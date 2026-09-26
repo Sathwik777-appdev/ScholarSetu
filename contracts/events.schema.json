@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ScholarSetu Event Schema",
+  "description": "Canonical event schema for the ScholarSetu event bus",
+  "type": "object",
+  "required": ["event_id", "type", "application_id", "student_id", "scheme", "source", "occurred_at", "payload"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique event identifier"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "ApplicationCreated",
+        "ApplicationSubmitted",
+        "InstituteVerificationStarted",
+        "InstituteVerified",
+        "DeficiencyRaised",
+        "DeficiencyResolved",
+        "Resubmitted",
+        "AuthorityVerificationStarted",
+        "AuthorityVerified",
+        "Sanctioned",
+        "Rejected",
+        "PaymentInitiated",
+        "PaymentCredited",
+        "PaymentFailed",
+        "RenewalDue",
+        "VerificationCompleted",
+        "AttestationIssued",
+        "AttestationExpired",
+        "AttestationRevoked",
+        "DBTHealthCheckCompleted",
+        "DBTRetryInitiated",
+        "TransitionDetected",
+        "EligibilityChecked",
+        "SLABreached",
+        "ConsentGranted",
+        "ConsentRevoked"
+      ],
+      "description": "Event type from the canonical vocabulary"
+    },
+    "application_id": {
+      "type": ["string", "null"],
+      "description": "Application this event pertains to (null for student-level events)"
+    },
+    "student_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Student this event pertains to"
+    },
+    "scheme": {
+      "type": ["string", "null"],
+      "enum": ["PRE_MATRIC", "POST_MATRIC", "TOP_CLASS", "NFST", "NOS", null],
+      "description": "Scheme type"
+    },
+    "source": {
+      "type": "string",
+      "enum": ["NSP", "SFMP", "NOS_PORTAL", "SCHOLARSETU"],
+      "description": "Source system that originated this event"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the event occurred (ISO 8601)"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Event-specific payload data"
+    },
+    "correlation_id": {
+      "type": ["string", "null"],
+      "description": "Correlation ID for tracing related events"
+    },
+    "hash_prev": {
+      "type": ["string", "null"],
+      "description": "Hash of the previous event in the chain (per application)"
+    },
+    "hash": {
+      "type": "string",
+      "description": "SHA-256 hash of this event data for tamper detection"
+    }
+  }
+}

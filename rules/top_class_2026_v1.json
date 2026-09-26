@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "scheme": "TOP_CLASS",
+  "version": "2026-v1",
+  "effective_from": "2026-04-01",
+  "description": "Top Class Education for ST Students in Premier Institutions",
+  "rules": [
+    {
+      "id": "tc_st_status",
+      "field": "st_status_verified",
+      "operator": "equals",
+      "value": true,
+      "failure_reason": "Student must belong to a Scheduled Tribe."
+    },
+    {
+      "id": "tc_income_limit",
+      "field": "family_annual_income",
+      "operator": "lte",
+      "value": 600000,
+      "failure_reason": "Family annual income must not exceed ₹6,00,000."
+    },
+    {
+      "id": "tc_premier_institution",
+      "field": "top_class_institution_verified",
+      "operator": "equals",
+      "value": true,
+      "failure_reason": "Student must be admitted in a notified premier institution (IIT, IIM, NIT, AIIMS, NLU, etc.)."
+    },
+    {
+      "id": "tc_one_scheme",
+      "field": "has_active_mota_scholarship",
+      "operator": "equals",
+      "value": false,
+      "failure_reason": "Student must not hold another active MoTA scholarship."
+    }
+  ],
+  "required_attestations": ["IDENTITY", "ST_STATUS", "INCOME", "TOP_CLASS_INSTITUTION"],
+  "amounts": {
+    "tuition_fee": "actual",
+    "living_expenses": 220000,
+    "book_grant": 15000,
+    "computer_allowance": 45000,
+    "computer_allowance_note": "one-time"
+  },
+  "notified_institutions": [
+    "IITs", "IIMs", "NITs", "IIITs", "AIIMS", "NLUs",
+    "IISc Bangalore", "TISS Mumbai", "NIFT", "NID",
+    "Delhi University (select colleges)", "JNU",
+    "ISI Kolkata", "IISER", "NISER"
+  ]
+}

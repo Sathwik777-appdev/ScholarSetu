@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+# Python packaging dirs at the repo root only (a bare lib/ would hide apps/mobile/lib, the Flutter source)
+/lib/
+/lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Secrets: never commit keys or real environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Flutter
+.dart_tool/
+.packages
+build/
+.pub-cache/
+.pub/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker
+.docker/
+
+# OS generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editors / IDEs
+.idea/
+.vscode/
+
+# Test caches
+.pytest_cache/

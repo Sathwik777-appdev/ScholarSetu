@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: scholarsetu
+      POSTGRES_USER: scholarsetu
+      POSTGRES_PASSWORD: scholarsetu_dev
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - scholarsetu-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scholarsetu"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7
+    ports:
+      - "6380:6379"
+    networks:
+      - scholarsetu-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  nats:
+    image: nats:2.10
+    command: ["-js"]
+    ports:
+      - "4223:4222"
+      - "8223:8222"
+    networks:
+      - scholarsetu-net
+
+  mock-services:
+    build:
+      context: ../mocks
+    ports:
+      - "8100:8100"
+    networks:
+      - scholarsetu-net
+
+  core:
+    build:
+      context: ../services/core
+    ports:
+      - "8000:8000"
+    # Secrets (JWT_SECRET, SKILL_SERVICE_TOKEN, ...) come from the repo-root .env, never from the image.
+    env_file:
+      - ../.env
+    volumes:
+      # Attestation signing key lives on the host (git- and docker-ignored). Create it with `make keys`.
+      - ../services/core/secrets:/app/secrets
+    environment:
+      - ATTESTATION_PRIVATE_KEY_PATH=/app/secrets/attestation_ed25519.pem
+      - DATABASE_URL=postgresql+asyncpg://scholarsetu:scholarsetu_dev@postgres:5432/scholarsetu
+      - REDIS_URL=redis://redis:6379
+      - NATS_URL=nats://nats:4222
+      - MINIO_URL=http://localhost:9000
+      - MOCK_SERVICE_URL=http://mock-services:8100
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - scholarsetu-net
+
+volumes:
+  postgres_data:
+
+networks:
+  scholarsetu-net:
+    driver: bridge

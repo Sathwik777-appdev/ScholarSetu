@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0",
+  "scheme": "NOS",
+  "version": "2026-v1",
+  "effective_from": "2026-04-01",
+  "description": "National Overseas Scholarship for ST Students",
+  "rules": [
+    {
+      "id": "nos_st_status",
+      "field": "st_status_verified",
+      "operator": "equals",
+      "value": true,
+      "failure_reason": "Student must belong to a Scheduled Tribe."
+    },
+    {
+      "id": "nos_income_limit",
+      "field": "family_annual_income",
+      "operator": "lte",
+      "value": 600000,
+      "failure_reason": "Family annual income must not exceed ₹6,00,000."
+    },
+    {
+      "id": "nos_age_limit",
+      "field": "age",
+      "operator": "lte",
+      "value": 35,
+      "failure_reason": "Applicant must not be older than 35 years."
+    },
+    {
+      "id": "nos_course_level",
+      "field": "course_level",
+      "operator": "in",
+      "value": ["Masters", "PhD", "Post-doctoral"],
+      "failure_reason": "NOS is for Master's, PhD, or Post-doctoral studies abroad."
+    },
+    {
+      "id": "nos_foreign_admission",
+      "field": "foreign_admission_verified",
+      "operator": "equals",
+      "value": true,
+      "failure_reason": "Must have confirmed admission from a foreign university/institution."
+    },
+    {
+      "id": "nos_academic_records",
+      "field": "academic_records_verified",
+      "operator": "equals",
+      "value": true,
+      "failure_reason": "Academic records are required for evaluation."
+    },
+    {
+      "id": "nos_one_scheme",
+      "field": "has_active_mota_scholarship",
+      "operator": "equals",
+      "value": false,
+      "failure_reason": "Student must not hold another active MoTA scholarship."
+    }
+  ],
+  "required_attestations": ["IDENTITY", "ST_STATUS", "INCOME", "FOREIGN_ADMISSION", "ACADEMIC_RECORDS"],
+  "amounts": {
+    "tuition_fees": "actual",
+    "maintenance_allowance": "as per country norms",
+    "contingency": "as per norms",
+    "equipment_allowance": "as per norms",
+    "travel": "economy class air fare",
+    "visa_fees": "actual",
+    "incidental_journey_allowance": "as per norms"
+  },
+  "total_slots_per_year": 20,
+  "priority": "PVTG candidates given preference"
+}

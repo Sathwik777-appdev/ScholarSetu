@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0",
+  "scheme": "NFST",
+  "version": "2026-v1",
+  "effective_from": "2026-04-01",
+  "description": "National Fellowship for Scheduled Tribe (NFST) Students - M.Phil/PhD",
+  "rules": [
+    {
+      "id": "nfst_st_status",
+      "field": "st_status_verified",
+      "operator": "equals",
+      "value": true,
+      "failure_reason": "Student must belong to a Scheduled Tribe."
+    },
+    {
+      "id": "nfst_net_jrf",
+      "field": "net_jrf_verified",
+      "operator": "equals",
+      "value": true,
+      "failure_reason": "Student must have qualified NET/JRF conducted by UGC-NTA."
+    },
+    {
+      "id": "nfst_course_level",
+      "field": "course_level",
+      "operator": "in",
+      "value": ["M.Phil", "PhD"],
+      "failure_reason": "NFST is for M.Phil and PhD scholars only."
+    },
+    {
+      "id": "nfst_university",
+      "field": "higher_ed_verified",
+      "operator": "equals",
+      "value": true,
+      "failure_reason": "Student must be registered in a recognized university/institution."
+    },
+    {
+      "id": "nfst_one_scheme",
+      "field": "has_active_mota_scholarship",
+      "operator": "equals",
+      "value": false,
+      "failure_reason": "Student must not hold another active MoTA scholarship."
+    }
+  ],
+  "required_attestations": ["IDENTITY", "ST_STATUS", "NET_JRF", "HIGHER_ED"],
+  "amounts": {
+    "jrf": {
+      "monthly": 31000,
+      "duration_years": 2,
+      "description": "Junior Research Fellowship for initial 2 years"
+    },
+    "srf": {
+      "monthly": 35000,
+      "duration_years": 3,
+      "description": "Senior Research Fellowship for remaining tenure"
+    },
+    "hra": "as per university/UGC norms",
+    "contingency_humanities": 10000,
+    "contingency_science": 12000,
+    "escort_reader_allowance": "for PwD candidates as per norms"
+  },
+  "total_slots_per_year": 750
+}

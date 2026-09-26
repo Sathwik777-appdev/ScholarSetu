@@ -1,0 +1,48 @@
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from app.attestation.schemas import AttestationVerification, ScholarshipPassport
+from app.attestation.service import AttestationService, get_attestation_service
+from app.dependencies import OFFICER_ROLES, StudentPrincipal, get_current_user, student_principal
+from app.gateway.models import User
+from app.shared.types import MitraScope
+
+router = APIRouter(prefix="/v1", tags=["Scholarship Passport & Attestations"])
+
+
+class JwsVerifyRequest(BaseModel):
+    jws: str
+
+
+@router.get("/me/attestations", response_model=ScholarshipPassport)
+async def get_my_passport(
+    principal: StudentPrincipal = Depends(student_principal(MitraScope.VIEW_STATUS)),
+    service: AttestationService = Depends(get_attestation_service),
+):
+    """The student's Scholarship Passport: all attestations, each with its compact JWS in `signature`."""
+    return await service.get_passport(principal.student_id)
+
+
+@router.get("/attestations/public-key")
+async def get_public_key(service: AttestationService = Depends(get_attestation_service)):
+    """Public verification key (JWK set) so anyone can verify an attestation JWS offline."""
+    return {"keys": [service.jwk]}
+
+
+@router.post("/attestations/verify-jws", response_model=AttestationVerification)
+async def verify_presented_jws(req: JwsVerifyRequest, service: AttestationService = Depends(get_attestation_service)):
+    """Verify an attestation JWS a student presents (signature, status and expiry)."""
+    return service.verify_jws(req.jws)
+
+
+@router.get("/attestations/{attestation_id}/verify", response_model=AttestationVerification)
+async def verify_attestation(
+    attestation_id: str,
+    user: User = Depends(get_current_user),
+    service: AttestationService = Depends(get_attestation_service),
+):
+    """Verify a stored attestation. Only its owner or an officer may ask."""
+    owner = service.get_owner(attestation_id)
+    if owner is None or (user.student_id != owner and user.role not in OFFICER_ROLES):
+        raise HTTPException(status_code=404, detail="Attestation not found")
+    return await service.verify_attestation(attestation_id)

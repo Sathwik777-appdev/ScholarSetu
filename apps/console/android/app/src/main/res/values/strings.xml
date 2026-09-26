@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ScholarSetu</string>
+    <string name="title_activity_main">ScholarSetu</string>
+    <string name="package_name">in.gov.mota.scholarsetu</string>
+    <string name="custom_url_scheme">in.gov.mota.scholarsetu</string>
+</resources>
