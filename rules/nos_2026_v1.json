@@ -1,70 +1,219 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "scheme": "NOS",
   "version": "2026-v1",
   "effective_from": "2026-04-01",
-  "description": "National Overseas Scholarship for ST Students",
+  "description": "National Overseas Scholarship for ST students (Master's, Ph.D, Post-doctoral)",
+  "parameters": {
+    "income_ceiling": {
+      "value": 600000,
+      "unit": "INR per year",
+      "source": "National Overseas Scholarship guidelines 2021-22 to 2025-26, section 2.2(iii)",
+      "source_url": "https://tribal.nic.in/downloads/guidelines/NOS/RevisedGuidelinesNOS07102022.pdf",
+      "verified_by_team": false,
+      "official_document_value": 600000,
+      "conflict": false
+    },
+    "maximum_age": {
+      "value": 35,
+      "unit": "years on 1 July of selection year",
+      "source": "National Overseas Scholarship guidelines 2021-22 to 2025-26, section 2.2",
+      "source_url": "https://tribal.nic.in/downloads/guidelines/NOS/RevisedGuidelinesNOS07102022.pdf",
+      "verified_by_team": false,
+      "official_document_value": {
+        "Post-doctoral": 38,
+        "PhD": 35,
+        "Masters": 32
+      },
+      "conflict": true,
+      "note": "The official limit depends on the course; the team's single value (35) is applied to every course until confirmed."
+    },
+    "eligible_course_levels": {
+      "value": [
+        "Masters",
+        "PhD",
+        "Post-doctoral"
+      ],
+      "unit": "course",
+      "source": "National Overseas Scholarship guidelines 2021-22 to 2025-26, section 2.2",
+      "source_url": "https://tribal.nic.in/downloads/guidelines/NOS/RevisedGuidelinesNOS07102022.pdf",
+      "verified_by_team": false,
+      "official_document_value": [
+        "Masters",
+        "PhD",
+        "Post-doctoral"
+      ],
+      "conflict": false
+    }
+  },
   "rules": [
     {
       "id": "nos_st_status",
-      "field": "st_status_verified",
-      "operator": "equals",
-      "value": true,
-      "failure_reason": "Student must belong to a Scheduled Tribe."
+      "needs": [
+        "claims.ST_STATUS.verified"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "claims.ST_STATUS.verified"
+          },
+          true
+        ]
+      },
+      "failure_reason": "Student must belong to a Scheduled Tribe.",
+      "failure_reason_hi": "छात्र को अनुसूचित जनजाति से संबंधित होना चाहिए।"
     },
     {
       "id": "nos_income_limit",
-      "field": "family_annual_income",
-      "operator": "lte",
-      "value": 600000,
-      "failure_reason": "Family annual income must not exceed ₹6,00,000."
+      "needs": [
+        "claims.INCOME.annual_income"
+      ],
+      "logic": {
+        "<=": [
+          {
+            "var": "claims.INCOME.annual_income"
+          },
+          {
+            "var": "params.income_ceiling"
+          }
+        ]
+      },
+      "failure_reason": "Family annual income exceeds the scheme ceiling.",
+      "failure_reason_hi": "परिवार की वार्षिक आय योजना की सीमा से अधिक है।"
     },
     {
       "id": "nos_age_limit",
-      "field": "age",
-      "operator": "lte",
-      "value": 35,
-      "failure_reason": "Applicant must not be older than 35 years."
+      "needs": [
+        "age"
+      ],
+      "logic": {
+        "<=": [
+          {
+            "var": "age"
+          },
+          {
+            "var": "params.maximum_age"
+          }
+        ]
+      },
+      "failure_reason": "Applicant is above the age limit.",
+      "failure_reason_hi": "आवेदक आयु सीमा से अधिक है।"
     },
     {
       "id": "nos_course_level",
-      "field": "course_level",
-      "operator": "in",
-      "value": ["Masters", "PhD", "Post-doctoral"],
-      "failure_reason": "NOS is for Master's, PhD, or Post-doctoral studies abroad."
+      "needs": [
+        "course_level"
+      ],
+      "logic": {
+        "in": [
+          {
+            "var": "course_level"
+          },
+          {
+            "var": "params.eligible_course_levels"
+          }
+        ]
+      },
+      "failure_reason": "Scholarship is for Master's, Ph.D or post-doctoral study.",
+      "failure_reason_hi": "छात्रवृत्ति मास्टर्स, पीएच.डी या पोस्ट-डॉक्टरल अध्ययन के लिए है।"
     },
     {
       "id": "nos_foreign_admission",
-      "field": "foreign_admission_verified",
-      "operator": "equals",
-      "value": true,
-      "failure_reason": "Must have confirmed admission from a foreign university/institution."
+      "needs": [
+        "claims.FOREIGN_ADMISSION.verified"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "claims.FOREIGN_ADMISSION.verified"
+          },
+          true
+        ]
+      },
+      "failure_reason": "Foreign university admission not verified.",
+      "failure_reason_hi": "विदेशी विश्वविद्यालय में प्रवेश सत्यापित नहीं है।"
     },
     {
       "id": "nos_academic_records",
-      "field": "academic_records_verified",
-      "operator": "equals",
-      "value": true,
-      "failure_reason": "Academic records are required for evaluation."
+      "needs": [
+        "claims.ACADEMIC_RECORDS.verified"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "claims.ACADEMIC_RECORDS.verified"
+          },
+          true
+        ]
+      },
+      "failure_reason": "Academic records are required.",
+      "failure_reason_hi": "शैक्षणिक रिकॉर्ड आवश्यक हैं।"
     },
     {
       "id": "nos_one_scheme",
-      "field": "has_active_mota_scholarship",
-      "operator": "equals",
-      "value": false,
-      "failure_reason": "Student must not hold another active MoTA scholarship."
+      "needs": [
+        "has_other_active_mota_scholarship"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "has_other_active_mota_scholarship"
+          },
+          false
+        ]
+      },
+      "failure_reason": "Student must not hold another active MoTA scholarship.",
+      "failure_reason_hi": "छात्र के पास कोई अन्य सक्रिय MoTA छात्रवृत्ति नहीं होनी चाहिए।"
     }
   ],
-  "required_attestations": ["IDENTITY", "ST_STATUS", "INCOME", "FOREIGN_ADMISSION", "ACADEMIC_RECORDS"],
+  "required_attestations": [
+    "IDENTITY",
+    "ST_STATUS",
+    "INCOME",
+    "FOREIGN_ADMISSION",
+    "ACADEMIC_RECORDS"
+  ],
   "amounts": {
-    "tuition_fees": "actual",
-    "maintenance_allowance": "as per country norms",
-    "contingency": "as per norms",
-    "equipment_allowance": "as per norms",
-    "travel": "economy class air fare",
-    "visa_fees": "actual",
-    "incidental_journey_allowance": "as per norms"
-  },
-  "total_slots_per_year": 20,
-  "priority": "PVTG candidates given preference"
+    "tuition_fees": {
+      "value": "actual",
+      "unit": "INR",
+      "source": "National Overseas Scholarship guidelines 2021-22 to 2025-26, section 3.2",
+      "source_url": "https://tribal.nic.in/downloads/guidelines/NOS/RevisedGuidelinesNOS07102022.pdf",
+      "verified_by_team": false,
+      "official_document_value": "actual",
+      "conflict": false
+    },
+    "maintenance_allowance": {
+      "value": "as per country norms",
+      "unit": "USD/GBP per year",
+      "source": "National Overseas Scholarship guidelines 2021-22 to 2025-26, section 3.2",
+      "source_url": "https://tribal.nic.in/downloads/guidelines/NOS/RevisedGuidelinesNOS07102022.pdf",
+      "verified_by_team": false
+    },
+    "travel": {
+      "value": "economy class air fare",
+      "unit": "",
+      "source": "National Overseas Scholarship guidelines 2021-22 to 2025-26, section 3.2",
+      "source_url": "https://tribal.nic.in/downloads/guidelines/NOS/RevisedGuidelinesNOS07102022.pdf",
+      "verified_by_team": false
+    },
+    "visa_fees": {
+      "value": "actual",
+      "unit": "INR",
+      "source": "National Overseas Scholarship guidelines 2021-22 to 2025-26, section 3.2",
+      "source_url": "https://tribal.nic.in/downloads/guidelines/NOS/RevisedGuidelinesNOS07102022.pdf",
+      "verified_by_team": false,
+      "official_document_value": "actual",
+      "conflict": false
+    },
+    "incidental_journey_allowance": {
+      "value": "as per norms",
+      "unit": "USD",
+      "source": "National Overseas Scholarship guidelines 2021-22 to 2025-26, section 3.2",
+      "source_url": "https://tribal.nic.in/downloads/guidelines/NOS/RevisedGuidelinesNOS07102022.pdf",
+      "verified_by_team": false,
+      "official_document_value": "up to USD 20",
+      "conflict": true
+    }
+  }
 }

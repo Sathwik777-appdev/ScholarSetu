@@ -1,55 +1,172 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "scheme": "PRE_MATRIC",
   "version": "2026-v1",
   "effective_from": "2026-04-01",
-  "description": "Pre-Matric Scholarship for ST Students (Classes 9-10)",
+  "description": "Pre-Matric Scholarship for ST students in Classes IX and X",
+  "parameters": {
+    "income_ceiling": {
+      "value": 250000,
+      "unit": "INR per year",
+      "source": "Pre-Matric guidelines, effective 01-07-2012, section 4(ii) / 5",
+      "source_url": "https://scholarships.gov.in/public/schemeGuidelines/PRE_MATRIC_ST_(Class_IX_X)_GUIDELINES.pdf",
+      "verified_by_team": false,
+      "official_document_value": 200000,
+      "conflict": true,
+      "note": "The 2012 guideline says Rs 2.00 lakh; a PIB release (PRID 1907241) cites Rs 2.50 lakh, suggesting a later revision. Confirm the current order."
+    },
+    "eligible_classes": {
+      "value": [
+        9,
+        10
+      ],
+      "unit": "class",
+      "source": "Pre-Matric guidelines, effective 01-07-2012, title / section 4",
+      "source_url": "https://scholarships.gov.in/public/schemeGuidelines/PRE_MATRIC_ST_(Class_IX_X)_GUIDELINES.pdf",
+      "verified_by_team": false,
+      "official_document_value": [
+        9,
+        10
+      ],
+      "conflict": false
+    }
+  },
   "rules": [
     {
       "id": "pm_st_status",
-      "field": "st_status_verified",
-      "operator": "equals",
-      "value": true,
-      "failure_reason": "Student must belong to a Scheduled Tribe. ST status certificate required.",
-      "failure_reason_hi": "छात्र को अनुसूचित जनजाति से संबंधित होना चाहिए। ST प्रमाण पत्र आवश्यक है।"
+      "needs": [
+        "claims.ST_STATUS.verified"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "claims.ST_STATUS.verified"
+          },
+          true
+        ]
+      },
+      "failure_reason": "Student must belong to a Scheduled Tribe.",
+      "failure_reason_hi": "छात्र को अनुसूचित जनजाति से संबंधित होना चाहिए।"
     },
     {
       "id": "pm_class_range",
-      "field": "current_class",
-      "operator": "in",
-      "value": [9, 10],
-      "failure_reason": "Pre-Matric scholarship is for students in Class 9 and 10 only.",
-      "failure_reason_hi": "प्री-मैट्रिक छात्रवृत्ति केवल कक्षा 9 और 10 के छात्रों के लिए है।"
+      "needs": [
+        "current_class"
+      ],
+      "logic": {
+        "in": [
+          {
+            "var": "current_class"
+          },
+          {
+            "var": "params.eligible_classes"
+          }
+        ]
+      },
+      "failure_reason": "Pre-Matric is for students in Classes IX and X.",
+      "failure_reason_hi": "प्री-मैट्रिक कक्षा 9 और 10 के छात्रों के लिए है।"
     },
     {
       "id": "pm_income_limit",
-      "field": "family_annual_income",
-      "operator": "lte",
-      "value": 250000,
-      "failure_reason": "Family annual income must not exceed ₹2,50,000.",
-      "failure_reason_hi": "परिवार की वार्षिक आय ₹2,50,000 से अधिक नहीं होनी चाहिए।"
+      "needs": [
+        "claims.INCOME.annual_income"
+      ],
+      "logic": {
+        "<=": [
+          {
+            "var": "claims.INCOME.annual_income"
+          },
+          {
+            "var": "params.income_ceiling"
+          }
+        ]
+      },
+      "failure_reason": "Family annual income exceeds the scheme ceiling.",
+      "failure_reason_hi": "परिवार की वार्षिक आय योजना की सीमा से अधिक है।"
     },
     {
       "id": "pm_school_enrolment",
-      "field": "school_enrolment_verified",
-      "operator": "equals",
-      "value": true,
-      "failure_reason": "Student must be enrolled in a recognized school (UDISE+ verification required).",
-      "failure_reason_hi": "छात्र को एक मान्यता प्राप्त विद्यालय में नामांकित होना चाहिए।"
+      "needs": [
+        "claims.SCHOOL_ENROLMENT.verified"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "claims.SCHOOL_ENROLMENT.verified"
+          },
+          true
+        ]
+      },
+      "failure_reason": "Student must be enrolled in a recognised school.",
+      "failure_reason_hi": "छात्र को मान्यता प्राप्त विद्यालय में नामांकित होना चाहिए।"
     },
     {
       "id": "pm_one_scheme",
-      "field": "has_active_mota_scholarship",
-      "operator": "equals",
-      "value": false,
+      "needs": [
+        "has_other_active_mota_scholarship"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "has_other_active_mota_scholarship"
+          },
+          false
+        ]
+      },
       "failure_reason": "Student must not hold another active MoTA scholarship.",
       "failure_reason_hi": "छात्र के पास कोई अन्य सक्रिय MoTA छात्रवृत्ति नहीं होनी चाहिए।"
     }
   ],
-  "required_attestations": ["IDENTITY", "ST_STATUS", "INCOME", "SCHOOL_ENROLMENT"],
+  "required_attestations": [
+    "IDENTITY",
+    "ST_STATUS",
+    "INCOME",
+    "SCHOOL_ENROLMENT"
+  ],
   "amounts": {
-    "day_scholar": {"class_9": 3500, "class_10": 3500},
-    "hosteller": {"class_9": 7000, "class_10": 7000},
-    "adhoc_grant": 1000
+    "day_scholar_per_year": {
+      "value": {
+        "class_9": 3500,
+        "class_10": 3500
+      },
+      "unit": "INR per year",
+      "source": "Pre-Matric guidelines, effective 01-07-2012, section 6 (rates table)",
+      "source_url": "https://scholarships.gov.in/public/schemeGuidelines/PRE_MATRIC_ST_(Class_IX_X)_GUIDELINES.pdf",
+      "verified_by_team": false,
+      "official_document_value": {
+        "monthly_for_10_months": 150,
+        "books_and_adhoc_grant_per_year": 750
+      },
+      "conflict": true,
+      "note": "PIB PRID 1907241 cites Rs 225/month for day scholars for 10 months."
+    },
+    "hosteller_per_year": {
+      "value": {
+        "class_9": 7000,
+        "class_10": 7000
+      },
+      "unit": "INR per year",
+      "source": "Pre-Matric guidelines, effective 01-07-2012, section 6 (rates table)",
+      "source_url": "https://scholarships.gov.in/public/schemeGuidelines/PRE_MATRIC_ST_(Class_IX_X)_GUIDELINES.pdf",
+      "verified_by_team": false,
+      "official_document_value": {
+        "monthly_for_10_months": 350,
+        "books_and_adhoc_grant_per_year": 1000
+      },
+      "conflict": true,
+      "note": "PIB PRID 1907241 cites Rs 525/month for hostellers for 10 months."
+    },
+    "adhoc_grant": {
+      "value": 1000,
+      "unit": "INR per year",
+      "source": "Pre-Matric guidelines, effective 01-07-2012, section 6 (rates table)",
+      "source_url": "https://scholarships.gov.in/public/schemeGuidelines/PRE_MATRIC_ST_(Class_IX_X)_GUIDELINES.pdf",
+      "verified_by_team": false,
+      "official_document_value": {
+        "day_scholar": 750,
+        "hosteller": 1000
+      },
+      "conflict": true
+    }
   }
 }

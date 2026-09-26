@@ -1,80 +1,205 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "scheme": "POST_MATRIC",
   "version": "2026-v1",
   "effective_from": "2026-04-01",
-  "description": "Post-Matric Scholarship for ST Students (Class 11 to PhD)",
+  "description": "Post-Matric Scholarship for ST students (Class XI to post-graduation)",
+  "parameters": {
+    "income_ceiling": {
+      "value": 250000,
+      "unit": "INR per year",
+      "source": "Post-Matric regulation, applicable from 01-04-2022, section 3.2(c) / 3.3",
+      "source_url": "https://scholarships.gov.in/public/schemeGuidelines/Post-matric-guidelines-ST.pdf",
+      "verified_by_team": false,
+      "official_document_value": 250000,
+      "conflict": false
+    },
+    "minimum_class": {
+      "value": 11,
+      "unit": "class",
+      "source": "Post-Matric regulation, applicable from 01-04-2022, section 1 (class XI to Post Graduation)",
+      "source_url": "https://scholarships.gov.in/public/schemeGuidelines/Post-matric-guidelines-ST.pdf",
+      "verified_by_team": false,
+      "official_document_value": 11,
+      "conflict": false
+    }
+  },
   "rules": [
     {
       "id": "postm_st_status",
-      "field": "st_status_verified",
-      "operator": "equals",
-      "value": true,
+      "needs": [
+        "claims.ST_STATUS.verified"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "claims.ST_STATUS.verified"
+          },
+          true
+        ]
+      },
       "failure_reason": "Student must belong to a Scheduled Tribe.",
       "failure_reason_hi": "छात्र को अनुसूचित जनजाति से संबंधित होना चाहिए।"
     },
     {
       "id": "postm_class_range",
-      "field": "current_class",
-      "operator": "gte",
-      "value": 11,
+      "needs": [
+        "current_stage_known"
+      ],
+      "logic": {
+        "or": [
+          {
+            ">=": [
+              {
+                "var": "current_class"
+              },
+              {
+                "var": "params.minimum_class"
+              }
+            ]
+          },
+          {
+            "==": [
+              {
+                "var": "claims.HIGHER_ED.verified"
+              },
+              true
+            ]
+          }
+        ]
+      },
       "failure_reason": "Post-Matric scholarship is for students in Class 11 and above.",
       "failure_reason_hi": "पोस्ट-मैट्रिक छात्रवृत्ति कक्षा 11 और उससे ऊपर के छात्रों के लिए है।"
     },
     {
       "id": "postm_income_limit",
-      "field": "family_annual_income",
-      "operator": "lte",
-      "value": 250000,
-      "failure_reason": "Family annual income must not exceed ₹2,50,000.",
-      "failure_reason_hi": "परिवार की वार्षिक आय ₹2,50,000 से अधिक नहीं होनी चाहिए।"
+      "needs": [
+        "claims.INCOME.annual_income"
+      ],
+      "logic": {
+        "<=": [
+          {
+            "var": "claims.INCOME.annual_income"
+          },
+          {
+            "var": "params.income_ceiling"
+          }
+        ]
+      },
+      "failure_reason": "Family annual income exceeds the scheme ceiling.",
+      "failure_reason_hi": "परिवार की वार्षिक आय योजना की सीमा से अधिक है।"
     },
     {
       "id": "postm_institution",
-      "field": "higher_ed_verified",
-      "operator": "equals",
-      "value": true,
-      "failure_reason": "Student must be enrolled in a recognized institution (AISHE verification required).",
-      "failure_reason_hi": "छात्र को एक मान्यता प्राप्त संस्थान में नामांकित होना चाहिए।"
+      "needs": [
+        "claims.HIGHER_ED.verified"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "claims.HIGHER_ED.verified"
+          },
+          true
+        ]
+      },
+      "failure_reason": "Student must be enrolled in a recognised institution (AISHE verification required).",
+      "failure_reason_hi": "छात्र को मान्यता प्राप्त संस्थान में नामांकित होना चाहिए।"
     },
     {
       "id": "postm_academic_records",
-      "field": "academic_records_verified",
-      "operator": "equals",
-      "value": true,
+      "needs": [
+        "claims.ACADEMIC_RECORDS.verified"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "claims.ACADEMIC_RECORDS.verified"
+          },
+          true
+        ]
+      },
       "failure_reason": "Previous academic records/marksheets are required.",
       "failure_reason_hi": "पिछले शैक्षणिक रिकॉर्ड/अंकपत्र आवश्यक हैं।"
     },
     {
       "id": "postm_one_scheme",
-      "field": "has_active_mota_scholarship",
-      "operator": "equals",
-      "value": false,
+      "needs": [
+        "has_other_active_mota_scholarship"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "has_other_active_mota_scholarship"
+          },
+          false
+        ]
+      },
       "failure_reason": "Student must not hold another active MoTA scholarship.",
       "failure_reason_hi": "छात्र के पास कोई अन्य सक्रिय MoTA छात्रवृत्ति नहीं होनी चाहिए।"
     }
   ],
-  "required_attestations": ["IDENTITY", "ST_STATUS", "INCOME", "HIGHER_ED", "ACADEMIC_RECORDS"],
+  "required_attestations": [
+    "IDENTITY",
+    "ST_STATUS",
+    "INCOME",
+    "HIGHER_ED",
+    "ACADEMIC_RECORDS"
+  ],
   "amounts": {
     "group_1": {
-      "description": "Degree and Post-Graduate (non-professional)",
-      "hosteller_maintenance": 1200,
-      "day_scholar_maintenance": 550,
-      "period": "monthly"
+      "value": {
+        "hosteller_monthly": 1200,
+        "day_scholar_monthly": 550
+      },
+      "unit": "INR per month",
+      "source": "Post-Matric regulation, applicable from 01-04-2022, section 3.4.2 (stipend table)",
+      "source_url": "https://scholarships.gov.in/public/schemeGuidelines/Post-matric-guidelines-ST.pdf",
+      "verified_by_team": false,
+      "note": "Check Table 2 of the 2022 regulation; groups there may be defined differently."
     },
     "group_2": {
-      "description": "Professional courses (Engineering, Medical, Law, MBA)",
-      "hosteller_maintenance": 1500,
-      "day_scholar_maintenance": 750,
-      "period": "monthly"
+      "value": {
+        "hosteller_monthly": 1500,
+        "day_scholar_monthly": 750
+      },
+      "unit": "INR per month",
+      "source": "Post-Matric regulation, applicable from 01-04-2022, section 3.4.2 (stipend table)",
+      "source_url": "https://scholarships.gov.in/public/schemeGuidelines/Post-matric-guidelines-ST.pdf",
+      "verified_by_team": false
     },
     "group_3": {
-      "description": "Class 11-12 and ITI/Diploma",
-      "hosteller_maintenance": 1000,
-      "day_scholar_maintenance": 500,
-      "period": "monthly"
+      "value": {
+        "hosteller_monthly": 1000,
+        "day_scholar_monthly": 500
+      },
+      "unit": "INR per month",
+      "source": "Post-Matric regulation, applicable from 01-04-2022, section 3.4.2 (stipend table)",
+      "source_url": "https://scholarships.gov.in/public/schemeGuidelines/Post-matric-guidelines-ST.pdf",
+      "verified_by_team": false
     },
-    "compulsory_fees": "actual",
-    "adhoc_grant": 1500
+    "adhoc_grant": {
+      "value": 1500,
+      "unit": "INR per year",
+      "source": "Post-Matric regulation, applicable from 01-04-2022, section 3.4",
+      "source_url": "https://scholarships.gov.in/public/schemeGuidelines/Post-matric-guidelines-ST.pdf",
+      "verified_by_team": false,
+      "note": "Not located in the 2022 regulation text; confirm."
+    },
+    "disability_allowance_monthly": {
+      "value": {
+        "hosteller": 800,
+        "day_scholar": 600
+      },
+      "unit": "INR per month",
+      "source": "Post-Matric regulation, applicable from 01-04-2022, section 3.4.2 note 4",
+      "source_url": "https://scholarships.gov.in/public/schemeGuidelines/Post-matric-guidelines-ST.pdf",
+      "verified_by_team": false,
+      "official_document_value": {
+        "hosteller": 800,
+        "day_scholar": 600
+      },
+      "conflict": false,
+      "note": "Added from the official text so it has a single home; the team never entered it."
+    }
   }
 }

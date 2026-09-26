@@ -105,7 +105,7 @@ async def test_invalid_transitions_are_refused(db, demo):
 async def test_money_view_is_computed_from_payments(client, db, demo, users):
     money = (await client.get("/v1/me/payments", headers=await users.headers("rahul"))).json()
     rules = json.loads((Path(__file__).resolve().parents[2] / "rules" / "pre_matric_2026_v1.json").read_text())
-    expected = rules["amounts"]["hosteller"]["class_9"] + rules["amounts"]["adhoc_grant"]
+    expected = rules["amounts"]["hosteller_per_year"]["value"]["class_9"] + rules["amounts"]["adhoc_grant"]["value"]
     assert money["total_sanctioned"] == money["total_credited"] == expected
     assert money["total_pending"] == 0 and len(money["applications"][0]["instalments"]) == 2
     sunita = (await client.get("/v1/me/payments", headers=await users.headers("sunita"))).json()

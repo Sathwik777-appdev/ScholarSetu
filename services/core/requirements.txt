@@ -18,3 +18,6 @@ structlog
 python-json-logger
 tenacity
 faker
+pgvector
+fastembed
+json-logic-qubit

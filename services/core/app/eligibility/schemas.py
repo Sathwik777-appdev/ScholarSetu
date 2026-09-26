@@ -1,33 +1,44 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
-from app.shared.types import SchemeType, ClaimType, CanonicalState
+from typing import Optional
 
-class EligibilityCheckRequest(BaseModel):
-    student_id: str
-    scheme: SchemeType
+from pydantic import BaseModel, Field
+
+from app.shared.types import CanonicalState, ClaimType, SchemeType
+
+
+class RuleOutcome(BaseModel):
+    rule_id: str
+    outcome: str            # PASS | FAIL | NEEDS
+    detail: str
+
 
 class EligibilityResult(BaseModel):
+    scheme: SchemeType
+    status: str             # ELIGIBLE | NOT_ELIGIBLE | NEEDS_INFORMATION
     eligible: bool
-    reasons: List[str] = Field(default_factory=list)
-    rule_version: str = "1.0"
-    required_attestations: List[ClaimType] = Field(default_factory=list)
-    missing_attestations: List[ClaimType] = Field(default_factory=list)
+    reasons: list[str]
+    missing: list[str] = Field(default_factory=list)
+    rule_version: str
+    rule_version_id: str
+    rules: list[RuleOutcome]
+    required_attestations: list[ClaimType]
+    decision_id: Optional[str] = None
+
+
+class OneSchemeCheck(BaseModel):
+    has_conflict: bool
+    blocking: bool
+    current_holding: Optional[SchemeType] = None
+    holding_application_id: Optional[str] = None
+    message: str
+
 
 class ScholarshipPathway(BaseModel):
     current_scheme: Optional[SchemeType]
     current_state: Optional[CanonicalState]
-    ladder_position: int
+    current_application_id: Optional[str]
+    ladder: list[SchemeType]
+    ladder_position: Optional[int]
+    education_stage: Optional[str]
     next_eligible: Optional[SchemeType]
     transition_trigger: Optional[str]
-    pre_filled_available: bool
-
-class OneSchemeCheckResult(BaseModel):
-    has_conflict: bool
-    current_holding: Optional[SchemeType]
-    message: str
-
-class TransitionDetection(BaseModel):
-    detected: bool
-    next_scheme: Optional[SchemeType]
-    trigger_description: Optional[str]
-    pre_filled_fields: Dict[str, Any] = Field(default_factory=dict)
+    prefilled_application_id: Optional[str]

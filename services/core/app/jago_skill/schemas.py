@@ -1,34 +1,42 @@
+from typing import Any, Optional
+
 from pydantic import BaseModel, Field
-from typing import List, Optional, Any, Dict
-from datetime import datetime
+
 
 class JAGOMessageRequest(BaseModel):
-    message: str
-    language: str = "hi"
-    channel: str = "app"
-    
+    model_config = {"extra": "forbid"}
+    message: str = Field(..., min_length=1, max_length=1000)
+    language: str = Field("hi", max_length=10)
+    channel: str = Field("app", pattern=r"^(app|web|whatsapp|voice|sms)$")
+
+
 class Citation(BaseModel):
     source: str
-    content: str
-    
-class SuggestedAction(BaseModel):
-    label: str
-    action_type: str
-    value: str
+    section: str
+    url: str
+    effective: str
+
 
 class ToolCallLog(BaseModel):
     tool_name: str
     parameters: dict[str, Any]
-    result_summary: str | None = None
+    result_summary: Optional[str] = None
+
 
 class JAGOResponse(BaseModel):
     response_text: str
-    tool_calls_made: list[ToolCallLog] = []
-    citations: list[Citation] = []
-    suggested_actions: list[SuggestedAction] = []
+    intent: str
+    language: str
+    language_note: Optional[str] = None
+    tool_calls_made: list[ToolCallLog] = Field(default_factory=list)
+    citations: list[Citation] = Field(default_factory=list)
+
 
 class GuidelineResult(BaseModel):
+    scheme: str
     section: str
     content: str
     source: str
-    relevance_score: float = 0.0
+    url: str
+    effective: str
+    relevance_score: float

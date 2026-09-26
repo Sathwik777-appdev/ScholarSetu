@@ -1,62 +1,168 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "scheme": "NFST",
   "version": "2026-v1",
   "effective_from": "2026-04-01",
-  "description": "National Fellowship for Scheduled Tribe (NFST) Students - M.Phil/PhD",
+  "description": "National Fellowship for ST students (Part A): M.Phil and Ph.D",
+  "parameters": {
+    "eligible_course_levels": {
+      "value": [
+        "M.Phil",
+        "PhD"
+      ],
+      "unit": "course",
+      "source": "National Fellowship & Scholarship guidelines 2021-22 to 2025-26, Part A section 2.1",
+      "source_url": "https://tribal.nic.in/downloads/scholarship/NS/4_SchemeGuidelinesnListof265topclassInstitutes_TopC1123.pdf",
+      "verified_by_team": false,
+      "official_document_value": [
+        "M.Phil",
+        "PhD"
+      ],
+      "conflict": false
+    },
+    "maximum_age": {
+      "value": null,
+      "unit": "years on 1 July of award year",
+      "source": "National Fellowship & Scholarship guidelines 2021-22 to 2025-26, Part A section 2.3",
+      "source_url": "https://tribal.nic.in/downloads/scholarship/NS/4_SchemeGuidelinesnListof265topclassInstitutes_TopC1123.pdf",
+      "verified_by_team": false,
+      "official_document_value": 36,
+      "conflict": true,
+      "note": "The team's rules had no age limit; the official Part A says maximum 36 years. Not enforced until the team confirms."
+    }
+  },
   "rules": [
     {
       "id": "nfst_st_status",
-      "field": "st_status_verified",
-      "operator": "equals",
-      "value": true,
-      "failure_reason": "Student must belong to a Scheduled Tribe."
+      "needs": [
+        "claims.ST_STATUS.verified"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "claims.ST_STATUS.verified"
+          },
+          true
+        ]
+      },
+      "failure_reason": "Student must belong to a Scheduled Tribe.",
+      "failure_reason_hi": "छात्र को अनुसूचित जनजाति से संबंधित होना चाहिए।"
     },
     {
       "id": "nfst_net_jrf",
-      "field": "net_jrf_verified",
-      "operator": "equals",
-      "value": true,
-      "failure_reason": "Student must have qualified NET/JRF conducted by UGC-NTA."
+      "needs": [
+        "claims.NET_JRF.verified"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "claims.NET_JRF.verified"
+          },
+          true
+        ]
+      },
+      "failure_reason": "NET/JRF qualification not verified.",
+      "failure_reason_hi": "नेट/जेआरएफ योग्यता सत्यापित नहीं है।"
     },
     {
       "id": "nfst_course_level",
-      "field": "course_level",
-      "operator": "in",
-      "value": ["M.Phil", "PhD"],
-      "failure_reason": "NFST is for M.Phil and PhD scholars only."
+      "needs": [
+        "course_level"
+      ],
+      "logic": {
+        "in": [
+          {
+            "var": "course_level"
+          },
+          {
+            "var": "params.eligible_course_levels"
+          }
+        ]
+      },
+      "failure_reason": "Fellowship is for M.Phil or Ph.D scholars.",
+      "failure_reason_hi": "फ़ेलोशिप एम.फिल या पीएच.डी शोधार्थियों के लिए है।"
     },
     {
       "id": "nfst_university",
-      "field": "higher_ed_verified",
-      "operator": "equals",
-      "value": true,
-      "failure_reason": "Student must be registered in a recognized university/institution."
+      "needs": [
+        "claims.HIGHER_ED.verified"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "claims.HIGHER_ED.verified"
+          },
+          true
+        ]
+      },
+      "failure_reason": "M.Phil/Ph.D registration not verified.",
+      "failure_reason_hi": "एम.फिल/पीएच.डी पंजीकरण सत्यापित नहीं है।"
     },
     {
       "id": "nfst_one_scheme",
-      "field": "has_active_mota_scholarship",
-      "operator": "equals",
-      "value": false,
-      "failure_reason": "Student must not hold another active MoTA scholarship."
+      "needs": [
+        "has_other_active_mota_scholarship"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "has_other_active_mota_scholarship"
+          },
+          false
+        ]
+      },
+      "failure_reason": "Student must not hold another active MoTA scholarship.",
+      "failure_reason_hi": "छात्र के पास कोई अन्य सक्रिय MoTA छात्रवृत्ति नहीं होनी चाहिए।"
     }
   ],
-  "required_attestations": ["IDENTITY", "ST_STATUS", "NET_JRF", "HIGHER_ED"],
+  "required_attestations": [
+    "IDENTITY",
+    "ST_STATUS",
+    "NET_JRF",
+    "HIGHER_ED"
+  ],
   "amounts": {
-    "jrf": {
-      "monthly": 31000,
-      "duration_years": 2,
-      "description": "Junior Research Fellowship for initial 2 years"
+    "jrf_monthly": {
+      "value": 31000,
+      "unit": "INR per month",
+      "source": "National Fellowship & Scholarship guidelines 2021-22 to 2025-26, Part A section 2.6",
+      "source_url": "https://tribal.nic.in/downloads/scholarship/NS/4_SchemeGuidelinesnListof265topclassInstitutes_TopC1123.pdf",
+      "verified_by_team": false,
+      "official_document_value": 31000,
+      "conflict": false
     },
-    "srf": {
-      "monthly": 35000,
-      "duration_years": 3,
-      "description": "Senior Research Fellowship for remaining tenure"
+    "srf_monthly": {
+      "value": 35000,
+      "unit": "INR per month",
+      "source": "National Fellowship & Scholarship guidelines 2021-22 to 2025-26, Part A section 2.6",
+      "source_url": "https://tribal.nic.in/downloads/scholarship/NS/4_SchemeGuidelinesnListof265topclassInstitutes_TopC1123.pdf",
+      "verified_by_team": false,
+      "official_document_value": 35000,
+      "conflict": false
     },
-    "hra": "as per university/UGC norms",
-    "contingency_humanities": 10000,
-    "contingency_science": 12000,
-    "escort_reader_allowance": "for PwD candidates as per norms"
-  },
-  "total_slots_per_year": 750
+    "contingency_humanities": {
+      "value": 10000,
+      "unit": "INR per year",
+      "source": "National Fellowship & Scholarship guidelines 2021-22 to 2025-26, Part A section 2.6",
+      "source_url": "https://tribal.nic.in/downloads/scholarship/NS/4_SchemeGuidelinesnListof265topclassInstitutes_TopC1123.pdf",
+      "verified_by_team": false,
+      "official_document_value": {
+        "M.Phil": 10000,
+        "PhD": 20500
+      },
+      "conflict": true
+    },
+    "contingency_science": {
+      "value": 12000,
+      "unit": "INR per year",
+      "source": "National Fellowship & Scholarship guidelines 2021-22 to 2025-26, Part A section 2.6",
+      "source_url": "https://tribal.nic.in/downloads/scholarship/NS/4_SchemeGuidelinesnListof265topclassInstitutes_TopC1123.pdf",
+      "verified_by_team": false,
+      "official_document_value": {
+        "M.Phil": 12000,
+        "PhD": 25000
+      },
+      "conflict": true
+    }
+  }
 }

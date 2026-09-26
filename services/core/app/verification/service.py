@@ -54,6 +54,9 @@ from app.verification.sources import SourceClient, SourceUnavailable, get_source
 logger = logging.getLogger("scholarsetu.verification")
 
 REVIEW_SLA = timedelta(days=7)
+# A newly verified education fact can move the student to the next scheme on the ladder.
+EDUCATION_CLAIMS = {ClaimType.SCHOOL_ENROLMENT, ClaimType.HIGHER_ED, ClaimType.ACADEMIC_RECORDS, ClaimType.NET_JRF,
+                    ClaimType.TOP_CLASS_INSTITUTION, ClaimType.FOREIGN_ADMISSION}
 OPEN_CASE_STATUSES = (ReviewCaseStatus.PENDING, ReviewCaseStatus.INFO_REQUESTED)
 
 # Better outcomes sort first.
@@ -143,6 +146,8 @@ class VerificationMeshService:
             results.append(result)
 
         overall = self._overall(results)
+        if any(r.status == VerificationStatus.VERIFIED and r.claim_type in EDUCATION_CLAIMS for r in results):
+            await self._detect_transition(student_id)
         await self._publish("verification.completed", "VerificationCompleted", application_id, {
             "student_id": student_id, "overall_status": overall.value,
             "claims": {r.claim_type.value: r.status.value for r in results}, "review_case_ids": case_ids,
@@ -301,6 +306,13 @@ class VerificationMeshService:
             return VerificationStatus.MANUAL_REVIEW
         return VerificationStatus.PROVISIONAL
 
+    async def _detect_transition(self, student_id: str) -> None:
+        from app.eligibility.service import EligibilityError, EligibilityService
+        try:
+            await EligibilityService(self.db).detect_transition(student_id, "system:pathway")
+        except EligibilityError as exc:  # e.g. rules not loaded: verification itself still stands
+            logger.warning("pathway check skipped for %s: %s", student_id, exc.detail)
+
     async def _publish(self, subject: str, event_type: str, application_id: str, payload: dict) -> None:
         """Queue in the outbox with the rest of the transaction; published to NATS after commit."""
         await emit(self.db, subject, event_type, payload, correlation_id=application_id)
@@ -337,6 +349,8 @@ class VerificationMeshService:
                     method=VerificationMethod.MANUAL, confidence=1.0, evidence_hash=None)
                 case.attestation_id = attestation.id
             case.status = ReviewCaseStatus.APPROVED
+            if case.claim_type in EDUCATION_CLAIMS:
+                await self._detect_transition(case.student_id)
         elif decision == ReviewDecision.REJECT:
             if attestation is not None:
                 await self.attestations.set_status(attestation, AttestationStatus.REVOKED)

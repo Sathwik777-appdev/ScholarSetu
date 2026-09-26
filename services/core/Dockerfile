@@ -8,6 +8,11 @@ WORKDIR /app
 COPY services/core/requirements.txt .
 RUN pip install -r requirements.txt
 
+# Bake the multilingual embedding model (ONNX) into the image so the API never downloads at runtime.
+ENV EMBEDDING_CACHE_DIR=/opt/models
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2', cache_dir='/opt/models')" \
+    && chmod -R a+rX /opt/models
+
 COPY services/core/ /app/
 COPY rules/ /rules/
 COPY adapters/ /adapters/

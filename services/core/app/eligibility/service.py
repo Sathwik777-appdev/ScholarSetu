@@ -1,102 +1,298 @@
-from typing import Dict, Any, List, Optional
-from .decision_tables import SCHEME_RULES, SCHEME_LADDER, TRANSITION_TRIGGERS, REQUIRED_ATTESTATIONS
-from .schemas import EligibilityResult, ScholarshipPathway, OneSchemeCheckResult, TransitionDetection
-from app.shared.types import SchemeType, ClaimType, CanonicalState
+"""Eligibility & Pathway Engine (ARCHITECTURE.md §6.5): rules-as-code with JSON-Logic.
+
+Decision tables live only in rules/*.json. They are loaded into rule_versions (immutable per
+scheme + version + effective date); every decision records the rule version and the facts used.
+Facts come from the student's ACTIVE attestations and ledger holdings. A rule whose input fact is
+missing yields "needs <fact>", never a silent false.
+"""
+
+import hashlib
+import json
+import logging
+import re
+from datetime import date, datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+from fastapi import Depends
+from json_logic import jsonLogic
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.attestation.models import Attestation
+from app.config import settings
+from app.database import get_db
+from app.eligibility.models import EligibilityDecision, RuleVersion
+from app.eligibility.schemas import EligibilityResult, OneSchemeCheck, RuleOutcome, ScholarshipPathway
+from app.ledger.models import Application
+from app.ledger.service import HOLDING_STATES, LedgerService
+from app.shared.events import emit
+from app.shared.types import AttestationStatus, CanonicalState, ClaimType, SchemeType
+from app.students.models import Student
+
+logger = logging.getLogger("scholarsetu.eligibility")
+
+LADDER = [SchemeType.PRE_MATRIC, SchemeType.POST_MATRIC, SchemeType.TOP_CLASS, SchemeType.NFST, SchemeType.NOS]
+SCHEME_LABEL = {SchemeType.PRE_MATRIC: "Pre-Matric", SchemeType.POST_MATRIC: "Post-Matric",
+                SchemeType.TOP_CLASS: "Top Class", SchemeType.NFST: "NFST", SchemeType.NOS: "NOS"}
+OPEN_STATES = set(CanonicalState) - {CanonicalState.REJECTED, CanonicalState.CREDITED}
+_MISSING = object()
+# Plain names for non-attestation facts, shown in "needs ..." reasons.
+FACT_LABELS = {"current_stage_known": "CURRENT_CLASS_OR_COURSE", "current_class": "CURRENT_CLASS",
+               "course_level": "COURSE_LEVEL", "age": "DATE_OF_BIRTH",
+               "has_other_active_mota_scholarship": "SCHOLARSHIP_HOLDINGS"}
 
 
-class StudentMock:
-    def __init__(self, data: Dict[str, Any]):
-        self.data = data
-        self.current_class = data.get("current_class", 11)
-        self.family_income = data.get("family_income", 120000)
-        self.attestations = data.get("attestations", ["IDENTITY", "ST_STATUS", "SCHOOL_ENROLMENT"])
-        self.active_scholarship = data.get("active_scholarship", None)
+class EligibilityError(Exception):
+    def __init__(self, status_code: int, detail: str):
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
 
-    def has_attestation(self, claim_type_name: str) -> bool:
-        return claim_type_name in self.attestations
 
-    def has_active_scholarship(self) -> bool:
-        return self.active_scholarship is not None
+def current_academic_year(today: Optional[date] = None) -> str:
+    today = today or date.today()
+    start = today.year if today.month >= settings.ACADEMIC_YEAR_START_MONTH else today.year - 1
+    return f"{start}-{(start + 1) % 100:02d}"
+
+
+def _lookup(data: dict, path: str) -> Any:
+    node: Any = data
+    for part in path.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return _MISSING
+        node = node[part]
+    return _MISSING if node is None else node
+
+
+def _course_level(text: str) -> Optional[str]:
+    t = text.lower()
+    if re.search(r"post[\s-]?doc", t):
+        return "Post-doctoral"
+    if re.search(r"ph\.?\s?d", t):
+        return "PhD"
+    if re.search(r"m\.?\s?phil", t):
+        return "M.Phil"
+    if re.search(r"\bmaster|\bm\.?\s?(a|sc|tech|com|ba|s)\b|\bpost[\s-]?graduat", t):
+        return "Masters"
+    return None
+
+
+# ── rule files ───────────────────────────────────────────────────────────────
+
+
+async def load_rule_files(db: AsyncSession, rules_dir: Optional[str] = None) -> int:
+    """Load rules/*.json into rule_versions. Refuses a changed file that kept the same version."""
+    loaded = 0
+    for path in sorted(Path(rules_dir or settings.RULES_DIR).glob("*.json")):
+        raw = path.read_bytes()
+        table = json.loads(raw)
+        digest = hashlib.sha256(raw).hexdigest()
+        scheme, version = SchemeType(table["scheme"]), table["version"]
+        effective = date.fromisoformat(table["effective_from"])
+        existing = (await db.execute(select(RuleVersion).where(
+            RuleVersion.scheme == scheme, RuleVersion.version == version,
+            RuleVersion.effective_from == effective))).scalar_one_or_none()
+        if existing is None:
+            db.add(RuleVersion(scheme=scheme, version=version, effective_from=effective, content_sha256=digest,
+                               decision_table=table))
+            loaded += 1
+        elif existing.content_sha256 != digest:
+            raise RuntimeError(f"{path.name} changed but kept version {version}; publish it as a new version")
+    await db.commit()
+    return loaded
 
 
 class EligibilityService:
-    """Rules-as-code eligibility engine with pathway tracking."""
+    def __init__(self, db: AsyncSession):
+        self.db = db
+        self.ledger = LedgerService(db)
 
-    async def check_eligibility(self, student_id: str, scheme: SchemeType) -> EligibilityResult:
-        """Check if student is eligible for a scheme using decision tables."""
-        student_data = {
-            "current_class": 11 if scheme == SchemeType.POST_MATRIC else 10,
-            "family_income": 120000,
-            "attestations": ["IDENTITY", "ST_STATUS", "SCHOOL_ENROLMENT", "HIGHER_ED", "ACADEMIC_RECORDS"],
-            "active_scholarship": None
-        }
-        student = StudentMock(student_data)
+    async def rule_version(self, scheme: SchemeType, on: Optional[date] = None) -> RuleVersion:
+        on = on or date.today()
+        version = (await self.db.execute(
+            select(RuleVersion).where(RuleVersion.scheme == scheme, RuleVersion.effective_from <= on)
+            .order_by(RuleVersion.effective_from.desc(), RuleVersion.loaded_at.desc()).limit(1)
+        )).scalar_one_or_none()
+        if version is None:
+            raise EligibilityError(503, f"No rules loaded for {scheme.value}")
+        return version
 
-        reasons = []
-        eligible = True
+    # ── facts ───────────────────────────────────────────────
 
-        rules = SCHEME_RULES.get(scheme, [])
-        for rule in rules:
-            try:
-                check_result = eval(rule["check"], {"student": student})
-                if not check_result:
-                    eligible = False
-                    reasons.append(rule["failure_reason"])
-            except Exception as e:
-                eligible = False
-                reasons.append(f"Error evaluating rule {rule['id']}: {str(e)}")
+    async def active_holdings(self, student_id: str, academic_year: Optional[str] = None) -> list[Application]:
+        """Scholarships the student currently holds (any source system), for the one-scheme rule."""
+        academic_year = academic_year or current_academic_year()
+        return list((await self.db.execute(select(Application).where(
+            Application.student_id == student_id, Application.canonical_state.in_(HOLDING_STATES),
+            Application.academic_year == academic_year))).scalars())
 
-        required = REQUIRED_ATTESTATIONS.get(scheme, [])
-        missing = [claim for claim in required if claim.value not in student.attestations and claim.name not in student.attestations]
+    async def facts(self, student: Student, scheme: SchemeType) -> dict[str, Any]:
+        now = datetime.now(timezone.utc)
+        attestations = (await self.db.execute(select(Attestation).where(
+            Attestation.student_id == student.id, Attestation.status == AttestationStatus.ACTIVE))).scalars()
+        claims: dict[str, dict] = {}
+        for att in attestations:
+            if att.valid_until is not None and (att.valid_until if att.valid_until.tzinfo
+                                                else att.valid_until.replace(tzinfo=timezone.utc)) <= now:
+                continue
+            claims[att.claim_type.value] = {"verified": True, **att.claim_value}
+        facts: dict[str, Any] = {"claims": claims}
 
-        if missing:
-            eligible = False
-            reasons.append(f"Missing required attestations: {[m.value for m in missing]}")
+        current_class = None
+        if "SCHOOL_ENROLMENT" in claims and str(claims["SCHOOL_ENROLMENT"].get("class", "")).isdigit():
+            current_class = int(claims["SCHOOL_ENROLMENT"]["class"])
+        higher = claims.get("HIGHER_ED", {})
+        if current_class is None and higher:
+            m = re.search(r"class\s*(\d{1,2})", str(higher.get("course", "")), re.I)
+            current_class = int(m.group(1)) if m else None
+        facts["current_class"] = current_class
+        facts["current_stage_known"] = True if (current_class is not None or higher) else None
+        level_source = " ".join(str(claims.get(c, {}).get("course", "")) for c in ("HIGHER_ED", "FOREIGN_ADMISSION"))
+        facts["course_level"] = _course_level(level_source)
+        reference = date(date.today().year, 7, 1)  # schemes measure age on 1 July of the award year
+        facts["age"] = reference.year - student.dob.year - ((reference.month, reference.day) < (student.dob.month, student.dob.day))
+        holdings = [a for a in await self.active_holdings(student.id) if a.scheme != scheme]
+        facts["has_other_active_mota_scholarship"] = bool(holdings)
+        facts["holdings"] = [{"application_id": a.id, "scheme": a.scheme.value, "academic_year": a.academic_year}
+                             for a in holdings]
+        return facts
 
-        if eligible:
-            reasons.append("All scheme criteria satisfied under MoTA 2026-v1 guidelines.")
+    # ── evaluation ──────────────────────────────────────────
 
-        return EligibilityResult(
-            eligible=eligible,
-            reasons=reasons,
-            rule_version="2026-v1",
-            required_attestations=required,
-            missing_attestations=missing
+    async def check_eligibility(self, student_id: str, scheme: SchemeType, record: bool = True) -> EligibilityResult:
+        student = await self.db.get(Student, student_id)
+        if student is None:
+            raise EligibilityError(404, f"Student {student_id} not found")
+        version = await self.rule_version(scheme)
+        table = version.decision_table
+        facts = await self.facts(student, scheme)
+        params = {k: v["value"] for k, v in table.get("parameters", {}).items()}
+        data = {**facts, "params": params}
+
+        outcomes, reasons, missing = [], [], []
+        failed = False
+        for rule in table["rules"]:
+            absent = [n for n in rule.get("needs", []) if _lookup(data, n) is _MISSING]
+            if absent:
+                labels = [n.split(".")[1] if n.startswith("claims.") else FACT_LABELS.get(n, n) for n in absent]
+                missing.extend(labels)
+                outcomes.append(RuleOutcome(rule_id=rule["id"], outcome="NEEDS", detail=f"needs {', '.join(labels)}"))
+                continue
+            if jsonLogic(rule["logic"], data):
+                outcomes.append(RuleOutcome(rule_id=rule["id"], outcome="PASS", detail="satisfied"))
+            else:
+                failed = True
+                reasons.append(rule["failure_reason"])
+                outcomes.append(RuleOutcome(rule_id=rule["id"], outcome="FAIL", detail=rule["failure_reason"]))
+        if failed:
+            status = "NOT_ELIGIBLE"
+        elif missing:
+            status = "NEEDS_INFORMATION"
+            reasons.append("Needs verified " + ", ".join(dict.fromkeys(missing)) + ".")
+        else:
+            status = "ELIGIBLE"
+            reasons.append(f"All {SCHEME_LABEL[scheme]} criteria are met under rules {version.version}.")
+
+        result = EligibilityResult(
+            scheme=scheme, status=status, eligible=status == "ELIGIBLE", reasons=reasons,
+            missing=list(dict.fromkeys(missing)), rule_version=version.version, rule_version_id=version.id,
+            rules=outcomes, required_attestations=[ClaimType(c) for c in table.get("required_attestations", [])],
         )
+        if record:
+            decision = EligibilityDecision(student_id=student_id, scheme=scheme, rule_version_id=version.id,
+                                           status=status, reasons=reasons, missing=result.missing, facts=facts)
+            self.db.add(decision)
+            await self.db.flush()
+            result.decision_id = decision.id
+        return result
+
+    # ── one scheme at a time ────────────────────────────────
+
+    async def check_one_scheme_rule(self, student_id: str, target: SchemeType, academic_year: str) -> OneSchemeCheck:
+        same = (await self.db.execute(select(Application).where(
+            Application.student_id == student_id, Application.scheme == target,
+            Application.academic_year == academic_year,
+            Application.canonical_state.in_(OPEN_STATES | HOLDING_STATES)))).scalars().first()
+        if same is not None:
+            return OneSchemeCheck(has_conflict=True, blocking=True, current_holding=target,
+                                  holding_application_id=same.id,
+                                  message=f"You already have a {SCHEME_LABEL[target]} application for {academic_year} "
+                                          f"({same.id}).")
+        holdings = [a for a in await self.active_holdings(student_id, academic_year) if a.scheme != target]
+        if holdings:
+            held = holdings[0]
+            return OneSchemeCheck(
+                has_conflict=True, blocking=False, current_holding=held.scheme, holding_application_id=held.id,
+                message=(f"You currently hold {SCHEME_LABEL[held.scheme]} for {held.academic_year}. You can apply for "
+                         f"{SCHEME_LABEL[target]}, but you must surrender {SCHEME_LABEL[held.scheme]} once "
+                         f"{SCHEME_LABEL[target]} is sanctioned."))
+        return OneSchemeCheck(has_conflict=False, blocking=False, message="No other scholarship is held for this year.")
+
+    # ── pathway ─────────────────────────────────────────────
+
+    def _next_rung(self, facts: dict) -> tuple[Optional[SchemeType], Optional[str], Optional[str]]:
+        claims = facts["claims"]
+        if "FOREIGN_ADMISSION" in claims:
+            return SchemeType.NOS, "POSTGRADUATE_ABROAD", "Foreign university admission verified"
+        if "NET_JRF" in claims and facts.get("course_level") in ("PhD", "M.Phil"):
+            return SchemeType.NFST, "RESEARCH", "UGC-NET/JRF result and M.Phil/Ph.D registration verified"
+        if "TOP_CLASS_INSTITUTION" in claims:
+            return SchemeType.TOP_CLASS, "PREMIER_INSTITUTE", "Admission to a notified premier institution verified"
+        cls = facts.get("current_class")
+        if cls is not None and cls >= 11 or "HIGHER_ED" in claims:
+            return SchemeType.POST_MATRIC, "POST_MATRIC", "Class 11 or higher enrolment verified"
+        if cls in (9, 10):
+            return SchemeType.PRE_MATRIC, "SECONDARY", f"Class {cls} enrolment verified"
+        return None, None, None
 
     async def get_pathway(self, student_id: str) -> ScholarshipPathway:
-        """Get the student's position on the scholarship ladder (Scene 2)."""
-        current_scheme = SchemeType.PRE_MATRIC
-        current_index = SCHEME_LADDER.index(current_scheme)
-        next_scheme = SchemeType.POST_MATRIC
-
+        student = await self.db.get(Student, student_id)
+        if student is None:
+            raise EligibilityError(404, f"Student {student_id} not found")
+        apps = await self.ledger.applications_for(student_id)
+        # The current rung is the latest real application; pre-filled DRAFTs are offers, not holdings.
+        current = next((a for a in sorted(apps, key=lambda a: a.created_at, reverse=True)
+                        if a.canonical_state not in (CanonicalState.REJECTED, CanonicalState.DRAFT)), None)
+        facts = await self.facts(student, current.scheme if current else SchemeType.PRE_MATRIC)
+        next_scheme, stage, trigger = self._next_rung(facts)
+        year = current_academic_year()
+        draft = next((a for a in apps if a.scheme == next_scheme and a.academic_year == year
+                      and a.canonical_state == CanonicalState.DRAFT), None)
         return ScholarshipPathway(
-            current_scheme=current_scheme,
-            current_state=CanonicalState.CREDITED,
-            ladder_position=current_index,
-            next_eligible=next_scheme,
-            transition_trigger="Class 10 Matriculation marksheet detected in DigiLocker",
-            pre_filled_available=True
+            current_scheme=current.scheme if current else None,
+            current_state=current.canonical_state if current else None,
+            current_application_id=current.id if current else None, ladder=LADDER,
+            ladder_position=LADDER.index(current.scheme) if current else None, education_stage=stage,
+            next_eligible=next_scheme if (current is None or next_scheme != current.scheme) else None,
+            transition_trigger=trigger if (current is None or next_scheme != current.scheme) else None,
+            prefilled_application_id=draft.id if draft else None,
         )
 
-    async def check_one_scheme_rule(self, student_id: str, target_scheme: SchemeType) -> OneSchemeCheckResult:
-        """Check if student already holds another active scholarship."""
-        return OneSchemeCheckResult(
-            has_conflict=False,
-            current_holding=None,
-            message="No conflicting scholarship holding. Student eligible to apply for Post-Matric."
-        )
+    async def detect_transition(self, student_id: str, actor: str) -> Optional[Application]:
+        """If verified facts put the student on a new rung, prepare a pre-filled DRAFT and announce it."""
+        pathway = await self.get_pathway(student_id)
+        target = pathway.next_eligible
+        if target is None or pathway.prefilled_application_id:
+            return None
+        year = current_academic_year()
+        if (await self.check_one_scheme_rule(student_id, target, year)).blocking:
+            return None
+        student = await self.db.get(Student, student_id)
+        facts = await self.facts(student, target)
+        prefill = {"prefilled_from_attestations": sorted(facts["claims"]),
+                   "transition_trigger": pathway.transition_trigger}
+        for claim in ("HIGHER_ED", "SCHOOL_ENROLMENT"):
+            if claim in facts["claims"]:
+                prefill["institution"] = facts["claims"][claim].get("institution") or facts["claims"][claim].get("school_name")
+                prefill["course"] = facts["claims"][claim].get("course") or facts["claims"][claim].get("class")
+        draft = await self.ledger.create_application(student_id, target, year, actor, prefill,
+                                                     initial_state=CanonicalState.DRAFT)
+        await emit(self.db, "pathway.transition_detected", "TransitionDetected",
+                   {"student_id": student_id, "application_id": draft.id, "scheme": target.value,
+                    "trigger": pathway.transition_trigger}, correlation_id=draft.id)
+        return draft
 
-    async def detect_transition(self, student_id: str, trigger_event: dict) -> TransitionDetection:
-        return TransitionDetection(
-            detected=True,
-            next_scheme=SchemeType.POST_MATRIC,
-            trigger_description="Class 10 Matriculation Result detected. Student eligible for Post-Matric ladder rung.",
-            pre_filled_fields={
-                "name": "Sunita Hansda",
-                "father_name": "Babulal Hansda",
-                "tribe": "Santal",
-                "class": 11,
-                "reused_claims": ["IDENTITY", "ST_STATUS"]
-            }
-        )
+
+def get_eligibility_service(db: AsyncSession = Depends(get_db)) -> EligibilityService:
+    return EligibilityService(db)

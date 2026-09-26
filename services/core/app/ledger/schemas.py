@@ -14,6 +14,8 @@ class ApplicationCreate(BaseModel):
     scheme: SchemeType
     academic_year: str = Field(..., pattern=ACADEMIC_YEAR)
     details: dict[str, Any] = Field(default_factory=dict)
+    # Set to true to proceed after being told you hold another scholarship (one-scheme rule, §6.5).
+    acknowledge_one_scheme_rule: bool = False
 
 
 class ApplicationOut(BaseModel):
@@ -26,6 +28,7 @@ class ApplicationOut(BaseModel):
     canonical_state: CanonicalState
     state_changed_at: datetime
     details: dict[str, Any]
+    provisional_flags: list[str] = []
     created_at: datetime
 
 

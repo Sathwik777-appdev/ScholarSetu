@@ -57,6 +57,10 @@ TEMPLATES = {
         "en": "{name}: your {scheme} is due for renewal. Apply for the next academic year.",
         "hi": "{name}: आपकी {scheme} का नवीनीकरण बाकी है। अगले शैक्षणिक वर्ष के लिए आवेदन करें।",
     },
+    "TRANSITION_DETECTED": {
+        "en": "{name}: you may be eligible for the {scheme}. A pre-filled application ({app_id}) is ready for you to check and submit.",
+        "hi": "{name}: आप {scheme} के लिए पात्र हो सकते हैं। पहले से भरा आवेदन ({app_id}) जाँचने और जमा करने के लिए तैयार है।",
+    },
     "REVIEW_INFO_REQUESTED": {
         "en": "{name}: an officer needs more information about your {claim} for {app_id}.",
         "hi": "{name}: अधिकारी को {app_id} के लिए आपके {claim} के बारे में और जानकारी चाहिए।",
@@ -71,6 +75,7 @@ EVENT_TEMPLATES = {
     "PaymentCredited": ("CREDITED", True),
     "PaymentFailed": ("PAYMENT_FAILED", True),
     "RenewalDue": ("RENEWAL_DUE", False),
+    "TransitionDetected": ("TRANSITION_DETECTED", False),
 }
 
 

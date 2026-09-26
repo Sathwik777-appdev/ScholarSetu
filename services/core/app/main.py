@@ -30,7 +30,23 @@ logging.basicConfig(level=settings.LOG_LEVEL, format="%(asctime)s %(levelname)s 
 logger = logging.getLogger("scholarsetu.core")
 
 NUDGE_SUBJECTS = {"application.>": "nudge-application", "deficiency.>": "nudge-deficiency",
-                  "payment.>": "nudge-payment", "verification.>": "nudge-verification"}
+                  "payment.>": "nudge-payment", "verification.>": "nudge-verification",
+                  "pathway.>": "nudge-pathway"}
+
+
+async def _prepare_reference_data() -> None:
+    """Load decision tables (fail loudly on a bad rule file) and index the guideline corpus."""
+    from app.eligibility.service import load_rule_files
+    from app.jago_skill.embeddings import get_embedder
+    from app.jago_skill.rag import ensure_index
+    async with AsyncSessionLocal() as db:
+        loaded = await load_rule_files(db)
+        logger.info("rule versions loaded: %d new", loaded)
+    try:
+        async with AsyncSessionLocal() as db:
+            await ensure_index(db, get_embedder())
+    except Exception:
+        logger.exception("guideline index build failed; JAGO guideline answers will say they cannot answer")
 
 
 async def _handle_for_nudge(event) -> None:
@@ -72,11 +88,11 @@ async def lifespan(app: FastAPI):
     if settings.DEMO_MODE:
         logger.warning("DEMO_MODE is ON: seeded demo users can log in with the demo OTP. Never enable in production.")
     stop = asyncio.Event()
+    reference_task = asyncio.create_task(_prepare_reference_data())
     bus_task = asyncio.create_task(_run_event_bus(stop)) if settings.OUTBOX_PUBLISHER_ENABLED else None
     yield
     stop.set()
-    if bus_task:
-        await asyncio.wait([bus_task], timeout=5)
+    await asyncio.wait([t for t in (bus_task, reference_task) if t], timeout=5)
     await engine.dispose()
     logger.info("ScholarSetu core stopped")
 
@@ -135,6 +151,17 @@ async def readiness():
         checks["database"] = "ok"
     except Exception as exc:
         checks["database"] = f"error: {type(exc).__name__}"
+    try:
+        from app.jago_skill.models import GuidelineChunk
+        from app.jago_skill.rag import corpus_version
+        from sqlalchemy import func, select
+        async with AsyncSessionLocal() as db:
+            indexed = await db.scalar(select(func.count()).select_from(GuidelineChunk)
+                                      .where(GuidelineChunk.corpus_version == corpus_version()))
+        # Informational: until built, JAGO says it cannot answer guideline questions (it never guesses).
+        checks["guideline_index"] = f"ok ({indexed} passages)" if indexed else "building"
+    except Exception as exc:
+        checks["guideline_index"] = f"error: {type(exc).__name__}"
     bus = get_event_bus()
     checks["event_bus"] = "ok" if bus is not None and getattr(bus, "connected", False) else "unavailable"
     ready = checks["database"] == "ok"

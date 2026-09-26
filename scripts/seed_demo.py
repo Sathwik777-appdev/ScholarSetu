@@ -90,8 +90,9 @@ async def seed(db: AsyncSession, now: datetime | None = None) -> dict:
     t = datetime(2025, 8, 10, 10, tzinfo=timezone.utc)
     await ledger.transition(rahul, CanonicalState.INSTITUTE_VERIFICATION, SEED_ACTOR, occurred_at=t)
     await ledger.transition(rahul, CanonicalState.AUTHORITY_VERIFICATION, SEED_ACTOR, occurred_at=t + timedelta(days=12))
-    payments = await ledger.sanction(rahul, [("Scholarship (hosteller, Class 9)", Decimal(pre["hosteller"]["class_9"])),
-                                             ("Ad-hoc grant", Decimal(pre["adhoc_grant"]))],
+    payments = await ledger.sanction(rahul, [("Scholarship (hosteller, Class 9)",
+                                              Decimal(pre["hosteller_per_year"]["value"]["class_9"])),
+                                             ("Ad-hoc grant", Decimal(pre["adhoc_grant"]["value"]))],
                                      SEED_ACTOR, occurred_at=t + timedelta(days=30))
     for i, p in enumerate(payments):
         await ledger.update_payment(rahul, p.id, PaymentState.INITIATED, SEED_ACTOR, pfms_ref=f"PFMS-JH-2025-{7710 + i}",

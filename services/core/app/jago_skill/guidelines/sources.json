@@ -1,0 +1,47 @@
+{
+  "note": "Official MoTA guideline documents used as JAGO's guideline corpus. Rebuild with scripts/build_guideline_corpus.py. The documents are the source of truth; the corpus holds verbatim extracted text.",
+  "documents": [
+    {
+      "id": "pre_matric_2012",
+      "schemes": [
+        "PRE_MATRIC"
+      ],
+      "title": "Guidelines: Centrally Sponsored Scheme of Pre-Matric Scholarship for Needy Scheduled Tribe Students Studying in Classes IX & X (effective from 01-07-2012)",
+      "url": "https://scholarships.gov.in/public/schemeGuidelines/PRE_MATRIC_ST_(Class_IX_X)_GUIDELINES.pdf",
+      "sha256": "b0edc7c98b4f40821237711851f161f7405a850ebc0c39a9910e47891515d477",
+      "effective": "Effective from 01-07-2012 (as printed)"
+    },
+    {
+      "id": "post_matric_2022",
+      "schemes": [
+        "POST_MATRIC"
+      ],
+      "title": "Post Matric Scholarship for ST Students: Regulation Governing the Award of Scholarship (applicable from 01-04-2022)",
+      "url": "https://scholarships.gov.in/public/schemeGuidelines/Post-matric-guidelines-ST.pdf",
+      "sha256": "0a198cda53699cce97f72c59608f63a5d282cee33e591ebb57b4d04b6efedc83",
+      "effective": "Applicable from 01-04-2022 (as printed)"
+    },
+    {
+      "id": "nfs_2021_26",
+      "schemes": [
+        "NFST",
+        "TOP_CLASS"
+      ],
+      "part_b_scheme": "TOP_CLASS",
+      "title": "Guidelines: National Fellowship & Scholarship for Higher Education of ST Students, 2021-22 to 2025-26 (Part A: National Fellowship; Part B: National Scholarship / Top Class)",
+      "url": "https://tribal.nic.in/downloads/scholarship/NS/4_SchemeGuidelinesnListof265topclassInstitutes_TopC1123.pdf",
+      "sha256": "0febc3b73f9930ef680067fb933114943b16bb944f75f4ecf02f0a5ec7bd1df1",
+      "effective": "2021-22 to 2025-26 (as printed)"
+    },
+    {
+      "id": "nos_2021_26",
+      "schemes": [
+        "NOS"
+      ],
+      "title": "Guidelines: Central-Sector Scholarship Scheme of National Overseas Scholarship for ST Students, 2021-22 to 2025-26",
+      "url": "https://tribal.nic.in/downloads/guidelines/NOS/RevisedGuidelinesNOS07102022.pdf",
+      "sha256": "10156fbf98dbed02e18b5862857341a3deb5249ecbebcc474c1c14aadd6931d2",
+      "effective": "2021-22 to 2025-26 (as printed)"
+    }
+  ]
+}

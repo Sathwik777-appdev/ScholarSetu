@@ -69,13 +69,26 @@ async def database():
         await conn.execute(text("CREATE SCHEMA public"))
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
+    # Reference data, loaded once: decision tables and the embedded guideline corpus.
+    from app.eligibility.service import load_rule_files
+    from app.jago_skill.embeddings import get_embedder
+    from app.jago_skill.rag import ensure_index
+    async with AsyncSessionLocal() as session:
+        await load_rule_files(session)
+        await ensure_index(session, get_embedder())
     yield
     await engine.dispose()
+    get_embedder()._model = None  # release ONNX Runtime before interpreter shutdown
+    import gc
+    gc.collect()
+
+
+REFERENCE_TABLES = {"rule_versions", "guideline_chunks"}
 
 
 @pytest.fixture
 async def db(database):
-    names = ", ".join(t.name for t in Base.metadata.sorted_tables)
+    names = ", ".join(t.name for t in Base.metadata.sorted_tables if t.name not in REFERENCE_TABLES)
     async with engine.begin() as conn:
         await conn.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
     async with AsyncSessionLocal() as session:

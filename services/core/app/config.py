@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -65,6 +66,21 @@ class Settings(BaseSettings):
     SLA_DAYS_PAYMENT_INITIATED: float = 10
     SLA_DAYS_PAYMENT_FAILED: float = 7
     ATTESTATION_EXPIRY_WARNING_DAYS: int = 30
+
+    # JAGO guideline search (ARCHITECTURE.md §6.7): multilingual embeddings in pgvector + keyword match.
+    EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    EMBEDDING_CACHE_DIR: str | None = None
+    # Below this JAGO says it could not find an answer. Chosen on tests/integration/test_guideline_retrieval.py:
+    # unrelated questions score <= 0.16, the weakest correct answer about 0.3.
+    GUIDELINE_MIN_SCORE: float = 0.25
+    # Human helpline JAGO offers when it cannot answer. No number is invented: unset = institute nodal officer.
+    JAGO_HELPLINE: str | None = None
+
+    # Versioned eligibility decision tables (rules/*.json). In the container they live at /rules.
+    RULES_DIR: str = next((str(parent / "rules") for parent in Path(__file__).resolve().parents
+                           if (parent / "rules").is_dir()), "/rules")
+    # Academic years start in this month (e.g. 4 = April: 2026-04-01 starts 2026-27).
+    ACADEMIC_YEAR_START_MONTH: int = 4
 
     # Publish the transactional outbox to NATS from the API process.
     OUTBOX_PUBLISHER_ENABLED: bool = True

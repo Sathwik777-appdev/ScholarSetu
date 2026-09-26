@@ -1,187 +1,221 @@
-from typing import Dict, Any, List
+"""JAGO Scholarship Skill (ARCHITECTURE.md §6.7): one tool server behind JAGO and the in-app chat.
+
+Every fact in an answer comes from a tool that reads the ledger, the eligibility engine or the
+official guideline corpus, and is placed into a deterministic template. There is no free-text
+generation, so no amount, date or status can be invented.
+"""
+
+from datetime import datetime
+from typing import Any, Optional
+
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
+from app.database import get_db
+from app.jago_skill import rag
+from app.jago_skill.embeddings import Embedder, get_embedder
+from app.jago_skill.schemas import Citation, GuidelineResult, JAGOResponse, ToolCallLog
+from app.jago_skill.templates import (
+    DEFICIENCY_EXPLANATIONS, EVENT_NAMES, NEXT_STEP, T, rupees, scheme_name, status_name,
+)
+from app.jago_skill.tools import Intent, ToolDefinition, detect_intent
+from app.ledger.service import LedgerService
 from app.shared.types import SchemeType
-from .tools import ToolDefinition, Intent, INTENT_PATTERNS
-from .schemas import JAGOResponse, ToolCallLog, GuidelineResult
-from .templates import RESPONSE_TEMPLATES, STATUS_DESCRIPTIONS, DEFICIENCY_EXPLANATIONS
-from .rag import GuidelineRAG
+
+SUPPORTED_LANGUAGES = ("hi", "en")
+
+
+def _date(value: Any) -> str:
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value)
+    return value.strftime("%d-%m-%Y") if value else "-"
+
+
+def _helpline(lang: str) -> str:
+    if settings.JAGO_HELPLINE:
+        return settings.JAGO_HELPLINE
+    return "your institute's scholarship nodal officer" if lang == "en" else "अपने संस्थान के छात्रवृत्ति नोडल अधिकारी"
+
 
 class JAGOSkillService:
-    """JAGO Scholarship Skill - tool-grounded assistant for scholarship queries.
-    
-    Key principle: Money amounts, dates, and statuses ONLY come from tool outputs
-    and are rendered through deterministic templates. The LLM never generates these.
-    """
-    
-    def __init__(self, db: AsyncSession, ledger_service: Any = None, eligibility_service: Any = None, attestation_service: Any = None):
+    def __init__(self, db: AsyncSession, embedder: Embedder):
         self.db = db
-        self.ledger_service = ledger_service
-        self.eligibility_service = eligibility_service
-        self.attestation_service = attestation_service
-        self.tools = self._register_tools()
-        self.rag = GuidelineRAG()
-    
-    def _register_tools(self) -> dict[str, ToolDefinition]:
-        """Register all tools that the LLM can call."""
-        return {
-            "get_applications": ToolDefinition(
-                name="get_applications",
-                description="Get all scholarship applications for the authenticated student",
-                parameters={"student_id": "string"},
-                handler=self._get_applications
-            ),
-            "get_timeline": ToolDefinition(
-                name="get_timeline",
-                description="Get the event history/timeline for a specific application",
-                parameters={"application_id": "string"},
-                handler=self._get_timeline
-            ),
-            "get_pending_actions": ToolDefinition(
-                name="get_pending_actions",
-                description="Get list of pending actions (deficiencies, expiring attestations) for student",
-                parameters={"student_id": "string"},
-                handler=self._get_pending_actions
-            ),
-            "get_payments": ToolDefinition(
-                name="get_payments",
-                description="Get payment details (sanctioned/credited/failed amounts) for student",
-                parameters={"student_id": "string"},
-                handler=self._get_payments
-            ),
-            "check_eligibility": ToolDefinition(
-                name="check_eligibility",
-                description="Check if student is eligible for a specific scheme",
-                parameters={"student_id": "string", "scheme": "SchemeType"},
-                handler=self._check_eligibility
-            ),
-            "explain_deficiency": ToolDefinition(
-                name="explain_deficiency",
-                description="Explain a deficiency code in plain language with fix steps",
-                parameters={"deficiency_code": "string"},
-                handler=self._explain_deficiency
-            ),
-            "search_guidelines": ToolDefinition(
-                name="search_guidelines",
-                description="Search official scheme guidelines for information",
-                parameters={"query": "string"},
-                handler=self._search_guidelines
-            ),
+        self.embedder = embedder
+        self.ledger = LedgerService(db)
+        self.tools = {
+            "get_applications": ToolDefinition("get_applications", "Canonical status of all applications",
+                                               {"student_id": "string"}, self.get_applications),
+            "get_timeline": ToolDefinition("get_timeline", "Event history of one application",
+                                           {"application_id": "string"}, self.get_timeline),
+            "get_pending_actions": ToolDefinition("get_pending_actions", "Deficiencies, expiring attestations",
+                                                  {"student_id": "string"}, self.get_pending_actions),
+            "get_payments": ToolDefinition("get_payments", "Sanctioned / credited / failed amounts",
+                                           {"student_id": "string"}, self.get_payments),
+            "check_eligibility": ToolDefinition("check_eligibility", "Eligibility result with reasons and rule version",
+                                                {"student_id": "string", "scheme": "SchemeType"}, self.check_eligibility),
+            "explain_deficiency": ToolDefinition("explain_deficiency", "Plain-language fix steps for a deficiency code",
+                                                 {"deficiency_code": "string"}, self.explain_deficiency),
+            "search_guidelines": ToolDefinition("search_guidelines", "Cited passages from official guidelines",
+                                                {"query": "string"}, self.search_guidelines),
         }
-    
-    async def process_message(self, student_id: str, message: str, language: str = "hi", channel: str = "app") -> JAGOResponse:
-        """Process a student message.
-        1. Detect intent from the message
-        2. Determine which tools to call
-        3. Call tools and get factual data
-        4. Compose response using templates for factual parts
-        5. Log conversation
-        """
-        intent = await self._detect_intent(message)
-        response_text = ""
-        tool_calls = []
-        
-        # Tool routing based on intent (simplified for prototype)
-        if intent == Intent.STATUS_CHECK:
-            app_data = await self._get_applications(student_id)
-            tool_calls.append(ToolCallLog(tool_name="get_applications", parameters={"student_id": student_id}, result_summary="Found applications"))
-            
-            if app_data and "applications" in app_data and app_data["applications"]:
-                app = app_data["applications"][0]
-                status_desc = STATUS_DESCRIPTIONS.get(app.get("status", ""), {}).get(language, app.get("status", ""))
-                response_text = RESPONSE_TEMPLATES["status_update"][language].format(
-                    scheme_name=app.get("scheme_name", "Scholarship"),
-                    app_id=app.get("id", "Unknown"),
-                    status=status_desc,
-                    next_action=""
-                )
-            else:
-                response_text = RESPONSE_TEMPLATES["no_data"][language].format(helpline_number="1800-111-222")
 
-        elif intent == Intent.PAYMENT_INFO:
-            payment_data = await self._get_payments(student_id)
-            tool_calls.append(ToolCallLog(tool_name="get_payments", parameters={"student_id": student_id}, result_summary="Found payments"))
-            if payment_data:
-                response_text = RESPONSE_TEMPLATES["payment_summary"][language].format(
-                    scheme_name=payment_data.get("scheme_name", "Scholarship"),
-                    academic_year=payment_data.get("academic_year", "2023-24"),
-                    sanctioned=payment_data.get("sanctioned", 0),
-                    credited=payment_data.get("credited", 0),
-                    pending=payment_data.get("pending", 0),
-                    status_detail=""
-                )
-            else:
-                response_text = RESPONSE_TEMPLATES["no_data"][language].format(helpline_number="1800-111-222")
+    # ── tools (also callable by MoTA's JAGO over /v1/skill/tools) ──
 
-        elif intent == Intent.ELIGIBILITY_QUERY:
-            response_text = RESPONSE_TEMPLATES["eligibility_result"][language].format(
-                scheme_name="Scholarship",
-                result="You may be eligible based on basic criteria.",
-                reasons="Please check detailed guidelines."
-            )
-            
-        elif intent == Intent.GUIDELINE_QUERY:
-            guidelines = await self._search_guidelines(message)
-            tool_calls.append(ToolCallLog(tool_name="search_guidelines", parameters={"query": message}, result_summary=f"Found {len(guidelines)} results"))
-            if guidelines:
-                response_text = "\n\n".join([f"{g['section']}: {g['content']}" for g in guidelines])
-            else:
-                response_text = RESPONSE_TEMPLATES["no_data"][language].format(helpline_number="1800-111-222")
+    async def get_applications(self, student_id: str) -> dict:
+        return await self.ledger.student_dashboard(student_id)
 
+    async def get_timeline(self, application_id: str) -> list[dict]:
+        return [{"type": e.type, "occurred_at": e.occurred_at.isoformat(), "payload": e.payload}
+                for e in await self.ledger.timeline(application_id)]
+
+    async def get_pending_actions(self, student_id: str) -> list[dict]:
+        return await self.ledger.pending_actions(student_id)
+
+    async def get_payments(self, student_id: str) -> dict:
+        return await self.ledger.money_view(student_id)
+
+    async def check_eligibility(self, student_id: str, scheme: str) -> dict:
+        from app.eligibility.service import EligibilityService
+        result = await EligibilityService(self.db).check_eligibility(student_id, SchemeType(scheme), record=False)
+        return result.model_dump(mode="json")
+
+    async def explain_deficiency(self, deficiency_code: str) -> dict:
+        entry = DEFICIENCY_EXPLANATIONS.get(deficiency_code)
+        return {"code": deficiency_code, "known": entry is not None,
+                **({"description": {k: entry[k] for k in ("en", "hi")}, "fix_steps": entry["fix_steps"]} if entry else {})}
+
+    async def search_guidelines(self, query: str, scheme: Optional[str] = None) -> list[dict]:
+        passages = await rag.search(self.db, self.embedder, query, SchemeType(scheme) if scheme else None)
+        return [GuidelineResult(scheme=p.scheme, section=p.section, content=p.text, source=p.source_title,
+                                url=p.source_url, effective=p.effective, relevance_score=p.score).model_dump()
+                for p in passages]
+
+    # ── chat ─────────────────────────────────────────────────
+
+    async def process_message(self, student_id: str, message: str, language: str = "hi") -> JAGOResponse:
+        lang, note = (language, None) if language in SUPPORTED_LANGUAGES else ("hi", T["language_fallback"]["hi"])
+        intent = detect_intent(message)
+        calls: list[ToolCallLog] = []
+        citations: list[Citation] = []
+
+        if intent == Intent.PAYMENT_INFO:
+            text = await self._answer_payments(student_id, lang, calls)
+        elif intent == Intent.STATUS_CHECK:
+            text = await self._answer_status(student_id, lang, calls)
+        elif intent == Intent.TIMELINE_QUERY:
+            text = await self._answer_timeline(student_id, lang, calls)
         elif intent == Intent.DEFICIENCY_HELP:
-            deficiency_data = await self._explain_deficiency("INCOME_CERT_EXPIRED") # Mock
-            tool_calls.append(ToolCallLog(tool_name="explain_deficiency", parameters={"deficiency_code": "INCOME_CERT_EXPIRED"}, result_summary="Explained deficiency"))
-            if deficiency_data:
-                response_text = RESPONSE_TEMPLATES["deficiency_explanation"][language].format(
-                    description=deficiency_data.get("description", ""),
-                    fix_steps="\n".join([f"- {s}" for s in deficiency_data.get("fix_steps", [])]),
-                    deadline="15 days from notice"
-                )
-            else:
-                response_text = RESPONSE_TEMPLATES["no_data"][language].format(helpline_number="1800-111-222")
-                
+            text = await self._answer_pending(student_id, lang, calls)
+        elif intent == Intent.ELIGIBILITY_QUERY:
+            text = await self._answer_eligibility(student_id, message, lang, calls)
+        elif intent == Intent.GUIDELINE_QUERY:
+            text, citations = await self._answer_guideline(message, lang, calls)
         else:
-            response_text = RESPONSE_TEMPLATES["greeting"][language]
+            text = T["help"][lang]
+        return JAGOResponse(response_text=text, intent=intent.value, language=lang, language_note=note,
+                            tool_calls_made=calls, citations=citations)
 
-        return JAGOResponse(
-            response_text=response_text,
-            tool_calls_made=tool_calls,
-            citations=[],
-            suggested_actions=[]
-        )
-    
-    async def _detect_intent(self, message: str) -> Intent:
-        """Detect user intent from message."""
-        msg_lower = message.lower()
-        for intent, patterns in INTENT_PATTERNS.items():
-            for pattern in patterns:
-                if pattern in msg_lower:
-                    return intent
-        return Intent.GENERAL_HELP
-    
-    # Tool handler implementations
-    async def _get_applications(self, student_id: str) -> dict: 
-        return {"applications": [{"id": "APP123", "scheme_name": "Post Matric", "status": "INSTITUTE_VERIFICATION"}]}
-    
-    async def _get_timeline(self, application_id: str) -> dict: 
-        return {"timeline": []}
-    
-    async def _get_pending_actions(self, student_id: str) -> dict: 
-        return {"actions": []}
-    
-    async def _get_payments(self, student_id: str) -> dict: 
-        return {"scheme_name": "Post Matric", "academic_year": "2023-24", "sanctioned": 12000, "credited": 12000, "pending": 0}
-    
-    async def _check_eligibility(self, student_id: str, scheme: str) -> dict: 
-        return {"eligible": True}
-    
-    async def _explain_deficiency(self, deficiency_code: str) -> dict: 
-        if deficiency_code in DEFICIENCY_EXPLANATIONS:
-            return {
-                "description": DEFICIENCY_EXPLANATIONS[deficiency_code]["en"],
-                "fix_steps": DEFICIENCY_EXPLANATIONS[deficiency_code].get("fix_steps", [])
-            }
-        return {}
-    
-    async def _search_guidelines(self, query: str) -> dict: 
-        results = await self.rag.search(query)
-        return [{"section": r.section, "content": r.content, "source": r.source} for r in results]
+    async def _answer_status(self, student_id: str, lang: str, calls: list) -> str:
+        dash = await self.get_applications(student_id)
+        calls.append(ToolCallLog(tool_name="get_applications", parameters={"student_id": student_id},
+                                 result_summary=f"{len(dash['applications'])} application(s)"))
+        if not dash["applications"]:
+            return T["no_applications"][lang]
+        lines = []
+        for a in dash["applications"]:
+            lines.append(T["status_line"][lang].format(scheme=scheme_name(a["scheme"].value, lang), app_id=a["id"],
+                                                       year=a["academic_year"],
+                                                       status=status_name(a["current_state"].value, lang),
+                                                       since=_date(a["state_since"])))
+            step = NEXT_STEP.get(a["current_state"].value, {}).get(lang)
+            if step:
+                lines.append(T["next_action"][lang].format(action=step))
+        return "\n".join(lines)
+
+    async def _answer_payments(self, student_id: str, lang: str, calls: list) -> str:
+        money = await self.get_payments(student_id)
+        calls.append(ToolCallLog(tool_name="get_payments", parameters={"student_id": student_id},
+                                 result_summary=f"sanctioned {money['total_sanctioned']}, credited {money['total_credited']}"))
+        if not money["applications"]:
+            return T["no_applications"][lang]
+        lines = []
+        for a in money["applications"]:
+            scheme = scheme_name(a["scheme"].value, lang)
+            if a["sanctioned"] == 0:
+                lines.append(T["money_none_sanctioned"][lang].format(scheme=scheme, app_id=a["application_id"],
+                                                                     status=status_name(a["state"].value, lang)))
+                continue
+            lines.append(T["money_line"][lang].format(scheme=scheme, app_id=a["application_id"],
+                                                      sanctioned=rupees(a["sanctioned"]), credited=rupees(a["credited"]),
+                                                      pending=rupees(a["pending"])))
+            for p in a["instalments"]:
+                if p["state"].value == "FAILED":
+                    lines.append(T["money_failed"][lang].format(amount=rupees(p["amount"]), instalment=p["instalment"],
+                                                                reason=p["failure_code"] or "-"))
+                elif p["state"].value in ("INITIATED", "RETRYING"):
+                    lines.append(T["money_in_transit"][lang].format(amount=rupees(p["amount"]),
+                                                                    instalment=p["instalment"],
+                                                                    date=_date(p["initiated_at"])))
+        return "\n".join(lines)
+
+    async def _answer_timeline(self, student_id: str, lang: str, calls: list) -> str:
+        dash = await self.get_applications(student_id)
+        if not dash["applications"]:
+            return T["no_applications"][lang]
+        latest = dash["applications"][-1]
+        events = await self.get_timeline(latest["id"])
+        calls.append(ToolCallLog(tool_name="get_timeline", parameters={"application_id": latest["id"]},
+                                 result_summary=f"{len(events)} event(s)"))
+        lines = [f"{scheme_name(latest['scheme'].value, lang)} {latest['id']}:"]
+        for e in events[-6:]:
+            lines.append(T["timeline_line"][lang].format(date=_date(e["occurred_at"]),
+                                                         event=EVENT_NAMES.get(e["type"], {}).get(lang, e["type"])))
+        return "\n".join(lines)
+
+    async def _answer_pending(self, student_id: str, lang: str, calls: list) -> str:
+        actions = await self.get_pending_actions(student_id)
+        calls.append(ToolCallLog(tool_name="get_pending_actions", parameters={"student_id": student_id},
+                                 result_summary=f"{len(actions)} action(s)"))
+        if not actions:
+            return T["no_actions"][lang]
+        lines = []
+        for a in actions:
+            key = "action_line" if a.get("deadline") else "action_line_no_deadline"
+            lines.append(T[key][lang].format(description=a["description"], deadline=_date(a.get("deadline"))))
+        return "\n".join(lines)
+
+    async def _answer_eligibility(self, student_id: str, message: str, lang: str, calls: list) -> str:
+        scheme = rag.detect_scheme(message)
+        dash = await self.get_applications(student_id)
+        if scheme is None:
+            scheme = dash["applications"][-1]["scheme"] if dash["applications"] else SchemeType.POST_MATRIC
+        result = await self.check_eligibility(student_id, scheme.value)
+        calls.append(ToolCallLog(tool_name="check_eligibility", parameters={"student_id": student_id,
+                                                                            "scheme": scheme.value},
+                                 result_summary=result["status"]))
+        verdict = {"ELIGIBLE": {"en": "you meet the criteria", "hi": "आप मानदंड पूरे करते हैं"},
+                   "NOT_ELIGIBLE": {"en": "you do not meet the criteria", "hi": "आप मानदंड पूरे नहीं करते"},
+                   "NEEDS_INFORMATION": {"en": "more verified information is needed", "hi": "और सत्यापित जानकारी चाहिए"}}
+        return T["eligibility_result"][lang].format(scheme=scheme_name(scheme.value, lang),
+                                                    verdict=verdict[result["status"]][lang],
+                                                    reasons=" ".join(result["reasons"]),
+                                                    version=result["rule_version"])
+
+    async def _answer_guideline(self, message: str, lang: str, calls: list) -> tuple[str, list[Citation]]:
+        found = await rag.search(self.db, self.embedder, message)
+        calls.append(ToolCallLog(tool_name="search_guidelines", parameters={"query": message},
+                                 result_summary=f"{len(found)} passage(s)"))
+        if not found:
+            return T["not_found"][lang].format(helpline=_helpline(lang)), []
+        best = found[0]
+        quote = await rag.section_text(self.db, best)  # the whole official section, not a fragment
+        text = T["guideline_answer"][lang].format(section=best.section.removesuffix(" (cont.)"), text=quote)
+        passages = [{"source": p.source_title, "section": p.section, "url": p.source_url, "effective": p.effective}
+                    for p in found]
+        return text, [Citation(source=p["source"], section=p["section"], url=p["url"], effective=p["effective"])
+                      for p in passages]
+
+
+def get_jago_service(db: AsyncSession = Depends(get_db)) -> JAGOSkillService:
+    return JAGOSkillService(db, get_embedder())

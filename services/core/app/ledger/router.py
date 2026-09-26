@@ -65,7 +65,8 @@ def _app_out(app: Application) -> ApplicationOut:
     return ApplicationOut(id=app.id, student_id=app.student_id, scheme=app.scheme, academic_year=app.academic_year,
                           source_system=app.source_system, source_ref=app.source_ref,
                           canonical_state=app.canonical_state, state_changed_at=app.state_changed_at,
-                          details=app.details, created_at=app.created_at)
+                          details=app.details, provisional_flags=app.provisional_flags or [],
+                          created_at=app.created_at)
 
 
 # ── student views ─────────────────────────────────────────────────────────────
@@ -107,12 +108,30 @@ async def get_pending_actions(principal: StudentPrincipal = Depends(student_prin
 @router.post("/applications", response_model=ApplicationOut, status_code=201)
 async def create_application(body: ApplicationCreate, principal: StudentPrincipal = Depends(student_principal()),
                              ledger: LedgerService = Depends(get_ledger_service)):
-    """Students apply for themselves; Mitra helpers cannot create applications."""
+    """Students apply for themselves; Mitra helpers cannot create applications.
+
+    One scholarship at a time (ARCHITECTURE.md §6.5): a duplicate for the same scheme and year is refused;
+    holding a different scheme returns 409 with the rule explained, and the student may proceed by
+    resending with acknowledge_one_scheme_rule=true (the application is then flagged).
+    """
+    from app.eligibility.service import EligibilityService
+    check = await EligibilityService(ledger.db).check_one_scheme_rule(principal.student_id, body.scheme,
+                                                                      body.academic_year)
+    if check.blocking or (check.has_conflict and not body.acknowledge_one_scheme_rule):
+        raise HTTPException(status_code=409, detail={"code": "ONE_SCHEME_RULE", "message": check.message,
+                                                     "current_holding": check.current_holding,
+                                                     "holding_application_id": check.holding_application_id,
+                                                     "can_acknowledge": not check.blocking})
     try:
         app = await ledger.create_application(principal.student_id, body.scheme, body.academic_year,
                                               actor_of(principal.user), body.details)
     except LedgerError as exc:
         raise _http(exc)
+    if check.has_conflict:
+        app.provisional_flags = [f"MUST_SURRENDER:{check.holding_application_id}"]
+        await ledger.append_event(app, "OneSchemeRuleAcknowledged",
+                                  {"holding_application_id": check.holding_application_id,
+                                   "message": check.message}, actor_of(principal.user))
     await ledger.db.commit()
     return _app_out(app)
 

@@ -1,51 +1,133 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "scheme": "TOP_CLASS",
   "version": "2026-v1",
   "effective_from": "2026-04-01",
-  "description": "Top Class Education for ST Students in Premier Institutions",
+  "description": "Top Class Education (National Scholarship, Part B) for ST students in notified premier institutions",
+  "parameters": {
+    "income_ceiling": {
+      "value": 600000,
+      "unit": "INR per year",
+      "source": "National Fellowship & Scholarship guidelines 2021-22 to 2025-26, Part B section 2.2",
+      "source_url": "https://tribal.nic.in/downloads/scholarship/NS/4_SchemeGuidelinesnListof265topclassInstitutes_TopC1123.pdf",
+      "verified_by_team": false,
+      "official_document_value": 600000,
+      "conflict": false,
+      "note": "The old Python decision table used Rs 8,00,000; it has been deleted. The official guideline says Rs 6.0 lakh."
+    }
+  },
   "rules": [
     {
       "id": "tc_st_status",
-      "field": "st_status_verified",
-      "operator": "equals",
-      "value": true,
-      "failure_reason": "Student must belong to a Scheduled Tribe."
+      "needs": [
+        "claims.ST_STATUS.verified"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "claims.ST_STATUS.verified"
+          },
+          true
+        ]
+      },
+      "failure_reason": "Student must belong to a Scheduled Tribe.",
+      "failure_reason_hi": "छात्र को अनुसूचित जनजाति से संबंधित होना चाहिए।"
     },
     {
       "id": "tc_income_limit",
-      "field": "family_annual_income",
-      "operator": "lte",
-      "value": 600000,
-      "failure_reason": "Family annual income must not exceed ₹6,00,000."
+      "needs": [
+        "claims.INCOME.annual_income"
+      ],
+      "logic": {
+        "<=": [
+          {
+            "var": "claims.INCOME.annual_income"
+          },
+          {
+            "var": "params.income_ceiling"
+          }
+        ]
+      },
+      "failure_reason": "Family annual income exceeds the scheme ceiling.",
+      "failure_reason_hi": "परिवार की वार्षिक आय योजना की सीमा से अधिक है।"
     },
     {
       "id": "tc_premier_institution",
-      "field": "top_class_institution_verified",
-      "operator": "equals",
-      "value": true,
-      "failure_reason": "Student must be admitted in a notified premier institution (IIT, IIM, NIT, AIIMS, NLU, etc.)."
+      "needs": [
+        "claims.TOP_CLASS_INSTITUTION.verified"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "claims.TOP_CLASS_INSTITUTION.verified"
+          },
+          true
+        ]
+      },
+      "failure_reason": "Not admitted to a notified premier institution.",
+      "failure_reason_hi": "अधिसूचित प्रमुख संस्थान में प्रवेश नहीं है।"
     },
     {
       "id": "tc_one_scheme",
-      "field": "has_active_mota_scholarship",
-      "operator": "equals",
-      "value": false,
-      "failure_reason": "Student must not hold another active MoTA scholarship."
+      "needs": [
+        "has_other_active_mota_scholarship"
+      ],
+      "logic": {
+        "==": [
+          {
+            "var": "has_other_active_mota_scholarship"
+          },
+          false
+        ]
+      },
+      "failure_reason": "Student must not hold another active MoTA scholarship.",
+      "failure_reason_hi": "छात्र के पास कोई अन्य सक्रिय MoTA छात्रवृत्ति नहीं होनी चाहिए।"
     }
   ],
-  "required_attestations": ["IDENTITY", "ST_STATUS", "INCOME", "TOP_CLASS_INSTITUTION"],
+  "required_attestations": [
+    "IDENTITY",
+    "ST_STATUS",
+    "INCOME",
+    "TOP_CLASS_INSTITUTION"
+  ],
   "amounts": {
-    "tuition_fee": "actual",
-    "living_expenses": 220000,
-    "book_grant": 15000,
-    "computer_allowance": 45000,
-    "computer_allowance_note": "one-time"
-  },
-  "notified_institutions": [
-    "IITs", "IIMs", "NITs", "IIITs", "AIIMS", "NLUs",
-    "IISc Bangalore", "TISS Mumbai", "NIFT", "NID",
-    "Delhi University (select colleges)", "JNU",
-    "ISI Kolkata", "IISER", "NISER"
-  ]
+    "tuition_fee": {
+      "value": "actual",
+      "unit": "INR",
+      "source": "National Fellowship & Scholarship guidelines 2021-22 to 2025-26, Part B section 2.5",
+      "source_url": "https://tribal.nic.in/downloads/scholarship/NS/4_SchemeGuidelinesnListof265topclassInstitutes_TopC1123.pdf",
+      "verified_by_team": false,
+      "official_document_value": "full for Government institutes; ceiling Rs 2.50 lakh/year for private",
+      "conflict": true
+    },
+    "living_expenses": {
+      "value": 220000,
+      "unit": "INR per year",
+      "source": "National Fellowship & Scholarship guidelines 2021-22 to 2025-26, Part B section 2.5",
+      "source_url": "https://tribal.nic.in/downloads/scholarship/NS/4_SchemeGuidelinesnListof265topclassInstitutes_TopC1123.pdf",
+      "verified_by_team": false,
+      "official_document_value": {
+        "stipend_monthly": 3000
+      },
+      "conflict": true
+    },
+    "book_grant": {
+      "value": 15000,
+      "unit": "INR per year",
+      "source": "National Fellowship & Scholarship guidelines 2021-22 to 2025-26, Part B section 2.5",
+      "source_url": "https://tribal.nic.in/downloads/scholarship/NS/4_SchemeGuidelinesnListof265topclassInstitutes_TopC1123.pdf",
+      "verified_by_team": false,
+      "official_document_value": 5000,
+      "conflict": true
+    },
+    "computer_allowance": {
+      "value": 45000,
+      "unit": "INR one-time",
+      "source": "National Fellowship & Scholarship guidelines 2021-22 to 2025-26, Part B section 2.5",
+      "source_url": "https://tribal.nic.in/downloads/scholarship/NS/4_SchemeGuidelinesnListof265topclassInstitutes_TopC1123.pdf",
+      "verified_by_team": false,
+      "official_document_value": 45000,
+      "conflict": false
+    }
+  }
 }
