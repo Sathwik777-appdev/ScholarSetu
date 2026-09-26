@@ -96,9 +96,25 @@ class AttestationStatus(str, Enum):
 
 class ReviewDecision(str, Enum):
     """Officer decision on a manual review case."""
+    APPROVE = "APPROVE"
+    REJECT = "REJECT"
+    REQUEST_INFO = "REQUEST_INFO"
+
+
+class ReviewCaseStatus(str, Enum):
+    PENDING = "PENDING"
+    INFO_REQUESTED = "INFO_REQUESTED"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
-    NEEDS_MORE_INFO = "NEEDS_MORE_INFO"
+    RESOLVED_BY_SOURCE = "RESOLVED_BY_SOURCE"  # a later automatic verification confirmed the claim
+
+
+class ReviewReason(str, Enum):
+    """Why a claim was routed to a human instead of being auto-verified."""
+    IDENTITY_NOT_CONFIRMED = "IDENTITY_NOT_CONFIRMED"   # a source confirmed the claim, but the holder-identity link is uncertain
+    NOT_CONFIRMED_BY_SOURCE = "NOT_CONFIRMED_BY_SOURCE" # sources answered but none confirmed the claim
+    SOURCE_UNAVAILABLE = "SOURCE_UNAVAILABLE"           # every source errored or timed out
+    NO_AUTOMATED_SOURCE = "NO_AUTOMATED_SOURCE"         # no verifier exists for this claim type
 
 
 # ── Payments ────────────────────────────────────────────────

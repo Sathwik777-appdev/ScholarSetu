@@ -1,86 +1,74 @@
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
 
-from app.dependencies import OFFICER_ROLES, get_current_user, require_role
+from app.dependencies import OFFICER_ROLES, Reader, officer_or_student, require_role
 from app.gateway.models import User
-from app.shared.types import ClaimType, ConsentArtefact, UserRole
-from app.verification.schemas import ReviewDecisionRequest, VerificationReport
-from app.verification.service import VerificationMeshService, get_verification_service
+from app.ledger.router import ensure_application_access
+from app.shared.types import ConsentArtefact, ReviewCaseStatus
+from app.students.service import StudentNotFound
+from app.verification.schemas import (
+    ReviewCaseOut, ReviewDecisionRequest, ReviewDecisionResponse, VerificationReport, VerifyClaimsRequest,
+)
+from app.verification.service import ReviewCaseError, VerificationMeshService, get_verification_service
 
 router = APIRouter(prefix="/v1", tags=["Verification Mesh & Review"])
-
-
-class VerifyClaimsRequest(BaseModel):
-    required_claims: list[ClaimType]
-    consent_id: str
-    # Officers may name the student; students always verify themselves.
-    student_id: Optional[str] = None
-
-
-def _target_student(user: User, requested: Optional[str]) -> str:
-    if user.role == UserRole.STUDENT:
-        if requested and requested != user.student_id:
-            raise HTTPException(status_code=403, detail="Students can only verify their own claims")
-        return user.student_id
-    if user.role in OFFICER_ROLES:
-        if not requested:
-            raise HTTPException(status_code=422, detail="student_id is required for officer-initiated verification")
-        return requested
-    raise HTTPException(status_code=403, detail="Insufficient role")
 
 
 @router.post("/verify/claims", response_model=VerificationReport)
 async def verify_claims(
     request: VerifyClaimsRequest,
-    user: User = Depends(get_current_user),
+    reader: Reader = Depends(officer_or_student()),
     service: VerificationMeshService = Depends(get_verification_service),
 ):
-    """Trigger multi-source claim verification with attestation reuse and identity matching."""
-    student_id = _target_student(user, request.student_id)
-    # TODO(Phase 7, S3): replace with a lookup of a stored, unexpired, unrevoked consent.
+    """Verify the claims an application needs. The student is the application's owner.
+
+    Never reports VERIFIED by default: unconfirmed claims come back PROVISIONAL, MANUAL_REVIEW
+    or SOURCE_UNAVAILABLE and are routed to the officer review queue.
+    """
+    application = ensure_application_access(service.ledger, request.application_id, reader)
+    # TODO(Phase 7, S3): look up a stored, unexpired, unrevoked consent instead of trusting the id.
     consent = ConsentArtefact(
         consent_id=request.consent_id,
-        student_id=student_id,
+        student_id=application.student_id,
         requester="SCHOLARSETU_VERIFICATION_MESH",
         purpose="MoTA Scholarship Eligibility Verification",
         data_items=[c.value for c in request.required_claims],
         granted_at="2026-09-25T10:00:00Z",
         expires_at="2027-09-25T10:00:00Z"
     )
-    return await service.verify_claims(student_id, request.required_claims, consent)
+    try:
+        return await service.verify_claims(application.student_id, application.id, request.required_claims, consent)
+    except StudentNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 @router.get("/verify/status/{request_id}", status_code=status.HTTP_501_NOT_IMPLEMENTED)
-async def check_verification_status(request_id: str, user: User = Depends(get_current_user)):
+async def check_verification_status(request_id: str, user: User = Depends(require_role(*OFFICER_ROLES))):
     """Verification runs synchronously today; there is no request tracking to report on."""
     raise HTTPException(status_code=501, detail="Asynchronous verification status is not implemented")
 
 
-@router.get("/review/cases")
+@router.get("/review/cases", response_model=list[ReviewCaseOut])
 async def get_review_cases(
-    sort: str = Query("sla_risk"),
-    officer: User = Depends(require_role(*OFFICER_ROLES)),
-    service: VerificationMeshService = Depends(get_verification_service),
-) -> List[Dict[str, Any]]:
-    """Officer review queue sorted by SLA risk."""
-    return await service.get_review_cases()
-
-
-@router.post("/review/cases/{id}/decision")
-async def post_review_decision(
-    id: str,
-    decision: ReviewDecisionRequest,
+    status_filter: Optional[ReviewCaseStatus] = Query(None, alias="status"),
+    sort: str = Query("sla_risk", pattern="^sla_risk$"),
     officer: User = Depends(require_role(*OFFICER_ROLES)),
     service: VerificationMeshService = Depends(get_verification_service),
 ):
-    """Record officer review decision on a provisional case."""
-    result = await service.decide_review_case(id, decision.decision.value, decision.notes, decided_by=officer.id)
-    return {
-        "status": "success",
-        "case_id": id,
-        "decision": decision.decision.value,
-        "notes": decision.notes,
-        "updated_case": result
-    }
+    """Officer review queue, most urgent SLA deadline first."""
+    return await service.list_cases(status_filter)
+
+
+@router.post("/review/cases/{case_id}/decision", response_model=ReviewDecisionResponse)
+async def post_review_decision(
+    case_id: str,
+    body: ReviewDecisionRequest,
+    officer: User = Depends(require_role(*OFFICER_ROLES)),
+    service: VerificationMeshService = Depends(get_verification_service),
+):
+    """APPROVE, REJECT or REQUEST_INFO. Writes a ledger event and updates the attestation."""
+    try:
+        return await service.decide(case_id, body.decision, body.notes, officer, body.claim_value)
+    except ReviewCaseError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)

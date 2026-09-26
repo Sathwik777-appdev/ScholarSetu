@@ -70,7 +70,7 @@ class IndicIdentityResolver:
         corroboration = self._corroborate(source_records)
         final_score = min(1.0, avg_name_score + corroboration.score)
         
-        decision, desc = self._decide(final_score)
+        decision, desc = self._decide(final_score, corroborated=bool(corroboration.details))
         explanation = self._explain(comparisons[0], corroboration) if comparisons else "No comparisons made."
         
         return IdentityResolution(
@@ -165,9 +165,12 @@ class IndicIdentityResolver:
                 details["district"] = "Match"
         return CorroborationResult(min(0.35, score), details)
     
-    def _decide(self, final_score: float) -> tuple[str, str]:
-        if final_score >= self.AUTO_VERIFY_THRESHOLD:
+    def _decide(self, final_score: float, corroborated: bool) -> tuple[str, str]:
+        # ARCHITECTURE.md §6.4.3: auto-verify needs a high score AND at least one corroborating field.
+        if final_score >= self.AUTO_VERIFY_THRESHOLD and corroborated:
             return "AUTO_VERIFY", "High confidence match."
+        if final_score >= self.AUTO_VERIFY_THRESHOLD:
+            return "PROVISIONAL", "Names match closely but no corroborating field (DOB, gender, father's name, district) was available."
         elif final_score >= self.PROVISIONAL_THRESHOLD:
             return "PROVISIONAL", "Borderline match, requires review."
         return "MANUAL_REVIEW", "Low confidence match, requires manual review."

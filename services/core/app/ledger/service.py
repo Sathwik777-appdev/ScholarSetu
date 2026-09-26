@@ -101,21 +101,6 @@ class LedgerService:
             event_hash=evt2_hash
         ))
 
-        evt3_time = now - timedelta(days=2)
-        evt3_hash = compute_hash("ProvisionalIdentityMatch", sunita_app_id, evt3_time.isoformat(), "{}", evt2_hash)
-        self._events.append(LedgerEventResponse(
-            id="evt_03",
-            application_id=sunita_app_id,
-            event_type="ProvisionalIdentityMatch",
-            payload={
-                "score": 0.88,
-                "note": "Hansda vs Hansdah transliteration difference. Routed to District Officer review without blocking."
-            },
-            source=SourceSystem.SCHOLARSETU,
-            occurred_at=evt3_time,
-            event_hash=evt3_hash
-        ))
-
     async def append_event(
         self, application_id: str, event_type: str, payload: dict[str, Any],
         source: SourceSystem, scheme: SchemeType, student_id: str

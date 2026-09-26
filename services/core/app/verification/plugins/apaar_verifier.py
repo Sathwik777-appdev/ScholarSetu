@@ -1,22 +1,28 @@
-from app.shared.types import ClaimType, VerificationMethod, VerificationStatus, ConsentArtefact
-from app.verification.plugins.base import VerifierPlugin, SubjectRef, VerificationResult
+from app.shared.types import ClaimType, ConsentArtefact, VerificationStatus
+from app.verification.identity_resolver import IdentityRecord
+from app.verification.plugins.base import SubjectRef, VerificationResult, not_confirmed, parse_date
+from app.verification.sources import SourceClient, evidence_hash
 
-class APAARVerifier(VerifierPlugin):
-    claim_type: ClaimType = ClaimType.ACADEMIC_RECORDS
-    source_name: str = "APAAR"
-    priority: int = 1
-    
-    async def verify(self, subject: SubjectRef, consent: ConsentArtefact) -> VerificationResult:
+
+class APAARVerifier:
+    claim_types = (ClaimType.ACADEMIC_RECORDS,)
+    source_name = "APAAR"
+    priority = 2
+
+    async def verify(self, claim_type: ClaimType, subject: SubjectRef, consent: ConsentArtefact,
+                     client: SourceClient) -> VerificationResult:
+        if not subject.apaar_id:
+            return not_confirmed(self.source_name, "No APAAR ID on the student record")
+        body = await client.request("GET", f"/apaar/students/{subject.apaar_id}/records")
+        if body is None:
+            return not_confirmed(self.source_name, "APAAR has no academic records for this ID")
+        records = body.get("records", [])
+        if not records:
+            return not_confirmed(self.source_name, "APAAR returned no academic records", body)
         return VerificationResult(
-            status=VerificationStatus.VERIFIED,
-            confidence=0.98,
-            source=self.source_name,
-            method=VerificationMethod.API,
-            evidence_hash="mock_hash_apaar",
-            claim_value={"apaar_id": subject.apaar_id, "academic_credits": 120},
-            reasons=["Found valid academic records via APAAR ID"],
-            raw_response={"credits": 120, "status": "Active"}
+            status=VerificationStatus.VERIFIED, source=self.source_name, confidence=0.9,
+            evidence_hash=evidence_hash(body), source_ref=subject.apaar_id, claim_value={"records": records},
+            subject_record=IdentityRecord("APAAR", body["name"], parse_date(body.get("dob")), body.get("gender"),
+                                          None, None, None),
+            reasons=[f"{len(records)} academic record(s) found in APAAR"],
         )
-        
-    async def is_available(self) -> bool:
-        return True

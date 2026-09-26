@@ -10,7 +10,7 @@ from app.config import settings
 from app.gateway.models import AssistSession, AuditLog, OtpChallenge
 from app.main import app
 from app.shared.types import UserRole
-from tests.conftest import bearer, latest_sms_code, login, make_user
+from tests.conftest import RAHUL_STUDENT, SUNITA_STUDENT, bearer, latest_sms_code, login, make_student, make_user
 
 SUNITA = ("9876543210", "stu-sunita-001")
 RAHUL = ("9876543211", "stu-rahul-002")
@@ -29,6 +29,8 @@ PUBLIC_ROUTES = {
 
 
 async def _students(db):
+    await make_student(db, **SUNITA_STUDENT)
+    await make_student(db, **RAHUL_STUDENT)
     await make_user(db, SUNITA[0], UserRole.STUDENT, "Sunita Hansda", student_id=SUNITA[1],
                     household_id="hh_hansda_001", is_demo=True)
     await make_user(db, RAHUL[0], UserRole.STUDENT, "Rahul Hansda", student_id=RAHUL[1],
@@ -185,8 +187,15 @@ async def test_student_sees_only_own_data(client, db):
     assert all(not v for v in r.json()["attestations"].values())
 
     # Sunita's attestation cannot be probed by Rahul
+    from app.attestation.keys import get_signer
+    from app.attestation.service import AttestationService
+    from app.shared.types import ClaimType, VerificationMethod
+    att = await AttestationService(db, get_signer()).issue_attestation(
+        SUNITA[1], ClaimType.ST_STATUS, {"tribe": "Santal"}, "e-District", VerificationMethod.API, 0.95, None)
+    await db.commit()
     passport = (await client.get("/v1/me/attestations", headers=bearer(sunita))).json()
     att_id = passport["attestations"]["ST_STATUS"][0]["attestation_id"]
+    assert att_id == att.id
     assert (await client.get(f"/v1/attestations/{att_id}/verify", headers=bearer(rahul))).status_code == 404
     ok = await client.get(f"/v1/attestations/{att_id}/verify", headers=bearer(sunita))
     assert ok.json() == {"is_valid": True, "reason": None}
@@ -196,10 +205,11 @@ async def test_student_sees_only_own_data(client, db):
                           json={"student_id": SUNITA[1], "scheme": "NOS", "academic_year": "2026-27"})
     assert r.status_code == 422
 
-    # A student cannot run verification for someone else
+    # A student cannot run verification on someone else's application
     r = await client.post("/v1/verify/claims", headers=bearer(rahul),
-                          json={"student_id": SUNITA[1], "required_claims": ["INCOME"], "consent_id": "c1"})
-    assert r.status_code == 403
+                          json={"application_id": "APP-PM-2026-000812", "required_claims": ["INCOME"],
+                                "consent_id": "c1"})
+    assert r.status_code == 404
 
 
 async def test_household_view_is_guardian_only(client, db):

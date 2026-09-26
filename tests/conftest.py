@@ -36,7 +36,8 @@ import pytest  # noqa: E402
 from sqlalchemy import select, text  # noqa: E402
 
 from app.database import AsyncSessionLocal, Base, engine  # noqa: E402
-from app.gateway.models import PHASE1_TABLES, OutboundSms, User  # noqa: E402
+from app.db_tables import LIVE_TABLES  # noqa: E402
+from app.gateway.models import OutboundSms, User  # noqa: E402
 from app.main import app  # noqa: E402
 from app.shared.types import UserRole  # noqa: E402
 
@@ -59,19 +60,21 @@ async def database():
     try:
         await _ensure_database()
     except (OSError, asyncpg.PostgresError) as exc:
-        pytest.skip(f"Postgres not reachable for integration tests: {exc}")
+        # Fail loudly: silently skipping would make a run without a database look green.
+        pytest.fail(f"Postgres not reachable ({exc}). Start it with: "
+                    "docker compose -f infra/docker-compose.yml up -d postgres", pytrace=False)
     async with engine.begin() as conn:
-        await conn.run_sync(lambda c: Base.metadata.drop_all(c, tables=PHASE1_TABLES))
-        await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=PHASE1_TABLES))
+        await conn.run_sync(lambda c: Base.metadata.drop_all(c, tables=LIVE_TABLES))
+        await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=LIVE_TABLES))
     yield
     await engine.dispose()
 
 
 @pytest.fixture
 async def db(database):
-    names = ", ".join(t.name for t in PHASE1_TABLES)
+    names = ", ".join(t.name for t in LIVE_TABLES)
     async with engine.begin() as conn:
-        await conn.execute(text(f"TRUNCATE {names}"))
+        await conn.execute(text(f"TRUNCATE {names} CASCADE"))
     async with AsyncSessionLocal() as session:
         yield session
 
@@ -113,3 +116,76 @@ async def login(client, db, phone: str) -> str:
 
 def bearer(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
+
+
+# ── Demo students and simulated government sources ───────────────────────────
+
+import importlib  # noqa: E402
+import sys  # noqa: E402
+from datetime import date  # noqa: E402
+
+from app.shared.types import Gender  # noqa: E402
+from app.students.models import Student  # noqa: E402
+from app.verification.sources import SourceClient, get_source_client  # noqa: E402
+
+_MOCKS_DIR = Path(__file__).resolve().parents[1] / "mocks"
+sys.path.insert(0, str(_MOCKS_DIR))
+mocks_main = importlib.import_module("main")          # mocks/main.py: the mock government cluster
+mocks_data = importlib.import_module("synthetic_data")
+mocks_data.generate_synthetic_data()
+
+SUNITA_STUDENT = dict(id="stu-sunita-001", full_name="Sunita Hansda", name_variants=["Sunita Hansda"],
+                      dob=date(2008, 4, 12), gender=Gender.FEMALE, father_name="Babulal Hansda",
+                      mother_name="Marangmai Hansda", tribe="Santal", state="Jharkhand", district="Dumka",
+                      household_id="hh_hansda_001", aadhaar_ref_token="AREF-JH-0004912",
+                      apaar_id="APAAR-JH-2026-0812")
+RAHUL_STUDENT = dict(id="stu-rahul-002", full_name="Rahul Hansda", name_variants=["Rahul Hansda"],
+                     dob=date(2010, 8, 15), gender=Gender.MALE, father_name="Babulal Hansda",
+                     mother_name="Marangmai Hansda", tribe="Santal", state="Jharkhand", district="Dumka",
+                     household_id="hh_hansda_001", aadhaar_ref_token="AREF-JH-0009914",
+                     apaar_id="APAAR-JH-2025-4192")
+
+
+async def make_student(db, **fields) -> Student:
+    student = Student(**fields)
+    db.add(student)
+    await db.commit()
+    return student
+
+
+class GovSources:
+    """The mock government cluster, in-process. Put path prefixes in `down` (or "*") to simulate outages."""
+
+    def __init__(self):
+        self.down: set[str] = set()
+        self.calls: list[str] = []
+        self.transport = _GovTransport(self)
+
+
+class _GovTransport(httpx.AsyncBaseTransport):
+    def __init__(self, gov: GovSources):
+        self.gov = gov
+        self.inner = httpx.ASGITransport(app=mocks_main.app)
+
+    async def handle_async_request(self, request):
+        path = request.url.path
+        self.gov.calls.append(path)
+        if "*" in self.gov.down or any(path.startswith(prefix) for prefix in self.gov.down):
+            raise httpx.ConnectError("simulated outage", request=request)
+        return await self.inner.handle_async_request(request)
+
+
+@pytest.fixture
+def gov():
+    sources = GovSources()
+
+    async def _client():
+        client = SourceClient("http://mocks", transport=sources.transport, attempts=2)
+        try:
+            yield client
+        finally:
+            await client.aclose()
+
+    app.dependency_overrides[get_source_client] = _client
+    yield sources
+    app.dependency_overrides.pop(get_source_client, None)

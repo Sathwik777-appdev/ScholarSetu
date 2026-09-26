@@ -87,9 +87,3 @@ class OutboundSms(Base):
     body: Mapped[str] = mapped_column(String, nullable=False)
     category: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
-
-
-# Tables introduced in Phase 1. Until the Phase 4 migration exists they are created
-# by scripts/seed_demo.py and by the test suite.
-PHASE1_TABLES = [User.__table__, OtpChallenge.__table__, AssistSession.__table__,
-                 AuditLog.__table__, OutboundSms.__table__]

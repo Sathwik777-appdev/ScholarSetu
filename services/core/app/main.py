@@ -5,7 +5,7 @@ import logging
 
 from app.config import settings
 from app.database import engine
-from app.attestation.service import get_attestation_service
+from app.attestation.keys import get_signer
 
 # Routers
 from app.gateway.router import router as gateway_router
@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan: initialize background resources and clean up on exit."""
     logger.info("Starting ScholarSetu Modular Monolith Core...")
     # Fail fast: refuse to start without a usable attestation signing key.
-    get_attestation_service()
+    get_signer()
     if settings.DEMO_MODE:
         logger.warning("DEMO_MODE is ON: seeded demo users can log in with the demo OTP. Never enable this in production.")
     yield

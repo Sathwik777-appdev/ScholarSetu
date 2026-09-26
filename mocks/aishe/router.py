@@ -1,17 +1,15 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+
+from synthetic_data import full_name, get_student
 
 router = APIRouter()
 
-@router.get("/institutions/{code}")
-def get_institution(code: str):
-    return {
-        "aishe_code": code,
-        "name": "Mock Tribal University",
-        "type": "University",
-        "state": "Jharkhand",
-        "district": "Ranchi"
-    }
 
-@router.get("/verify-enrolment")
-def verify_enrolment(student_ref: str, aishe_code: str):
-    return {"enrolled": True, "course": "B.A. History", "year": 2}
+@router.get("/enrolments/{apaar_id}")
+def get_enrolment(apaar_id: str):
+    """Higher-education enrolment for an APAAR ID. 404 when unknown."""
+    student = get_student(apaar_id)
+    if not student or "aishe" not in student["sources"]:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    return {"apaar_id": apaar_id, "student_name": full_name(student), "dob": student["dob"],
+            "gender": student["gender"], "district": student["district"], **student["sources"]["aishe"]}

@@ -1,30 +1,17 @@
-from fastapi import APIRouter
-from synthetic_data import db, get_student
-import uuid
+from fastapi import APIRouter, HTTPException
+
+from synthetic_data import get_student
 
 router = APIRouter()
 
-@router.post("/authorize")
-def authorize(payload: dict):
-    return {"auth_code": "AUTH_12345"}
 
-@router.post("/token")
-def token(payload: dict):
-    return {"access_token": "TOK_12345", "expires_in": 3600}
-
-@router.get("/documents")
-def list_documents():
-    return {
-        "documents": [
-            {"doc_id": "DOC_CASTE", "type": "CASTE_CERTIFICATE"},
-            {"doc_id": "DOC_INCOME", "type": "INCOME_CERTIFICATE"}
-        ]
-    }
-
-@router.get("/documents/{doc_id}")
-def get_document(doc_id: str):
-    return {"doc_id": doc_id, "signed_uri": f"https://mock.digilocker.gov.in/{doc_id}.pdf"}
-
-@router.get("/documents/{doc_id}/verify")
-def verify_document(doc_id: str):
-    return {"doc_id": doc_id, "verified": True, "authenticity_score": 100}
+@router.get("/issued/{aadhaar_ref}")
+def get_issued_document(aadhaar_ref: str, doc_type: str):
+    """An issuer-pushed document from the person's DigiLocker. 404 when absent."""
+    student = get_student(aadhaar_ref)
+    docs = student["sources"].get("digilocker", {}) if student else {}
+    if doc_type not in docs:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    doc = docs[doc_type]
+    return {"doc_type": doc_type, "holder_dob": student["dob"], "gender": student["gender"],
+            "district": student["district"], **doc}

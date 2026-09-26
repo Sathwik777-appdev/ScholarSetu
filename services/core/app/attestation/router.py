@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.attestation.schemas import AttestationVerification, ScholarshipPassport
+from app.attestation.keys import get_signer
 from app.attestation.service import AttestationService, get_attestation_service
 from app.dependencies import OFFICER_ROLES, StudentPrincipal, get_current_user, student_principal
 from app.gateway.models import User
@@ -24,15 +25,15 @@ async def get_my_passport(
 
 
 @router.get("/attestations/public-key")
-async def get_public_key(service: AttestationService = Depends(get_attestation_service)):
+async def get_public_key():
     """Public verification key (JWK set) so anyone can verify an attestation JWS offline."""
-    return {"keys": [service.jwk]}
+    return {"keys": [get_signer().jwk]}
 
 
 @router.post("/attestations/verify-jws", response_model=AttestationVerification)
-async def verify_presented_jws(req: JwsVerifyRequest, service: AttestationService = Depends(get_attestation_service)):
+async def verify_presented_jws(req: JwsVerifyRequest):
     """Verify an attestation JWS a student presents (signature, status and expiry)."""
-    return service.verify_jws(req.jws)
+    return AttestationService(db=None, signer=get_signer()).verify_jws(req.jws)
 
 
 @router.get("/attestations/{attestation_id}/verify", response_model=AttestationVerification)
@@ -42,7 +43,7 @@ async def verify_attestation(
     service: AttestationService = Depends(get_attestation_service),
 ):
     """Verify a stored attestation. Only its owner or an officer may ask."""
-    owner = service.get_owner(attestation_id)
-    if owner is None or (user.student_id != owner and user.role not in OFFICER_ROLES):
+    att = await service.get(attestation_id)
+    if att is None or (user.student_id != att.student_id and user.role not in OFFICER_ROLES):
         raise HTTPException(status_code=404, detail="Attestation not found")
     return await service.verify_attestation(attestation_id)

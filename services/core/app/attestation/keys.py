@@ -7,8 +7,12 @@ import logging
 import os
 from pathlib import Path
 
+import jwt
+
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+
+from app.config import settings
 
 logger = logging.getLogger("scholarsetu.attestation")
 
@@ -54,3 +58,39 @@ def public_jwk(public_key: Ed25519PublicKey) -> dict:
     thumbprint_input = json.dumps({"crv": "Ed25519", "kty": "OKP", "x": x}, separators=(",", ":"), sort_keys=True)
     kid = _b64url(hashlib.sha256(thumbprint_input.encode()).digest())
     return {"kty": "OKP", "crv": "Ed25519", "x": x, "kid": kid, "alg": "EdDSA", "use": "sig"}
+
+
+class AttestationSigner:
+    """Signs and verifies attestation payloads as compact JWS (EdDSA)."""
+
+    ISSUER = "scholarsetu"
+
+    def __init__(self, private_key: Ed25519PrivateKey):
+        self._private_key = private_key
+        self.public_key = private_key.public_key()
+        self.jwk = public_jwk(self.public_key)
+
+    def sign(self, payload: dict) -> str:
+        return jwt.encode(payload, self._private_key, algorithm="EdDSA", headers={"kid": self.jwk["kid"], "typ": "JWT"})
+
+    def decode(self, token: str) -> dict:
+        """Verify the signature and return the payload. Raises jwt.InvalidTokenError otherwise."""
+        return jwt.decode(token, self.public_key, algorithms=["EdDSA"], issuer=self.ISSUER,
+                          options={"verify_exp": False, "verify_aud": False})
+
+
+_signer: "AttestationSigner | None" = None
+
+
+def get_signer() -> AttestationSigner:
+    """Process-wide signer; loading it at startup makes the API refuse to start without a key."""
+    global _signer
+    if _signer is None:
+        _signer = AttestationSigner(load_or_create_signing_key(settings.ATTESTATION_PRIVATE_KEY_PATH, settings.DEMO_MODE))
+    return _signer
+
+
+def reset_signer() -> None:
+    """Drop the cached signer (tests use this to simulate a restart)."""
+    global _signer
+    _signer = None

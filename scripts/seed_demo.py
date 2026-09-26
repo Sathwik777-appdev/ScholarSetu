@@ -1,4 +1,4 @@
-"""Seed demo users for the judge-demo storyline (ARCHITECTURE.md §14).
+"""Seed demo students and users for the judge-demo storyline (ARCHITECTURE.md §14).
 
 Demo data lives here, not in core service logic. These users are marked is_demo=True:
 they may log in with DEMO_OTP only while the API runs with DEMO_MODE=true.
@@ -6,12 +6,13 @@ they may log in with DEMO_OTP only while the API runs with DEMO_MODE=true.
 Run from the repo root (host):      python scripts/seed_demo.py
 Or inside the core container:       python /scripts/seed_demo.py
 
-Phase 1 note: until the Phase 4 Alembic migration exists, this script also creates the
-Phase 1 tables (users, otp_challenges, assist_sessions, audit_log, outbound_sms).
+Until the Phase 4 Alembic migration exists, this script also creates the live tables
+(app.db_tables.LIVE_TABLES).
 """
 
 import asyncio
 import sys
+from datetime import date
 from pathlib import Path
 
 for candidate in (Path(__file__).resolve().parents[1] / "services" / "core", Path("/app")):
@@ -22,8 +23,10 @@ for candidate in (Path(__file__).resolve().parents[1] / "services" / "core", Pat
 from sqlalchemy import select  # noqa: E402
 
 from app.database import AsyncSessionLocal, Base, engine  # noqa: E402
-from app.gateway.models import PHASE1_TABLES, User  # noqa: E402
-from app.shared.types import UserRole  # noqa: E402
+from app.db_tables import LIVE_TABLES  # noqa: E402
+from app.gateway.models import User  # noqa: E402
+from app.shared.types import Gender, UserRole  # noqa: E402
+from app.students.models import Student  # noqa: E402
 
 DEMO_USERS = [
     # phone, name, role, student_id, household_id
@@ -36,9 +39,32 @@ DEMO_USERS = [
 ]
 
 
-async def create_phase1_tables() -> None:
+# Student master records. Identifiers match the mock government services (mocks/synthetic_data.py).
+DEMO_STUDENTS = [
+    dict(id="stu-sunita-001", full_name="Sunita Hansda", name_variants=["Sunita Hansda"], dob=date(2008, 4, 12),
+         gender=Gender.FEMALE, father_name="Babulal Hansda", mother_name="Marangmai Hansda", tribe="Santal",
+         state="Jharkhand", district="Dumka", household_id="hh_hansda_001",
+         aadhaar_ref_token="AREF-JH-0004912", apaar_id="APAAR-JH-2026-0812"),
+    dict(id="stu-rahul-002", full_name="Rahul Hansda", name_variants=["Rahul Hansda"], dob=date(2010, 8, 15),
+         gender=Gender.MALE, father_name="Babulal Hansda", mother_name="Marangmai Hansda", tribe="Santal",
+         state="Jharkhand", district="Dumka", household_id="hh_hansda_001",
+         aadhaar_ref_token="AREF-JH-0009914", apaar_id="APAAR-JH-2025-4192"),
+]
+
+
+async def create_tables() -> None:
     async with engine.begin() as conn:
-        await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=PHASE1_TABLES))
+        await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=LIVE_TABLES))
+
+
+async def seed_students() -> None:
+    async with AsyncSessionLocal() as db:
+        for fields in DEMO_STUDENTS:
+            student = await db.get(Student, fields["id"]) or Student(id=fields["id"])
+            for key, value in fields.items():
+                setattr(student, key, value)
+            db.add(student)
+        await db.commit()
 
 
 async def seed_users() -> list[User]:
@@ -57,10 +83,11 @@ async def seed_users() -> list[User]:
 
 
 async def main() -> None:
-    await create_phase1_tables()
+    await create_tables()
+    await seed_students()
     users = await seed_users()
     await engine.dispose()
-    print(f"Seeded {len(users)} demo users:")
+    print(f"Seeded {len(DEMO_STUDENTS)} demo students and {len(users)} demo users:")
     for u in users:
         print(f"  {u.phone}  {u.role.value:<17} {u.name}")
 

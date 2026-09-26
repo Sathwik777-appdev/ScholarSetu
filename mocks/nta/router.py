@@ -1,17 +1,13 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
 
+# No demo persona holds a UGC-NET result yet; unknown roll numbers return 404.
+RESULTS: dict[str, dict] = {}
+
+
 @router.get("/results/{roll_number}")
 def get_result(roll_number: str):
-    return {
-        "roll_number": roll_number,
-        "qualified": True,
-        "subject": "Sociology",
-        "year": "2022",
-        "score": 210
-    }
-
-@router.get("/verify-qualification")
-def verify_nta(roll_number: str):
-    return {"verified": True, "qualification": "JRF"}
+    if roll_number not in RESULTS:
+        raise HTTPException(status_code=404, detail="NOT_FOUND")
+    return RESULTS[roll_number]
