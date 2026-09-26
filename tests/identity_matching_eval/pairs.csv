@@ -1,0 +1,96 @@
+id,category,hard_negative,name_a,name_b,dob_a,dob_b,father_a,father_b,district_a,district_b,expected_decision,note
+1,spelling_variant,no,Sunita Hansda,Sunita Hansdah,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,AUTO_VERIFY,trailing h
+2,spelling_variant,no,Birsa Murmu,Birsa Murmoo,2007-02-10,2007-02-10,Sugna Murmu,Sugna Murmu,Dumka,Dumka,AUTO_VERIFY,oo vs u
+3,spelling_variant,no,Salkhan Tudu,Salkhan Toodoo,2006-06-01,2006-06-01,Chunu Tudu,Chunu Tudu,Pakur,Pakur,AUTO_VERIFY,oo vs u twice
+4,spelling_variant,no,Phulmani Kisku,Fulmani Kisku,2009-01-15,2009-01-15,Mangal Kisku,Mangal Kisku,Godda,Godda,AUTO_VERIFY,ph vs f
+5,spelling_variant,no,Sunita Hansda,Suneeta Hansda,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,AUTO_VERIFY,ee vs i
+6,spelling_variant,no,Pooja Soren,Puja Soren,2008-09-09,2008-09-09,Ramesh Soren,Ramesh Soren,Jamtara,Jamtara,AUTO_VERIFY,oo vs u
+7,spelling_variant,no,Deepak Hembrom,Dipak Hembrom,2005-03-03,2005-03-03,Somai Hembrom,Somai Hembrom,Dumka,Dumka,AUTO_VERIFY,ee vs i
+8,spelling_variant,no,Vijay Marandi,Wijay Marandi,2006-12-12,2006-12-12,Lakhan Marandi,Lakhan Marandi,Sahebganj,Sahebganj,AUTO_VERIFY,w vs v
+9,spelling_variant,no,Laxmi Oraon,Lakshmi Oraon,2007-07-07,2007-07-07,Budhu Oraon,Budhu Oraon,Gumla,Gumla,AUTO_VERIFY,x vs ksh
+10,spelling_variant,no,Shanti Munda,Santi Munda,2008-02-02,2008-02-02,Birsa Munda,Birsa Munda,Khunti,Khunti,AUTO_VERIFY,sh vs s
+11,spelling_variant,no,Rajesh Baskey,Rajes Baskey,2005-05-05,2005-05-05,Hopna Baskey,Hopna Baskey,Pakur,Pakur,AUTO_VERIFY,sh vs s
+12,spelling_variant,no,Sunitha Hansda,Sunita Hansda,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,AUTO_VERIFY,th vs t (final h)
+13,spelling_variant,no,Anil Kerketta,Aneel Kerketta,2006-10-10,2006-10-10,Paulus Kerketta,Paulus Kerketta,Simdega,Simdega,AUTO_VERIFY,ee vs i
+14,spelling_variant,no,Jitendra Lakra,Jeetendra Lakra,2004-04-04,2004-04-04,Manohar Lakra,Manohar Lakra,Gumla,Gumla,AUTO_VERIFY,ee vs i
+15,spelling_variant,no,Mahadev Kujur,Mahadeo Kujur,2005-08-08,2005-08-08,Somra Kujur,Somra Kujur,Lohardaga,Lohardaga,AUTO_VERIFY,v vs o ending
+16,spelling_variant,no,Sanjay Hembrom,Sanjay Hembram,2007-11-11,2007-11-11,Suku Hembrom,Suku Hembrom,Dumka,Dumka,AUTO_VERIFY,om vs am
+17,spelling_variant,no,Rameshwar Oraon,Rameswar Oraon,2003-03-13,2003-03-13,Karma Oraon,Karma Oraon,Ranchi,Ranchi,AUTO_VERIFY,sh vs s
+18,spelling_variant,no,Kanhu Murmu,Kanhoo Murmu,2009-09-19,2009-09-19,Sido Murmu,Sido Murmu,Sahebganj,Sahebganj,AUTO_VERIFY,oo vs u
+19,spelling_variant,no,Sunil Tirkey,Sunil Tirki,2006-01-21,2006-01-21,Anand Tirkey,Anand Tirkey,Gumla,Gumla,PROVISIONAL,ey vs i: close but not a known equivalence
+20,spelling_variant,no,Mukesh Minz,Mukesh Minj,2005-02-25,2005-02-25,Dilip Minz,Dilip Minz,Ranchi,Ranchi,PROVISIONAL,z vs j: real variant but needs a human
+21,transliteration,no,Sunita Hansda,सुनीता हांसदा,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,AUTO_VERIFY,Devanagari
+22,transliteration,no,Babulal Murmu,बाबूलाल मुर्मू,1978-01-01,1978-01-01,Sona Murmu,Sona Murmu,Dumka,Dumka,AUTO_VERIFY,Devanagari
+23,transliteration,no,Birsa Munda,बिरसा मुंडा,2007-02-10,2007-02-10,Sugna Munda,Sugna Munda,Khunti,Khunti,AUTO_VERIFY,Devanagari anusvara
+24,transliteration,no,Somra Munda,सोमरा मुंडा,2006-03-30,2006-03-30,Karam Munda,Karam Munda,Khunti,Khunti,AUTO_VERIFY,Devanagari medial schwa
+25,transliteration,no,Rahul Hansda,राहुल हांसदा,2010-08-15,2010-08-15,Babulal Hansda,Babulal Hansda,Dumka,Dumka,AUTO_VERIFY,Devanagari
+26,transliteration,no,Salkhan Soren,सालखन सोरेन,2005-12-01,2005-12-01,Gopal Soren,Gopal Soren,Dumka,Dumka,AUTO_VERIFY,Devanagari final schwa
+27,transliteration,no,Arjun Tudu,अर्जुन टुडू,2007-04-14,2007-04-14,Chamu Tudu,Chamu Tudu,Pakur,Pakur,AUTO_VERIFY,Devanagari retroflex
+28,transliteration,no,Phulmani Kisku,फूलमनी किस्कू,2009-01-15,2009-01-15,Mangal Kisku,Mangal Kisku,Godda,Godda,AUTO_VERIFY,Devanagari compound name
+29,transliteration,no,Ramcharan Oraon,रामचरण ओरांव,2004-06-06,2004-06-06,Budhu Oraon,Budhu Oraon,Gumla,Gumla,AUTO_VERIFY,Devanagari; Oraon written ओरांव
+30,known_hard_positive,no,Laxmi Oraon,लक्ष्मी उरांव,2007-07-07,2007-07-07,Budhu Oraon,Budhu Oraon,Gumla,Gumla,AUTO_VERIFY,Oraon written उरांव reads 'uranv': expected miss
+31,transliteration,no,Sunita Hansda,সুনীতা হাঁসদা,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,AUTO_VERIFY,Bengali candrabindu
+32,transliteration,no,Birsa Munda,বিরসা মুণ্ডা,2007-02-10,2007-02-10,Sugna Munda,Sugna Munda,Khunti,Khunti,AUTO_VERIFY,Bengali
+33,transliteration,no,Sunita Hansda,ସୁନୀତା ହାଂସଦା,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Mayurbhanj,Mayurbhanj,AUTO_VERIFY,Odia (keeps inherent vowel)
+34,transliteration,no,Birsa Munda,ବିରସା ମୁଣ୍ଡା,2007-02-10,2007-02-10,Sugna Munda,Sugna Munda,Sundargarh,Sundargarh,AUTO_VERIFY,Odia
+35,transliteration,no,Ramesh Bhil,રમેશ ભીલ,2006-05-05,2006-05-05,Kalu Bhil,Kalu Bhil,Dahod,Dahod,AUTO_VERIFY,Gujarati
+36,transliteration,no,Sunita Hansda,ਸੁਨੀਤਾ ਹਾਂਸਦਾ,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,AUTO_VERIFY,Gurmukhi
+37,transliteration,no,Sunita Irular,சுனிதா இருளர்,2008-04-12,2008-04-12,Murugan Irular,Murugan Irular,Chengalpattu,Chengalpattu,AUTO_VERIFY,Tamil
+38,transliteration,no,Sunita Koya,సునీత కోయ,2008-04-12,2008-04-12,Ramaiah Koya,Ramaiah Koya,Bhadradri Kothagudem,Bhadradri Kothagudem,AUTO_VERIFY,Telugu
+39,transliteration,no,Sunita Soliga,ಸುನೀತಾ ಸೋಲಿಗ,2008-04-12,2008-04-12,Madaiah Soliga,Madaiah Soliga,Chamarajanagar,Chamarajanagar,AUTO_VERIFY,Kannada
+40,transliteration,no,Sunita Paniya,സുനിത പണിയ,2008-04-12,2008-04-12,Kelu Paniya,Kelu Paniya,Wayanad,Wayanad,AUTO_VERIFY,Malayalam
+41,unsupported_script,no,Sunita Hansda,ᱥᱩᱱᱤᱛᱟ ᱦᱟᱸᱥᱫᱟ,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,MANUAL_REVIEW,Ol Chiki: route to a human
+42,unsupported_script,no,Birsa Munda,ᱵᱤᱨᱥᱟ ᱢᱩᱱᱰᱟ,2007-02-10,2007-02-10,Sugna Munda,Sugna Munda,Khunti,Khunti,MANUAL_REVIEW,Ol Chiki
+43,initials,no,S. Hansda,Sunita Hansda,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,PROVISIONAL,initial is never enough to auto-verify
+44,initials,no,S Hansda,Sunita Hansdah,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,PROVISIONAL,initial without dot
+45,initials,no,R. K. Soren,Ravi Kumar Soren,2006-06-16,2006-06-16,Gopal Soren,Gopal Soren,Dumka,Dumka,PROVISIONAL,two initials
+46,initials,no,B. Murmu,Birsa Murmu,2007-02-10,2007-02-10,Sugna Murmu,Sugna Murmu,Dumka,Dumka,PROVISIONAL,initial
+47,initials,yes,A. Hansda,Sunita Hansda,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,MANUAL_REVIEW,initial does not fit
+48,honorific,no,Smt. Sunita Hansda,Sunita Hansda,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,AUTO_VERIFY,title removed
+49,honorific,no,Kumari Sunita Hansda,Sunita Hansda,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,AUTO_VERIFY,prefix Kumari removed
+50,honorific,no,Km. Sunita Hansda,Sunita Hansda,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,AUTO_VERIFY,prefix Km removed
+51,honorific,no,Shri Birsa Munda,Birsa Munda,2007-02-10,2007-02-10,Sugna Munda,Sugna Munda,Khunti,Khunti,AUTO_VERIFY,title removed
+52,honorific,no,Dr. Anita Soren,Anita Soren,1990-10-10,1990-10-10,Gopal Soren,Gopal Soren,Dumka,Dumka,AUTO_VERIFY,title removed
+53,honorific,no,Sunita Kumari,Sunita Kumari,2008-04-12,2008-04-12,Ramesh Prasad,Ramesh Prasad,Ranchi,Ranchi,AUTO_VERIFY,Kumari as surname is kept
+54,honorific,no,Sunita Kumari,Sunita Devi,1995-04-12,1995-04-12,Ramesh Prasad,Ramesh Prasad,Ranchi,Ranchi,MANUAL_REVIEW,Kumari to Devi after marriage: a human must decide
+55,honorific,no,Ravi Kumar Soren,Ravi Soren,2006-06-16,2006-06-16,Gopal Soren,Gopal Soren,Dumka,Dumka,AUTO_VERIFY,middle name Kumar on one record
+56,honorific,no,Sunita Hansda D/O Babulal Hansda,Sunita Hansda,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,AUTO_VERIFY,relation marker cut
+57,honorific,no,श्रीमती सुनीता हांसदा,Sunita Hansda,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,AUTO_VERIFY,Devanagari title
+58,honorific,no,Late Ramesh Tudu,Ramesh Tudu,1960-01-01,1960-01-01,Chamu Tudu,Chamu Tudu,Pakur,Pakur,AUTO_VERIFY,Late removed
+59,honorific_inside_name,yes,Srinivas Munda,Nivas Munda,2007-02-10,2007-02-10,Sugna Munda,Sugna Munda,Khunti,Khunti,MANUAL_REVIEW,sri inside a name is not a title
+60,honorific_inside_name,yes,Shrikant Oraon,Kant Oraon,2006-03-03,2006-03-03,Budhu Oraon,Budhu Oraon,Gumla,Gumla,MANUAL_REVIEW,shri inside a name is not a title
+61,honorific_inside_name,yes,Smita Tudu,Mita Tudu,2008-08-08,2008-08-08,Chamu Tudu,Chamu Tudu,Pakur,Pakur,MANUAL_REVIEW,smt-like prefix inside a name
+62,honorific_inside_name,yes,Kumaresh Soren,Resh Soren,2005-05-15,2005-05-15,Gopal Soren,Gopal Soren,Dumka,Dumka,MANUAL_REVIEW,kum inside a name is not a title
+63,reordered,no,Hansda Sunita,Sunita Hansda,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,AUTO_VERIFY,surname first (school register)
+64,reordered,no,MURMU BIRSA,Birsa Murmu,2007-02-10,2007-02-10,Sugna Murmu,Sugna Murmu,Dumka,Dumka,AUTO_VERIFY,surname first uppercase
+65,reordered,no,Soren Salkhan,Salkhan Soren,2005-12-01,2005-12-01,Gopal Soren,Gopal Soren,Dumka,Dumka,AUTO_VERIFY,surname first
+66,reordered,no,Kumar Ravi Soren,Ravi Kumar Soren,2006-06-16,2006-06-16,Gopal Soren,Gopal Soren,Dumka,Dumka,AUTO_VERIFY,given names swapped
+67,missing_surname,no,Sunita,Sunita Hansda,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,PROVISIONAL,surname missing
+68,missing_surname,no,Birsa,Birsa Munda,2007-02-10,2007-02-10,Sugna Munda,Sugna Munda,Khunti,Khunti,PROVISIONAL,surname missing
+69,no_corroboration,no,Sunita Hansda,Sunita Hansda,2008-04-12,,Babulal Hansda,,Dumka,,PROVISIONAL,identical names but nothing to corroborate
+70,no_corroboration,no,Sunita Hansda,Sunita Hansdah,2008-04-12,,Babulal Hansda,,Dumka,,PROVISIONAL,demo Scene 3: caste certificate
+71,no_corroboration,no,Birsa Munda,बिरसा मुंडा,2007-02-10,,Sugna Munda,,Khunti,,PROVISIONAL,script variant without corroboration
+72,namesake,yes,Sunita Hansda,Sunita Hansda,2008-04-12,2006-11-02,Babulal Hansda,Babulal Hansda,Dumka,Dumka,MANUAL_REVIEW,same name different DOB
+73,namesake,yes,Birsa Munda,Birsa Munda,2007-02-10,2007-02-10,Sugna Munda,Budhu Munda,Khunti,Khunti,MANUAL_REVIEW,same name different father
+74,namesake,yes,Rahul Hansda,Rahul Hansda,2010-08-15,2011-01-20,Babulal Hansda,Somai Hansda,Dumka,Dumka,MANUAL_REVIEW,namesake cousin
+75,field_conflict,no,Rahul Hansda,Rahul Hansda,2010-08-15,2010-08-15,Babulal Hansda,Babulal Hansda,Dumka,Ranchi,MANUAL_REVIEW,district differs: a human must check
+76,twins_siblings,yes,Sunita Hansda,Anita Hansda,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,MANUAL_REVIEW,twin sisters
+77,twins_siblings,yes,Pinky Marandi,Rinky Marandi,2009-03-03,2009-03-03,Lakhan Marandi,Lakhan Marandi,Sahebganj,Sahebganj,MANUAL_REVIEW,rhyming twin names
+78,twins_siblings,yes,Ram Tudu,Shyam Tudu,2008-01-01,2008-01-01,Chamu Tudu,Chamu Tudu,Pakur,Pakur,MANUAL_REVIEW,twins
+79,twins_siblings,yes,Sita Murmu,Gita Murmu,2007-05-05,2007-05-05,Sona Murmu,Sona Murmu,Dumka,Dumka,MANUAL_REVIEW,twins
+80,twins_siblings,yes,Lav Soren,Kush Soren,2009-09-09,2009-09-09,Gopal Soren,Gopal Soren,Dumka,Dumka,MANUAL_REVIEW,twins
+81,twins_siblings,yes,Rahul Hansda,Rohit Hansda,2010-08-15,2010-08-15,Babulal Hansda,Babulal Hansda,Dumka,Dumka,MANUAL_REVIEW,twins
+82,twins_siblings,yes,Somra Oraon,Sukra Oraon,2006-06-06,2006-06-06,Budhu Oraon,Budhu Oraon,Gumla,Gumla,MANUAL_REVIEW,twins
+83,twins_siblings,yes,Mangal Munda,Mangru Munda,2005-10-10,2005-10-10,Karam Munda,Karam Munda,Khunti,Khunti,MANUAL_REVIEW,twins with similar names
+84,twins_siblings,yes,Birsa Munda,Budhu Munda,2007-02-10,2009-11-11,Sugna Munda,Sugna Munda,Khunti,Khunti,MANUAL_REVIEW,siblings
+85,twins_siblings,yes,Sunita Hansda,Rahul Hansda,2008-04-12,2010-08-15,Babulal Hansda,Babulal Hansda,Dumka,Dumka,MANUAL_REVIEW,siblings
+86,same_given_diff_surname,yes,Sunita Hansda,Sunita Murmu,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,MANUAL_REVIEW,different surname despite matching fields
+87,same_given_diff_surname,yes,Rahul Hansda,Rahul Tudu,2010-08-15,2010-08-15,Babulal Hansda,Babulal Hansda,Dumka,Dumka,MANUAL_REVIEW,different surname
+88,same_given_diff_surname,yes,Ravi Soren,Ravi Kisku,2006-06-16,2006-06-16,Gopal Soren,Gopal Soren,Dumka,Dumka,MANUAL_REVIEW,different surname
+89,same_given_diff_surname,yes,Anita Oraon,Anita Munda,2008-08-18,2008-08-18,Budhu Oraon,Budhu Oraon,Gumla,Gumla,MANUAL_REVIEW,different surname
+90,same_given_diff_surname,yes,Salkhan Soren,Salkhan Hembrom,2005-12-01,2005-12-01,Gopal Soren,Gopal Soren,Dumka,Dumka,MANUAL_REVIEW,different surname
+91,different_person,yes,Sunita Hansda,Mary Kujur,2008-04-12,2001-01-01,Babulal Hansda,Joseph Kujur,Dumka,Simdega,MANUAL_REVIEW,unrelated
+92,different_person,yes,Birsa Munda,Sidhu Murmu,2007-02-10,2003-03-03,Sugna Munda,Chunar Murmu,Khunti,Sahebganj,MANUAL_REVIEW,unrelated
+93,different_person,yes,Rahul Hansda,Pradeep Lakra,2010-08-15,2002-02-02,Babulal Hansda,Manohar Lakra,Dumka,Gumla,MANUAL_REVIEW,unrelated
+94,different_person,yes,Phulmani Kisku,Jyoti Tirkey,2009-01-15,2004-04-04,Mangal Kisku,Anand Tirkey,Godda,Gumla,MANUAL_REVIEW,unrelated
+95,different_person,yes,Sunita Hansda,सुनीता मुर्मू,2008-04-12,2008-04-12,Babulal Hansda,Babulal Hansda,Dumka,Dumka,MANUAL_REVIEW,different surname in Devanagari

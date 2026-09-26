@@ -45,6 +45,15 @@ class Settings(BaseSettings):
 
     MITRA_MAX_SESSION_MINUTES: int = 30
 
+    # Identity Resolver (ARCHITECTURE.md §6.4.3). Tune on anonymised pilot data.
+    IDENTITY_AUTO_VERIFY_THRESHOLD: float = 0.92   # name score for auto-verify (also needs corroboration)
+    IDENTITY_REVIEW_THRESHOLD: float = 0.75        # below this: manual review
+    IDENTITY_TOKEN_MISMATCH_THRESHOLD: float = 0.85  # a name token scoring below this is a different name
+    IDENTITY_INITIAL_SCORE: float = 0.90           # "S." vs "Sunita": consistent but never enough to auto-verify
+    IDENTITY_EXTRA_TOKEN_PENALTY: float = 0.97     # per given-name token present on only one record
+    IDENTITY_REORDER_PENALTY: float = 0.98         # surname written first, etc.
+    IDENTITY_MISSING_SURNAME_CAP: float = 0.85     # one record has no surname
+
     LOG_LEVEL: str = "INFO"
 
     @field_validator("JWT_SECRET")
