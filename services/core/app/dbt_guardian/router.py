@@ -23,7 +23,7 @@ async def health_check(
     service: DBTGuardianService = Depends(get_dbt_service),
 ):
     """Run pre-sanction health checks (officers)."""
-    ensure_application_access(ledger, application_id, Reader(user=officer, student_id=None))
+    await ensure_application_access(ledger, application_id, Reader(user=officer, student_id=None))
     return await service.pre_sanction_check(application_id)
 
 
@@ -35,7 +35,7 @@ async def dbt_status(
     service: DBTGuardianService = Depends(get_dbt_service),
 ):
     """Get full DBT status for an application (its owner or an officer)."""
-    ensure_application_access(ledger, application_id, reader)
+    await ensure_application_access(ledger, application_id, reader)
     return await service.get_dbt_status(application_id)
 
 

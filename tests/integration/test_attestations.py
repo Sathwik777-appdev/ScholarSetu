@@ -13,21 +13,22 @@ from app.attestation.keys import SigningKeyUnavailable, get_signer, load_or_crea
 from app.attestation.models import Attestation
 from app.attestation.service import AttestationService
 from app.shared.types import AttestationStatus, ClaimType, VerificationMethod
-from tests.conftest import SUNITA_STUDENT, make_student
 
 SIGNED_FIELDS = {"iss", "attestation_id", "subject", "claim", "source", "method", "confidence",
                  "evidence_hash", "issued_at", "valid_until", "status"}
 
 
+SUNITA = "stu-sunita-001"
+
+
 @pytest.fixture
-async def service(db):
-    await make_student(db, **SUNITA_STUDENT)
+async def service(db, demo):
     return AttestationService(db, get_signer())
 
 
 async def _issue(service: AttestationService) -> Attestation:
     att = await service.issue_attestation(
-        student_id=SUNITA_STUDENT["id"], claim_type=ClaimType.ST_STATUS, claim_value={"tribe": "Santal"},
+        student_id=SUNITA, claim_type=ClaimType.ST_STATUS, claim_value={"tribe": "Santal"},
         source="e-District", method=VerificationMethod.API, confidence=0.97, evidence_hash="sha256:abc")
     await service.db.commit()
     return att
@@ -84,9 +85,9 @@ async def test_status_change_is_signed(service):
 
 
 async def test_provisional_attestations_are_not_reused(service):
-    await service.issue_attestation(SUNITA_STUDENT["id"], ClaimType.INCOME, {"annual_income": 1}, "e-District",
+    await service.issue_attestation(SUNITA, ClaimType.INCOME, {"annual_income": 1}, "e-District",
                                     VerificationMethod.API, 0.5, None, status=AttestationStatus.PROVISIONAL)
-    assert await service.find_valid_attestations(SUNITA_STUDENT["id"], [ClaimType.INCOME]) == {}
+    assert await service.find_valid_attestations(SUNITA, [ClaimType.INCOME]) == {}
 
 
 async def test_attestation_ids_are_uuidv7(service):

@@ -28,7 +28,7 @@ from app.database import get_db
 from app.gateway.models import User
 from app.gateway.service import record_audit
 from app.ledger.service import LedgerService, get_ledger_service
-from app.shared.events import BaseEvent, EventBus, get_event_bus
+from app.shared.events import emit
 from app.shared.ids import new_id
 from app.shared.types import (
     AttestationStatus, ClaimType, ConsentArtefact, ReviewCaseStatus, ReviewDecision, ReviewReason,
@@ -100,13 +100,12 @@ class ClaimOutcome:
 
 
 class VerificationMeshService:
-    def __init__(self, db: AsyncSession, sources: SourceClient, ledger: LedgerService, event_bus: EventBus,
+    def __init__(self, db: AsyncSession, sources: SourceClient, ledger: LedgerService,
                  plugins: Optional[list[VerifierPlugin]] = None,
                  identity_resolver: Optional[IndicIdentityResolver] = None):
         self.db = db
         self.sources = sources
         self.ledger = ledger
-        self.event_bus = event_bus
         self.attestations = AttestationService(db, get_signer())
         self.identity_resolver = identity_resolver or IndicIdentityResolver()
         self.verifiers: dict[ClaimType, list[VerifierPlugin]] = defaultdict(list)
@@ -144,11 +143,11 @@ class VerificationMeshService:
             results.append(result)
 
         overall = self._overall(results)
-        await self.db.commit()
         await self._publish("verification.completed", "VerificationCompleted", application_id, {
             "student_id": student_id, "overall_status": overall.value,
             "claims": {r.claim_type.value: r.status.value for r in results}, "review_case_ids": case_ids,
         })
+        await self.db.commit()
         return VerificationReport(student_id=student_id, application_id=application_id, overall_status=overall,
                                   claims=results, requires_manual_review=bool(case_ids), review_case_ids=case_ids)
 
@@ -303,11 +302,8 @@ class VerificationMeshService:
         return VerificationStatus.PROVISIONAL
 
     async def _publish(self, subject: str, event_type: str, application_id: str, payload: dict) -> None:
-        try:
-            await self.event_bus.publish(subject, BaseEvent(event_id=new_id(), type=event_type,
-                                                            correlation_id=application_id, payload=payload))
-        except Exception:  # the DB is the source of truth; a bus failure must not undo a committed result
-            logger.exception("failed to publish %s", subject)
+        """Queue in the outbox with the rest of the transaction; published to NATS after commit."""
+        await emit(self.db, subject, event_type, payload, correlation_id=application_id)
 
     # ── officer review ──────────────────────────────────────
 
@@ -325,7 +321,7 @@ class VerificationMeshService:
             raise ReviewCaseError(404, "Review case not found")
         if case.status not in OPEN_CASE_STATUSES:
             raise ReviewCaseError(409, f"Case already decided ({case.status.value})")
-        application = self.ledger.get_application(case.application_id)
+        application = await self.ledger.get_application(case.application_id)
         if application is None:
             raise ReviewCaseError(409, f"Application {case.application_id} is not in the ledger")
 
@@ -349,24 +345,24 @@ class VerificationMeshService:
             case.status = ReviewCaseStatus.INFO_REQUESTED
 
         event = await self.ledger.append_event(
-            application_id=case.application_id, event_type="ReviewDecisionRecorded",
-            payload={"review_case_id": case.id, "claim_type": case.claim_type.value, "decision": decision.value,
-                     "officer_role": officer.role.value, "attestation_id": case.attestation_id,
-                     "attestation_status": attestation.status.value if attestation else None},
-            source=SourceSystem.SCHOLARSETU, scheme=application.scheme, student_id=case.student_id,
+            application, "ReviewDecisionRecorded",
+            {"review_case_id": case.id, "claim_type": case.claim_type.value, "decision": decision.value,
+             "officer_role": officer.role.value, "attestation_id": case.attestation_id,
+             "attestation_status": attestation.status.value if attestation else None},
+            actor=f"user:{officer.id}:{officer.role.value}", source=SourceSystem.SCHOLARSETU,
         )
         case.decision = decision
         case.decided_by = officer.id
         case.decided_at = datetime.now(timezone.utc)
         case.notes = notes
-        case.decision_event_id = event.id
+        case.decision_event_id = event.event_id
         await record_audit(self.db, "REVIEW_DECISION", actor=officer, student_id=case.student_id,
                            details={"review_case_id": case.id, "decision": decision.value,
-                                    "ledger_event_id": event.id})
+                                    "ledger_event_id": event.event_id})
         await self.db.commit()
         student = await self.db.get(Student, case.student_id)
         return ReviewDecisionResponse(
-            case=self._case_out(case, student.full_name if student else None), ledger_event_id=event.id,
+            case=self._case_out(case, student.full_name if student else None), ledger_event_id=event.event_id,
             attestation_id=attestation.id if attestation else None,
             attestation_status=attestation.status.value if attestation else None,
         )
@@ -388,4 +384,4 @@ def get_verification_service(
     sources: SourceClient = Depends(get_source_client),
     ledger: LedgerService = Depends(get_ledger_service),
 ) -> VerificationMeshService:
-    return VerificationMeshService(db, sources, ledger, get_event_bus())
+    return VerificationMeshService(db, sources, ledger)

@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.gateway.models import AssistSession, User
 from app.gateway.service import record_audit
-from app.shared.events import EventBus, get_event_bus
 from app.shared.security import decode_access_token, service_token_matches
 from app.shared.types import AssistSessionStatus, MitraScope, UserRole
 
@@ -123,6 +122,18 @@ def student_principal(*mitra_scopes: MitraScope):
     return _dep
 
 
+def officer_covers(user: User, student_state: Optional[str], student_district: Optional[str]) -> bool:
+    """Whether an officer's jurisdiction includes a student's state/district."""
+    if user.role == UserRole.MINISTRY:
+        return True
+    if user.role == UserRole.STATE_OFFICER:
+        return bool(user.jurisdiction_state) and user.jurisdiction_state == student_state
+    if user.role in (UserRole.DISTRICT_OFFICER, UserRole.INSTITUTE_OFFICER):
+        return (bool(user.jurisdiction_district) and user.jurisdiction_state == student_state
+                and user.jurisdiction_district == student_district)
+    return False
+
+
 @dataclass
 class Reader:
     """An officer (any student's records) or a student principal (own records only)."""
@@ -170,6 +181,3 @@ async def get_skill_student(
         raise HTTPException(status_code=403, detail="Student session required")
     return user
 
-
-async def get_bus() -> EventBus:
-    return get_event_bus()

@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_DB: scholarsetu
       POSTGRES_USER: scholarsetu
@@ -48,7 +48,8 @@ services:
 
   core:
     build:
-      context: ../services/core
+      context: ..
+      dockerfile: services/core/Dockerfile
     ports:
       - "8000:8000"
     # Secrets (JWT_SECRET, SKILL_SERVICE_TOKEN, ...) come from the repo-root .env, never from the image.

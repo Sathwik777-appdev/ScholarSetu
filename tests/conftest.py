@@ -20,6 +20,7 @@ os.environ["DATABASE_NULL_POOL"] = "true"
 os.environ["JWT_SECRET"] = secrets.token_hex(32)
 os.environ["SKILL_SERVICE_TOKEN"] = secrets.token_hex(24)
 os.environ["DEMO_MODE"] = "false"
+os.environ["OUTBOX_PUBLISHER_ENABLED"] = "false"
 os.environ["CORS_ALLOWED_ORIGINS"] = "http://localhost:5173"
 os.environ["ATTESTATION_PRIVATE_KEY_PATH"] = str(_TMP / "attestation_ed25519.pem")
 
@@ -36,7 +37,7 @@ import pytest  # noqa: E402
 from sqlalchemy import select, text  # noqa: E402
 
 from app.database import AsyncSessionLocal, Base, engine  # noqa: E402
-from app.db_tables import LIVE_TABLES  # noqa: E402
+import app.models  # noqa: E402,F401
 from app.gateway.models import OutboundSms, User  # noqa: E402
 from app.main import app  # noqa: E402
 from app.shared.types import UserRole  # noqa: E402
@@ -64,17 +65,19 @@ async def database():
         pytest.fail(f"Postgres not reachable ({exc}). Start it with: "
                     "docker compose -f infra/docker-compose.yml up -d postgres", pytrace=False)
     async with engine.begin() as conn:
-        await conn.run_sync(lambda c: Base.metadata.drop_all(c, tables=LIVE_TABLES))
-        await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=LIVE_TABLES))
+        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public"))
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        await conn.run_sync(Base.metadata.create_all)
     yield
     await engine.dispose()
 
 
 @pytest.fixture
 async def db(database):
-    names = ", ".join(t.name for t in LIVE_TABLES)
+    names = ", ".join(t.name for t in Base.metadata.sorted_tables)
     async with engine.begin() as conn:
-        await conn.execute(text(f"TRUNCATE {names} CASCADE"))
+        await conn.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
     async with AsyncSessionLocal() as session:
         yield session
 
@@ -87,9 +90,9 @@ async def client(db):
 
 
 async def make_user(db, phone: str, role: UserRole, name: str = "Test User", student_id=None,
-                    household_id=None, is_demo=False) -> User:
+                    household_id=None, is_demo=False, jurisdiction=(None, None)) -> User:
     user = User(phone=phone, name=name, role=role, student_id=student_id, household_id=household_id,
-                is_demo=is_demo)
+                is_demo=is_demo, jurisdiction_state=jurisdiction[0], jurisdiction_district=jurisdiction[1])
     db.add(user)
     await db.commit()
     return user
@@ -189,3 +192,36 @@ def gov():
     app.dependency_overrides[get_source_client] = _client
     yield sources
     app.dependency_overrides.pop(get_source_client, None)
+
+
+# ── Seeded demo world (scripts/seed_demo.py) ─────────────────────────────────
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.seed_demo import seed as seed_demo  # noqa: E402
+
+PHONES = {"sunita": "9876543210", "rahul": "9876543211", "guardian": "9876543212", "mitra": "9876543220",
+          "institute": "9876543225", "district": "9876543230", "state": "9876543235", "ministry": "9876543240"}
+
+
+@pytest.fixture
+async def demo(db):
+    """The demo world, created through the service layer. Returns the seeded application ids."""
+    return await seed_demo(db)
+
+
+class Logins:
+    def __init__(self, client, db):
+        self.client, self.db, self._cache = client, db, {}
+
+    async def token(self, who: str) -> str:
+        if who not in self._cache:
+            self._cache[who] = await login(self.client, self.db, PHONES[who])
+        return self._cache[who]
+
+    async def headers(self, who: str) -> dict:
+        return bearer(await self.token(who))
+
+
+@pytest.fixture
+def users(client, db, demo):
+    return Logins(client, db)

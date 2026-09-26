@@ -60,7 +60,7 @@ RAHUL = {
         "income": {"certificate_no": "JH/INC/2026/55121", "holder_name": "Rahul Hansda",
                    "father_name": "Babulal Hansda", "district": "Dumka", "annual_income": 120000,
                    "financial_year": "2026-27", "valid_until": "2027-03-31", "status": "VALID"},
-        "udise": {"udise_code": "20140212345", "school_name": "Government High School, Dumka", "class": "9",
+        "udise": {"udise_code": "20140212345", "school_name": "Government High School, Dumka", "class": "10",
                   "academic_year": "2026-27", "status": "ACTIVE"},
     },
 }

@@ -26,6 +26,10 @@ class User(Base):
     student_id: Mapped[Optional[str]] = mapped_column(String, unique=True, nullable=True)
     # Set for GUARDIAN users: the household they may view.
     household_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # Officer jurisdiction: STATE_OFFICER needs a state; DISTRICT/INSTITUTE officers a state and district.
+    # MINISTRY is national. Officers only see students inside their jurisdiction.
+    jurisdiction_state: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    jurisdiction_district: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Only seeded demo users may use DEMO_OTP, and only while DEMO_MODE=true.
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

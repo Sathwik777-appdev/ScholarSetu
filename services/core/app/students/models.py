@@ -3,7 +3,7 @@
 from datetime import date, datetime, timezone
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Enum as SAEnum, String
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -29,7 +29,7 @@ class Student(Base):
     state: Mapped[str] = mapped_column(String, nullable=False)
     district: Mapped[str] = mapped_column(String, nullable=False)
     preferred_language: Mapped[str] = mapped_column(String(10), default="hi", nullable=False)
-    household_id: Mapped[Optional[str]] = mapped_column(String, index=True, nullable=True)
+    household_id: Mapped[Optional[str]] = mapped_column(String, ForeignKey("households.id"), index=True, nullable=True)
     # Opaque Aadhaar Data Vault reference; the raw Aadhaar number is never stored.
     aadhaar_ref_token: Mapped[Optional[str]] = mapped_column(String, unique=True, nullable=True)
     # Needed to query UDISE+/AISHE/APAAR (see ARCHITECTURE.md §19 deviations).

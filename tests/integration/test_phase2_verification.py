@@ -4,30 +4,24 @@ import pytest
 from sqlalchemy import func, select
 
 from app.attestation.models import Attestation
-from app.ledger.service import get_ledger_service
-from app.ledger.schemas import ApplicationResponse
-from app.shared.events import get_event_bus
-from app.shared.types import CanonicalState, SchemeType, SourceSystem, UserRole
+from app.ledger.models import OutboxMessage
+from app.shared.types import UserRole
 from app.verification.models import ReviewCase
-from tests.conftest import RAHUL_STUDENT, SUNITA_STUDENT, bearer, login, make_student, make_user
+from tests.conftest import bearer, login, make_user
 
-SUNITA_APP = "APP-PM-2026-000812"
-RAHUL_APP = "APP-PRM-2025-004192"
+SUNITA_APP = RAHUL_APP = None  # set per test from the seeded demo world
 
 
 @pytest.fixture
-async def people(client, db):
-    await make_student(db, **SUNITA_STUDENT)
-    await make_student(db, **RAHUL_STUDENT)
-    await make_user(db, "9876543210", UserRole.STUDENT, "Sunita Hansda", student_id=SUNITA_STUDENT["id"])
-    await make_user(db, "9876543211", UserRole.STUDENT, "Rahul Hansda", student_id=RAHUL_STUDENT["id"])
-    await make_user(db, "9876543230", UserRole.DISTRICT_OFFICER, "DWO Dumka")
-    return {"sunita": await login(client, db, "9876543210"),
-            "rahul": await login(client, db, "9876543211"),
-            "officer": await login(client, db, "9876543230")}
+async def people(users, demo):
+    global SUNITA_APP, RAHUL_APP
+    SUNITA_APP, RAHUL_APP = demo["sunita_application"], demo["rahul_application"]
+    return {"sunita": await users.token("sunita"), "rahul": await users.token("rahul"),
+            "officer": await users.token("district")}
 
 
-async def _verify(client, token, claims, app_id=SUNITA_APP):
+async def _verify(client, token, claims, app_id=None):
+    app_id = app_id or SUNITA_APP
     return await client.post("/v1/verify/claims", headers=bearer(token),
                              json={"application_id": app_id, "required_claims": claims, "consent_id": "cst-test"})
 
@@ -77,11 +71,16 @@ async def test_claim_without_any_verifier_goes_to_review(client, people, gov):
 
 
 async def test_unknown_student_is_404(client, db, people, gov):
-    get_ledger_service().register_application(ApplicationResponse(
-        id="APP-TEST-999", student_id="stu-random-999", scheme=SchemeType.POST_MATRIC, academic_year="2026-27",
-        canonical_state=CanonicalState.SUBMITTED, source_system=SourceSystem.SCHOLARSETU, details={}))
-    r = await _verify(client, people["officer"], ["IDENTITY"], app_id="APP-TEST-999")
+    # A login linked to a student record that does not exist cannot apply or verify anything.
+    await make_user(db, "9000000999", UserRole.STUDENT, "Random Student", student_id="stu-random-999")
+    random_student = bearer(await login(client, db, "9000000999"))
+    r = await client.post("/v1/applications", headers=random_student,
+                          json={"scheme": "POST_MATRIC", "academic_year": "2026-27"})
     assert r.status_code == 404 and "stu-random-999" in r.json()["detail"]
+    r = await client.post("/v1/verify/claims", headers=random_student,
+                          json={"application_id": "APP-PM-2026-999999", "required_claims": ["IDENTITY"],
+                                "consent_id": "c"})
+    assert r.status_code == 404
     assert gov.calls == []
 
 
@@ -113,8 +112,6 @@ async def test_confirmed_claims_are_verified_and_then_reused(client, people, gov
 
 
 async def test_hansdah_certificate_opens_review_case_with_provisional_attestation(client, db, people, gov):
-    bus = get_event_bus()
-    before = len(bus.published_events)
     report = (await _verify(client, people["sunita"], ["ST_STATUS"])).json()
     st = _claims(report)["ST_STATUS"]
     assert st["status"] == "PROVISIONAL" and report["overall_status"] == "PROVISIONAL"
@@ -130,8 +127,9 @@ async def test_hansdah_certificate_opens_review_case_with_provisional_attestatio
     assert case["attestation_id"] == st["attestation_id"] and case["student_name"] == "Sunita Hansda"
     assert {e["source"] for e in case["evidence_refs"]} == {"DigiLocker", "e-District"}
 
-    subjects = [e["subject"] for e in bus.published_events[before:]]
-    assert "verification.review_required" in subjects and "verification.completed" in subjects
+    db.expire_all()
+    subjects = {m.subject for m in (await db.execute(select(OutboxMessage))).scalars()}
+    assert {"verification.review_required", "verification.completed"} <= subjects
 
     # Repeating the verification does not open a second case.
     await _verify(client, people["sunita"], ["ST_STATUS"])
@@ -159,8 +157,8 @@ async def test_approve_activates_attestation_and_writes_ledger_event(client, peo
     assert body["case"]["status"] == "APPROVED" and body["attestation_status"] == "ACTIVE"
 
     timeline = (await client.get(f"/v1/applications/{SUNITA_APP}/timeline", headers=bearer(people["sunita"]))).json()
-    event = next(e for e in timeline if e["id"] == body["ledger_event_id"])
-    assert event["event_type"] == "ReviewDecisionRecorded"
+    event = next(e for e in timeline if e["event_id"] == body["ledger_event_id"])
+    assert event["type"] == "ReviewDecisionRecorded"
     assert event["payload"]["decision"] == "APPROVE" and event["payload"]["review_case_id"] == case_id
 
     check = await client.get(f"/v1/attestations/{att_id}/verify", headers=bearer(people["sunita"]))

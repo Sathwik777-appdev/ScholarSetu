@@ -26,7 +26,7 @@ async def verify_claims(
     Never reports VERIFIED by default: unconfirmed claims come back PROVISIONAL, MANUAL_REVIEW
     or SOURCE_UNAVAILABLE and are routed to the officer review queue.
     """
-    application = ensure_application_access(service.ledger, request.application_id, reader)
+    application = await ensure_application_access(service.ledger, request.application_id, reader)
     # TODO(Phase 7, S3): look up a stored, unexpired, unrevoked consent instead of trusting the id.
     consent = ConsentArtefact(
         consent_id=request.consent_id,

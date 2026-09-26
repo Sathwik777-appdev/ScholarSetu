@@ -121,6 +121,7 @@ class ReviewReason(str, Enum):
 
 class PaymentState(str, Enum):
     """DBT payment states."""
+    SCHEDULED = "SCHEDULED"   # sanctioned instalment not yet sent to PFMS
     INITIATED = "INITIATED"
     CREDITED = "CREDITED"
     FAILED = "FAILED"

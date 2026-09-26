@@ -4,7 +4,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 
 from app.dependencies import StudentPrincipal, get_skill_student, student_principal
 from app.gateway.models import User
-from app.ledger.service import get_ledger_service
+from app.ledger.service import LedgerService, get_ledger_service
 from app.shared.types import MitraScope, SchemeType
 from .rag import GuidelineRAG
 from .schemas import GuidelineResult, JAGOMessageRequest, JAGOResponse
@@ -44,6 +44,7 @@ async def invoke_tool(
     parameters: dict = Body(default_factory=dict),
     student: User = Depends(get_skill_student),
     service: JAGOSkillService = Depends(get_jago_service),
+    ledger: LedgerService = Depends(get_ledger_service),
 ):
     """Server-to-server tool calls from MoTA's JAGO.
 
@@ -60,7 +61,7 @@ async def invoke_tool(
     if tool_name in _STUDENT_SCOPED:
         kwargs["student_id"] = student.student_id
     if tool_name == "get_timeline":
-        app = get_ledger_service().get_application(str(kwargs.get("application_id", "")))
+        app = await ledger.get_application(str(kwargs.get("application_id", "")))
         if app is None or app.student_id != student.student_id:
             raise HTTPException(status_code=404, detail="Application not found")
 

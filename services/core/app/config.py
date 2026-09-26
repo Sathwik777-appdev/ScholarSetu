@@ -3,6 +3,8 @@ import os
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.shared.types import CanonicalState
+
 MIN_SECRET_LENGTH = 32
 
 
@@ -54,6 +56,19 @@ class Settings(BaseSettings):
     IDENTITY_REORDER_PENALTY: float = 0.98         # surname written first, etc.
     IDENTITY_MISSING_SURNAME_CAP: float = 0.85     # one record has no surname
 
+    # Days an application may sit in a state before its SLA is breached (targets, not official norms).
+    SLA_DAYS_SUBMITTED: float = 7
+    SLA_DAYS_INSTITUTE_VERIFICATION: float = 15
+    SLA_DAYS_RESUBMITTED: float = 7
+    SLA_DAYS_AUTHORITY_VERIFICATION: float = 21
+    SLA_DAYS_SANCTIONED: float = 15
+    SLA_DAYS_PAYMENT_INITIATED: float = 10
+    SLA_DAYS_PAYMENT_FAILED: float = 7
+    ATTESTATION_EXPIRY_WARNING_DAYS: int = 30
+
+    # Publish the transactional outbox to NATS from the API process.
+    OUTBOX_PUBLISHER_ENABLED: bool = True
+
     LOG_LEVEL: str = "INFO"
 
     @field_validator("JWT_SECRET")
@@ -77,6 +92,11 @@ class Settings(BaseSettings):
         if "*" in self.cors_origins:
             raise ValueError("CORS_ALLOWED_ORIGINS must list explicit origins; '*' is not allowed with credentials")
         return self
+
+    @property
+    def sla_days(self) -> dict[CanonicalState, float]:
+        return {state: getattr(self, f"SLA_DAYS_{state.value}")
+                for state in CanonicalState if hasattr(self, f"SLA_DAYS_{state.value}")}
 
     @property
     def cors_origins(self) -> list[str]:

@@ -23,5 +23,6 @@ async def pull_from_digilocker(
     principal: StudentPrincipal = Depends(student_principal(MitraScope.UPLOAD_DOCUMENTS)),
     service: WalletService = Depends(get_wallet_service),
 ):
-    """Pull a certificate/marksheet from DigiLocker into the wallet."""
-    return await service.pull_from_digilocker(principal.student_id, req.doc_type)
+    """Pull a certificate/marksheet from DigiLocker into the wallet. TODO(Phase 7): real pull into MinIO."""
+    from fastapi import HTTPException
+    raise HTTPException(status_code=501, detail="DigiLocker pull is not implemented yet")
