@@ -57,6 +57,10 @@ TEMPLATES = {
         "en": "{name}: your {scheme} is due for renewal. Apply for the next academic year.",
         "hi": "{name}: आपकी {scheme} का नवीनीकरण बाकी है। अगले शैक्षणिक वर्ष के लिए आवेदन करें।",
     },
+    "DBT_ACTION_NEEDED": {
+        "en": "{name}: your scholarship payment cannot reach your bank account yet ({reason}). Open the app for the steps to fix it.",
+        "hi": "{name}: आपकी छात्रवृत्ति का भुगतान अभी आपके बैंक खाते में नहीं पहुँच सकता ({reason})। सुधार के चरण ऐप में देखें।",
+    },
     "TRANSITION_DETECTED": {
         "en": "{name}: you may be eligible for the {scheme}. A pre-filled application ({app_id}) is ready for you to check and submit.",
         "hi": "{name}: आप {scheme} के लिए पात्र हो सकते हैं। पहले से भरा आवेदन ({app_id}) जाँचने और जमा करने के लिए तैयार है।",
@@ -93,6 +97,8 @@ class NudgeService:
         self.db = db
 
     def _template_for(self, event: BaseEvent) -> Optional[tuple[str, bool]]:
+        if event.type == "DBTHealthChecked":
+            return ("DBT_ACTION_NEEDED", True) if event.payload.get("status") == "FAIL" else None
         if event.type == "ReviewDecisionRecorded" and event.payload.get("decision") == "REQUEST_INFO":
             return "REVIEW_INFO_REQUESTED", False
         return EVENT_TEMPLATES.get(event.type)
@@ -127,7 +133,7 @@ class NudgeService:
             "amount": _amount(p.get("total_amount", p.get("amount"))),
             "description": p.get("description", ""),
             "due": (p.get("due_at") or "")[:10],
-            "reason": p.get("failure_code") or "bank issue",
+            "reason": p.get("failure_code") or ", ".join(p.get("issue_codes", [])) or "bank issue",
             "claim": p.get("claim_type", ""),
         }
         body = render(template_key, language, params)

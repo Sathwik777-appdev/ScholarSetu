@@ -21,3 +21,4 @@ faker
 pgvector
 fastembed
 json-logic-qubit
+minio

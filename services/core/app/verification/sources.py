@@ -25,6 +25,18 @@ class SourceClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
+    async def request_bytes(self, method: str, path: str, **kwargs) -> Optional[bytes]:
+        """Like request(), for binary downloads."""
+        try:
+            response = await self._client.request(method, path, **kwargs)
+        except httpx.TransportError as exc:
+            raise SourceUnavailable(f"{method} {path}: {type(exc).__name__}") from exc
+        if response.status_code == 404:
+            return None
+        if response.status_code >= 400:
+            raise SourceUnavailable(f"{method} {path}: HTTP {response.status_code}")
+        return response.content
+
     async def request(self, method: str, path: str, **kwargs) -> Optional[dict[str, Any]]:
         """Return the JSON body, None for 404 (no record), or raise SourceUnavailable."""
         try:

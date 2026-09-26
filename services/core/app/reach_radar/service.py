@@ -1,97 +1,153 @@
+"""Reach Radar (ARCHITECTURE.md §6.8): coverage gaps by privacy-preserving linkage, plus ministry analytics.
+
+UDISE+ (the enrolment data holder) sends only CLK encodings; ScholarSetu encodes its own scholarship
+records the same way. Matching never sees the other side's names or dates. Officials get aggregates;
+individual outreach lists go only to the student's own school.
+"""
+
+from collections import defaultdict
+from typing import Optional
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from .schemas import (
-    CoverageAnalysisResult,
-    CoverageHeatmapEntry,
-    BottleneckEntry,
-    DBTFailureHotspot,
-    TransitionEntry,
-    OutreachList
-)
-from .pprl import BloomFilterEncoder, PPRLMatcher
+
+from app.config import settings
+from app.dbt_guardian.models import DbtHealthCheck
+from app.eligibility.service import current_academic_year
+from app.ledger.models import Application
+from app.ledger.service import LedgerService
+from app.reach_radar import pprl
+from app.shared.types import CanonicalState, SchemeType
+from app.students.models import Student
+from app.verification.sources import SourceClient, SourceUnavailable
+from app.verification.transliteration import to_latin
+
+
+class RadarError(Exception):
+    def __init__(self, status_code: int, detail: str):
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+
+
+def _secret() -> bytes:
+    if not settings.PPRL_HMAC_KEY:
+        raise RadarError(503, "Reach Radar is not configured (PPRL_HMAC_KEY)")
+    return settings.PPRL_HMAC_KEY.encode()
+
+
+def _pct(part: int, whole: int) -> Optional[float]:
+    return round(100 * part / whole, 1) if whole else None
+
+
+def _previous_year(year: str) -> str:
+    start = int(year[:4]) - 1
+    return f"{start}-{(start + 1) % 100:02d}"
+
 
 class ReachRadarService:
-    """Privacy-preserving coverage gap discovery."""
-    
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, sources: SourceClient):
         self.db = db
-    
-    async def run_coverage_analysis(self, state: str | None = None, district: str | None = None) -> CoverageAnalysisResult:
-        """Run full coverage analysis.
-        1. Fetch enrolled ST students from UDISE+/APAAR mocks
-        2. Fetch scholarship holders from ledger
-        3. Encode both sets using PPRL
-        4. Match and find gaps
-        5. Compute coverage metrics
-        6. Generate outreach lists (sent only to own institution)
-        """
-        # Mock implementation
-        encoder = BloomFilterEncoder()
-        matcher = PPRLMatcher(threshold=0.85)
-        
-        # Encodings simulated
-        return CoverageAnalysisResult(
-            total_enrolled=10000,
-            total_scholarship=6500,
-            coverage_pct=65.0,
-            by_district={"District A": 70.0, "District B": 60.0},
-            by_scheme={"PRE_MATRIC": 80.0, "POST_MATRIC": 50.0}
-        )
-    
-    async def get_coverage_heatmap(self, level: str = "district") -> list[CoverageHeatmapEntry]:
-        """Get coverage percentage by geography for ministry dashboard."""
-        return [
-            CoverageHeatmapEntry(
-                state="Maharashtra",
-                district="Palghar",
-                block="Dahanu",
-                coverage_pct=55.4,
-                pvtg_coverage_pct=30.2,
-                total_enrolled=5000,
-                total_scholarship=2770
-            )
-        ]
-    
-    async def get_bottleneck_analysis(self) -> list[BottleneckEntry]:
-        """Find where applications are stuck longest."""
-        return [
-            BottleneckEntry(
-                state="Odisha",
-                district="Mayurbhanj",
-                stage="INSTITUTE_VERIFICATION",
-                avg_days_stuck=45.5,
-                count=1200
-            )
-        ]
-    
-    async def get_dbt_failure_hotspots(self) -> list[DBTFailureHotspot]:
-        """Find districts with highest DBT failure rates."""
-        return [
-            DBTFailureHotspot(
-                district="Bastar",
-                failure_count=450,
-                failure_rate=12.5,
-                common_failure_codes=["BANK_ACCOUNT_INACTIVE", "AADHAAR_NOT_MAPPED"]
-            )
-        ]
-    
-    async def get_transition_analysis(self) -> list[TransitionEntry]:
-        """Analyze transition rates (e.g., Class 10 → Post-Matric conversion)."""
-        return [
-            TransitionEntry(
-                from_scheme="PRE_MATRIC",
-                to_scheme="POST_MATRIC",
-                eligible_count=5000,
-                applied_count=2000,
-                conversion_rate=40.0
-            )
-        ]
-    
-    async def generate_outreach_list(self, institution_code: str) -> OutreachList:
-        """Generate outreach list for a specific institution.
-        Contains only students of THAT institution."""
-        return OutreachList(
-            institution_code=institution_code,
-            institution_name=f"Institution {institution_code}",
-            unreached_students_count=45,
-            sent_to=f"nodal_officer_{institution_code}@edu.in"
-        )
+        self.sources = sources
+
+    async def _enrolled(self, district: Optional[str]) -> list[dict]:
+        try:
+            rows = await self.sources.request("GET", "/udise/pprl/encodings",
+                                              params={"district": district} if district else None)
+        except SourceUnavailable:
+            raise RadarError(503, "UDISE+ encodings could not be fetched; try again later")
+        return rows or []
+
+    async def _scholarship_side(self, secret: bytes, district: Optional[str]) -> list[tuple[Optional[str], int]]:
+        """Students with a live application this academic year, encoded locally."""
+        live = select(Application.student_id).where(Application.academic_year == current_academic_year(),
+                                                     Application.canonical_state != CanonicalState.REJECTED)
+        query = select(Student).where(Student.id.in_(live))
+        if district:
+            query = query.where(Student.district == district)
+        students = (await self.db.execute(query)).scalars().all()
+        return [(pprl.apaar_token(secret, s.apaar_id),
+                 pprl.encode(secret, to_latin(s.full_name), s.dob.isoformat(), s.district)) for s in students]
+
+    async def linkage(self, district: Optional[str]) -> tuple[list[dict], set[int], dict[str, int]]:
+        secret = _secret()
+        enrolled = await self._enrolled(district)
+        left = [(r["apaar_token"], pprl.from_b64(r["clk"])) for r in enrolled]
+        right = await self._scholarship_side(secret, district)
+        matches = pprl.link(left, right)
+        methods = {"apaar": sum(m.method == "apaar" for m in matches), "clk": sum(m.method == "clk" for m in matches)}
+        return enrolled, {m.left for m in matches}, methods
+
+    async def coverage(self, level: str, district: Optional[str]) -> dict:
+        enrolled, matched, methods = await self.linkage(district)
+        groups: dict[tuple, dict] = defaultdict(lambda: {"enrolled": 0, "with": 0, "pvtg": 0, "pvtg_with": 0})
+        for i, r in enumerate(enrolled):
+            key = (r["district"], r["block"] if level == "block" else None)
+            g = groups[key]
+            g["enrolled"] += 1
+            g["with"] += i in matched
+            if r["pvtg"]:
+                g["pvtg"] += 1
+                g["pvtg_with"] += i in matched
+        rows = [{"district": d, "block": b, "enrolled_st": g["enrolled"], "with_scholarship": g["with"],
+                 "coverage_pct": _pct(g["with"], g["enrolled"]) or 0.0, "pvtg_enrolled": g["pvtg"],
+                 "pvtg_with_scholarship": g["pvtg_with"], "pvtg_coverage_pct": _pct(g["pvtg_with"], g["pvtg"])}
+                for (d, b), g in sorted(groups.items(), key=lambda kv: (kv[1]["with"] / kv[1]["enrolled"]))]
+        return {"level": level, "method": "CLK v1 balanced Bloom filters + hashed APAAR, 1:1 greedy linkage",
+                "matched_by_apaar": methods["apaar"], "matched_by_clk": methods["clk"], "rows": rows}
+
+    async def outreach(self, udise_code: str, include_students: bool) -> dict:
+        enrolled, matched, _ = await self.linkage(None)
+        mine = [(i, r) for i, r in enumerate(enrolled) if r["udise_code"] == udise_code]
+        unreached = [r for i, r in mine if i not in matched]
+        return {"udise_code": udise_code, "school_name": mine[0][1]["school_name"] if mine else None,
+                "unreached_count": len(unreached),
+                "students": [{"record_ref": r["record_ref"], "class_": r["class"], "pvtg": r["pvtg"]}
+                             for r in unreached] if include_students else None}
+
+    async def bottlenecks(self) -> list[dict]:
+        groups: dict[tuple, list] = defaultdict(list)
+        for row in await LedgerService(self.db).sla_monitor():
+            groups[(row["district"], row["state_name"], row["state"].value)].append(row)
+        return sorted(({"district": d, "state_name": s, "stage": stage, "open_applications": len(rows),
+                        "avg_days_in_stage": round(sum(r["days_in_state"] for r in rows) / len(rows), 1),
+                        "sla_breaches": sum(r["breached"] for r in rows)} for (d, s, stage), rows in groups.items()),
+                      key=lambda r: (-r["sla_breaches"], -r["avg_days_in_stage"]))
+
+    async def dbt_hotspots(self) -> list[dict]:
+        checks = (await self.db.execute(select(DbtHealthCheck, Student.district)
+                                        .join(Student, Student.id == DbtHealthCheck.student_id)
+                                        .order_by(DbtHealthCheck.created_at))).all()
+        latest: dict[str, tuple] = {}
+        for check, district in checks:
+            latest[check.application_id] = (check, district)  # later checks overwrite earlier ones
+        groups: dict[str, dict] = defaultdict(lambda: {"checked": 0, "failing": 0, "issues": defaultdict(int)})
+        for check, district in latest.values():
+            g = groups[district]
+            g["checked"] += 1
+            if check.status == "FAIL":
+                g["failing"] += 1
+                for issue in check.issues:
+                    g["issues"][issue["code"]] += 1
+        return sorted(({"district": d, "applications_checked": g["checked"], "failing": g["failing"],
+                        "failure_rate_pct": _pct(g["failing"], g["checked"]) or 0.0,
+                        "issue_counts": dict(g["issues"])} for d, g in groups.items()),
+                      key=lambda r: -r["failure_rate_pct"])
+
+    async def transitions(self) -> list[dict]:
+        """Of students who held Pre-Matric last year, how many applied for Post-Matric this year."""
+        current = current_academic_year()
+        previous = _previous_year(current)
+        rows = (await self.db.execute(select(Application.student_id, Application.scheme, Application.academic_year,
+                                             Student.district)
+                                      .join(Student, Student.id == Application.student_id))).all()
+        cohort: dict[str, set] = defaultdict(set)
+        applied: dict[str, set] = defaultdict(set)
+        for student_id, scheme, year, district in rows:
+            if scheme == SchemeType.PRE_MATRIC and year == previous:
+                cohort[district].add(student_id)
+            if scheme == SchemeType.POST_MATRIC and year == current:
+                applied[district].add(student_id)
+        return [{"district": d, "from_scheme": "PRE_MATRIC", "to_scheme": "POST_MATRIC", "previous_year": previous,
+                 "current_year": current, "eligible_cohort": len(ids), "applied": len(ids & applied[d]),
+                 "conversion_pct": _pct(len(ids & applied[d]), len(ids))} for d, ids in sorted(cohort.items())]

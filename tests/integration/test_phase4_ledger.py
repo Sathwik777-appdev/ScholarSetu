@@ -225,3 +225,15 @@ async def test_migrations_build_the_schema_on_an_empty_database(database):
         result = subprocess.run([sys.executable, "-m", "alembic", *args], cwd=CORE, env=env,
                                 capture_output=True, text=True, timeout=120)
         assert result.returncode == 0, f"alembic {' '.join(args)} failed:\n{result.stdout}\n{result.stderr}"
+
+
+async def test_event_times_in_other_offsets_still_verify(db, demo):
+    from datetime import datetime, timedelta, timezone as tz
+    ledger = LedgerService(db)
+    ist = tz(timedelta(hours=5, minutes=30))
+    app = await ledger.create_application("stu-rahul-002", SchemeType.PRE_MATRIC, "2026-27", "system:test",
+                                          occurred_at=datetime(2026, 9, 5, 10, 0, tzinfo=ist))
+    app_id = app.id
+    await db.commit()
+    db.expire_all()
+    assert (await LedgerService(db).verify_chain(app_id)).valid

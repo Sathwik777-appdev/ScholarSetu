@@ -1,50 +1,49 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
-from app.dependencies import OFFICER_ROLES, Reader, StudentPrincipal, officer_or_student, require_role, student_principal
-from app.gateway.models import User
-from app.ledger.router import ensure_application_access
-from app.ledger.service import LedgerService, get_ledger_service
+from app.dependencies import Reader, StudentPrincipal, officer_or_student, student_principal
+from app.ledger.router import actor_of, ensure_application_access
 from app.shared.types import MitraScope
-from .schemas import DBTHealthCheckResult, DBTRetryResult, DBTStatus
-from .service import DBTGuardianService
+from .schemas import DBTHealthCheckResult, DBTRetryOut, DBTStatus, RetryRequest
+from .service import DBTError, DBTGuardianService, get_dbt_service, health_result
 
 router = APIRouter(prefix="/v1", tags=["DBT Guardian"])
 
 
-def get_dbt_service() -> DBTGuardianService:
-    return DBTGuardianService()
+def _http(exc: DBTError) -> HTTPException:
+    return HTTPException(status_code=exc.status_code, detail=exc.detail)
 
 
 @router.post("/dbt/health-check/{application_id}", response_model=DBTHealthCheckResult)
-async def health_check(
-    application_id: str,
-    officer: User = Depends(require_role(*OFFICER_ROLES)),
-    ledger: LedgerService = Depends(get_ledger_service),
-    service: DBTGuardianService = Depends(get_dbt_service),
-):
-    """Run pre-sanction health checks (officers)."""
-    await ensure_application_access(ledger, application_id, Reader(user=officer, student_id=None))
-    return await service.pre_sanction_check(application_id)
+async def health_check(application_id: str, reader: Reader = Depends(officer_or_student(MitraScope.VIEW_STATUS)),
+                       service: DBTGuardianService = Depends(get_dbt_service)):
+    """Pre-sanction check: Aadhaar seeding, account status, account-holder name and account type."""
+    app = await ensure_application_access(service.ledger, application_id, reader)
+    try:
+        check = await service.health_check(app, actor_of(reader.user))
+    except DBTError as exc:
+        raise _http(exc)
+    await service.db.commit()
+    return health_result(check)
 
 
 @router.get("/dbt/status/{application_id}", response_model=DBTStatus)
-async def dbt_status(
-    application_id: str,
-    reader: Reader = Depends(officer_or_student(MitraScope.VIEW_STATUS)),
-    ledger: LedgerService = Depends(get_ledger_service),
-    service: DBTGuardianService = Depends(get_dbt_service),
-):
-    """Get full DBT status for an application (its owner or an officer)."""
-    await ensure_application_access(ledger, application_id, reader)
-    return await service.get_dbt_status(application_id)
+async def dbt_status(application_id: str, reader: Reader = Depends(officer_or_student(MitraScope.VIEW_STATUS)),
+                     service: DBTGuardianService = Depends(get_dbt_service)):
+    app = await ensure_application_access(service.ledger, application_id, reader)
+    return await service.status(app)
 
 
-@router.post("/dbt/retry/{retry_id}/confirm", response_model=DBTRetryResult)
-async def confirm_retry(
-    retry_id: str,
-    principal: StudentPrincipal = Depends(student_principal()),
-    service: DBTGuardianService = Depends(get_dbt_service),
-):
-    """Student confirms a bank fix and asks for a retry."""
-    # TODO(Phase 8): tie retry_id to the student's payment and run the DBT retry workflow.
-    return await service.confirm_fix_and_retry(retry_id)
+@router.post("/dbt/applications/{application_id}/payments/{payment_id}/retry", response_model=DBTRetryOut)
+async def retry_payment(application_id: str, payment_id: str, body: RetryRequest,
+                        principal: StudentPrincipal = Depends(student_principal()),
+                        service: DBTGuardianService = Depends(get_dbt_service)):
+    """After fixing the bank problem, the student asks for the failed payment to be sent again."""
+    if not body.confirm_fixed:
+        raise HTTPException(status_code=422, detail="Confirm that the bank problem has been fixed")
+    app = await ensure_application_access(service.ledger, application_id, Reader(principal.user, principal.student_id))
+    try:
+        retry = await service.request_retry(app, payment_id, actor_of(principal.user))
+    except DBTError as exc:
+        raise _http(exc)
+    await service.db.commit()
+    return retry

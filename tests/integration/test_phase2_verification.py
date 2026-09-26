@@ -7,7 +7,7 @@ from app.attestation.models import Attestation
 from app.ledger.models import OutboxMessage
 from app.shared.types import UserRole
 from app.verification.models import ReviewCase
-from tests.conftest import bearer, login, make_user
+from tests.conftest import bearer, grant_consent, login, make_user
 
 SUNITA_APP = RAHUL_APP = None  # set per test from the seeded demo world
 
@@ -22,8 +22,9 @@ async def people(users, demo):
 
 async def _verify(client, token, claims, app_id=None):
     app_id = app_id or SUNITA_APP
+    consent_id = await grant_consent(client, bearer(token), claims)
     return await client.post("/v1/verify/claims", headers=bearer(token),
-                             json={"application_id": app_id, "required_claims": claims, "consent_id": "cst-test"})
+                             json={"application_id": app_id, "required_claims": claims, "consent_id": consent_id})
 
 
 def _claims(report):

@@ -19,8 +19,10 @@ os.environ["DATABASE_URL"] = os.environ.get(
 os.environ["DATABASE_NULL_POOL"] = "true"
 os.environ["JWT_SECRET"] = secrets.token_hex(32)
 os.environ["SKILL_SERVICE_TOKEN"] = secrets.token_hex(24)
+os.environ["PPRL_HMAC_KEY"] = secrets.token_hex(24)  # read by core and by the in-process UDISE+ mock
 os.environ["DEMO_MODE"] = "false"
 os.environ["OUTBOX_PUBLISHER_ENABLED"] = "false"
+os.environ["ADAPTER_SYNC_INTERVAL_SECONDS"] = "0"
 os.environ["CORS_ALLOWED_ORIGINS"] = "http://localhost:5173"
 os.environ["ATTESTATION_PRIVATE_KEY_PATH"] = str(_TMP / "attestation_ed25519.pem")
 
@@ -193,6 +195,7 @@ class _GovTransport(httpx.AsyncBaseTransport):
 
 @pytest.fixture
 def gov():
+    mocks_data.generate_synthetic_data()  # fresh mock state (bank accounts, portal statuses) per test
     sources = GovSources()
 
     async def _client():
@@ -212,7 +215,7 @@ def gov():
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.seed_demo import seed as seed_demo  # noqa: E402
 
-PHONES = {"sunita": "9876543210", "rahul": "9876543211", "guardian": "9876543212", "mitra": "9876543220",
+PHONES = {"headmaster": "9876543226", "sunita": "9876543210", "rahul": "9876543211", "salkhan": "9876543213", "guardian": "9876543212", "mitra": "9876543220",
           "institute": "9876543225", "district": "9876543230", "state": "9876543235", "ministry": "9876543240"}
 
 
@@ -238,3 +241,34 @@ class Logins:
 @pytest.fixture
 def users(client, db, demo):
     return Logins(client, db)
+
+
+async def grant_consent(client, headers: dict, items: list[str], requester="SCHOLARSETU_VERIFICATION_MESH",
+                        days: int = 30) -> str:
+    r = await client.post("/v1/consents", headers=headers, json={
+        "requester": requester, "purpose": "Scholarship eligibility verification", "data_items": items,
+        "duration_days": days})
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
+
+
+class MemoryStore:
+    """In-memory stand-in for MinIO (the real store is exercised by the Docker acceptance run)."""
+
+    def __init__(self):
+        self.objects: dict[str, bytes] = {}
+
+    async def put(self, key, data, content_type):
+        self.objects[key] = data
+
+    async def get(self, key):
+        return self.objects[key]
+
+
+@pytest.fixture
+def store():
+    from app.wallet.storage import get_object_store
+    memory = MemoryStore()
+    app.dependency_overrides[get_object_store] = lambda: memory
+    yield memory
+    app.dependency_overrides.pop(get_object_store, None)

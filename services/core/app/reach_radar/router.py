@@ -1,66 +1,74 @@
-from fastapi import APIRouter, Depends, Query
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database import get_db
-from app.dependencies import ANALYTICS_ROLES, require_role
-from .schemas import (
-    CoverageAnalysisResult,
-    CoverageHeatmapEntry,
-    BottleneckEntry,
-    DBTFailureHotspot,
-    TransitionEntry,
-    OutreachList
-)
-from .service import ReachRadarService
+from app.dependencies import ANALYTICS_ROLES, officer_covers, require_role
+from app.gateway.models import User
+from app.shared.types import UserRole
+from app.verification.sources import SourceClient, get_source_client
+from .schemas import BottleneckRow, CoverageReport, DBTHotspotRow, OutreachList, TransitionRow
+from .service import RadarError, ReachRadarService
 
-# Ministry, state and district officers only (aggregate analytics and outreach lists).
-router = APIRouter(prefix="/v1/analytics", tags=["Reach Radar"],
-                   dependencies=[Depends(require_role(*ANALYTICS_ROLES))])
+router = APIRouter(prefix="/v1/analytics", tags=["Reach Radar & Ministry Analytics"])
 
-def get_reach_radar_service(db: AsyncSession = Depends(get_db)) -> ReachRadarService:
-    return ReachRadarService(db=db)
 
-@router.get("/coverage", response_model=list[CoverageHeatmapEntry])
-async def get_coverage_heatmap(
-    level: str = Query("district", description="Level of aggregation (state, district, block)"),
-    service: ReachRadarService = Depends(get_reach_radar_service)
-):
-    """Get coverage heatmap data."""
-    return await service.get_coverage_heatmap(level)
+def get_radar(db: AsyncSession = Depends(get_db), sources: SourceClient = Depends(get_source_client)):
+    return ReachRadarService(db, sources)
 
-@router.get("/bottlenecks", response_model=list[BottleneckEntry])
-async def get_bottlenecks(
-    service: ReachRadarService = Depends(get_reach_radar_service)
-):
-    """Get stage bottlenecks."""
-    return await service.get_bottleneck_analysis()
 
-@router.get("/dbt-failures", response_model=list[DBTFailureHotspot])
-async def get_dbt_failures(
-    service: ReachRadarService = Depends(get_reach_radar_service)
-):
-    """Get DBT failure hotspots."""
-    return await service.get_dbt_failure_hotspots()
+def _http(exc: RadarError) -> HTTPException:
+    return HTTPException(status_code=exc.status_code, detail=exc.detail)
 
-@router.get("/transitions", response_model=list[TransitionEntry])
-async def get_transitions(
-    service: ReachRadarService = Depends(get_reach_radar_service)
-):
-    """Get transition conversion rates."""
-    return await service.get_transition_analysis()
 
-@router.post("/run-analysis", response_model=CoverageAnalysisResult)
-async def run_analysis(
-    state: str | None = None,
-    district: str | None = None,
-    service: ReachRadarService = Depends(get_reach_radar_service)
-):
-    """Trigger a new coverage analysis."""
-    return await service.run_coverage_analysis(state, district)
+def _district_scope(user: User, district: Optional[str]) -> Optional[str]:
+    if user.role == UserRole.DISTRICT_OFFICER:
+        return user.jurisdiction_district  # district officers only ever see their own district
+    return district
 
-@router.get("/outreach/{institution_code}", response_model=OutreachList)
-async def get_outreach_list(
-    institution_code: str,
-    service: ReachRadarService = Depends(get_reach_radar_service)
-):
-    """Get outreach list for a specific institution."""
-    return await service.generate_outreach_list(institution_code)
+
+@router.get("/coverage", response_model=CoverageReport)
+async def coverage(level: str = Query("block", pattern="^(district|block)$"), district: Optional[str] = None,
+                   user: User = Depends(require_role(*ANALYTICS_ROLES)), radar: ReachRadarService = Depends(get_radar)):
+    """Share of enrolled ST students (UDISE+) who hold a scholarship, found by privacy-preserving linkage."""
+    try:
+        report = await radar.coverage(level, _district_scope(user, district))
+    except RadarError as exc:
+        raise _http(exc)
+    return report
+
+
+@router.get("/bottlenecks", response_model=list[BottleneckRow])
+async def bottlenecks(user: User = Depends(require_role(*ANALYTICS_ROLES)), radar: ReachRadarService = Depends(get_radar)):
+    """Where open applications wait longest, from the ledger."""
+    return [r for r in await radar.bottlenecks() if officer_covers(user, r["state_name"], r["district"])]
+
+
+@router.get("/dbt-failures", response_model=list[DBTHotspotRow])
+async def dbt_failures(user: User = Depends(require_role(*ANALYTICS_ROLES)), radar: ReachRadarService = Depends(get_radar)):
+    """Districts where DBT Guardian finds payments would not land (e.g. unseeded Aadhaar), for bank camps."""
+    rows = await radar.dbt_hotspots()
+    return [r for r in rows if user.role != UserRole.DISTRICT_OFFICER or r["district"] == user.jurisdiction_district]
+
+
+@router.get("/transitions", response_model=list[TransitionRow])
+async def transitions(user: User = Depends(require_role(*ANALYTICS_ROLES)), radar: ReachRadarService = Depends(get_radar)):
+    """Pre-Matric holders last year who applied for Post-Matric this year."""
+    rows = await radar.transitions()
+    return [r for r in rows if user.role != UserRole.DISTRICT_OFFICER or r["district"] == user.jurisdiction_district]
+
+
+@router.get("/outreach/{udise_code}", response_model=OutreachList)
+async def outreach(udise_code: str,
+                   user: User = Depends(require_role(UserRole.INSTITUTE_OFFICER, *ANALYTICS_ROLES)),
+                   radar: ReachRadarService = Depends(get_radar)):
+    """Unreached enrolled ST students of one school. The school's own nodal officer gets the list of its own
+    record references; everyone else gets the count only."""
+    own_school = user.role == UserRole.INSTITUTE_OFFICER and user.institution_code == udise_code
+    if user.role == UserRole.INSTITUTE_OFFICER and not own_school:
+        raise HTTPException(status_code=403, detail="Outreach lists go only to the student's own institution")
+    try:
+        return await radar.outreach(udise_code, include_students=own_school)
+    except RadarError as exc:
+        raise _http(exc)

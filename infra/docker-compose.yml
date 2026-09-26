@@ -38,9 +38,37 @@ services:
     networks:
       - scholarsetu-net
 
+  objectstore:
+    # S3-compatible object storage for wallet documents (SeaweedFS). MinIO no longer publishes community
+    # images to public registries; the API speaks plain S3, so any S3 store works.
+    image: chrislusf/seaweedfs:4.47
+    # S3 credentials come from MINIO_ROOT_USER / MINIO_ROOT_PASSWORD in the repo-root .env.
+    env_file:
+      - ../.env
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        printf '{"identities":[{"name":"scholarsetu","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","Write","List","Tagging"]}]}'
+        "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" > /tmp/s3.json &&
+        exec weed server -dir=/data -s3 -s3.port=8333 -s3.config=/tmp/s3.json -master.volumeSizeLimitMB=256
+    ports:
+      - "9002:8333"
+    volumes:
+      - objectstore_data:/data
+    networks:
+      - scholarsetu-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8333/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   mock-services:
     build:
       context: ../mocks
+    # PPRL_HMAC_KEY: the (mock) UDISE+ data holder encodes locally with the shared linkage key.
+    env_file:
+      - ../.env
     ports:
       - "8100:8100"
     networks:
@@ -60,21 +88,26 @@ services:
       - ../services/core/secrets:/app/secrets
     environment:
       - ATTESTATION_PRIVATE_KEY_PATH=/app/secrets/attestation_ed25519.pem
+      - MINIO_URL=http://objectstore:8333
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
       - DATABASE_URL=postgresql+asyncpg://scholarsetu:scholarsetu_dev@postgres:5432/scholarsetu
       - REDIS_URL=redis://redis:6379
       - NATS_URL=nats://nats:4222
-      - MINIO_URL=http://localhost:9000
       - MOCK_SERVICE_URL=http://mock-services:8100
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      objectstore:
+        condition: service_healthy
     networks:
       - scholarsetu-net
 
 volumes:
   postgres_data:
+  objectstore_data:
 
 networks:
   scholarsetu-net:

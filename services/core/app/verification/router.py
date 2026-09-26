@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.dependencies import OFFICER_ROLES, Reader, officer_or_student, require_role
 from app.gateway.models import User
 from app.ledger.router import ensure_application_access
-from app.shared.types import ConsentArtefact, ReviewCaseStatus
+from app.consent.service import ConsentError, ConsentService
+from app.shared.types import ReviewCaseStatus
 from app.students.service import StudentNotFound
 from app.verification.schemas import (
     ReviewCaseOut, ReviewDecisionRequest, ReviewDecisionResponse, VerificationReport, VerifyClaimsRequest,
@@ -27,16 +28,12 @@ async def verify_claims(
     or SOURCE_UNAVAILABLE and are routed to the officer review queue.
     """
     application = await ensure_application_access(service.ledger, request.application_id, reader)
-    # TODO(Phase 7, S3): look up a stored, unexpired, unrevoked consent instead of trusting the id.
-    consent = ConsentArtefact(
-        consent_id=request.consent_id,
-        student_id=application.student_id,
-        requester="SCHOLARSETU_VERIFICATION_MESH",
-        purpose="MoTA Scholarship Eligibility Verification",
-        data_items=[c.value for c in request.required_claims],
-        granted_at="2026-09-25T10:00:00Z",
-        expires_at="2027-09-25T10:00:00Z"
-    )
+    try:
+        consent = await ConsentService(service.db).require(
+            request.consent_id, application.student_id, "SCHOLARSETU_VERIFICATION_MESH",
+            [c.value for c in request.required_claims])
+    except ConsentError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
     try:
         return await service.verify_claims(application.student_id, application.id, request.required_claims, consent)
     except StudentNotFound as exc:

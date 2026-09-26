@@ -1,44 +1,63 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from typing import Optional
 
-class CoverageAnalysisResult(BaseModel):
-    total_enrolled: int
-    total_scholarship: int
-    coverage_pct: float
-    by_district: dict[str, float]
-    by_scheme: dict[str, float]
+from pydantic import BaseModel
 
-class CoverageHeatmapEntry(BaseModel):
-    state: str
+
+class CoverageRow(BaseModel):
     district: str
-    block: str
+    block: Optional[str]
+    enrolled_st: int
+    with_scholarship: int
     coverage_pct: float
-    pvtg_coverage_pct: float
-    total_enrolled: int
-    total_scholarship: int
+    pvtg_enrolled: int
+    pvtg_with_scholarship: int
+    pvtg_coverage_pct: Optional[float]
 
-class BottleneckEntry(BaseModel):
-    state: str
+
+class CoverageReport(BaseModel):
+    level: str
+    method: str
+    matched_by_apaar: int
+    matched_by_clk: int
+    rows: list[CoverageRow]
+
+
+class BottleneckRow(BaseModel):
     district: str
+    state_name: str
     stage: str
-    avg_days_stuck: float
-    count: int
+    open_applications: int
+    avg_days_in_stage: float
+    sla_breaches: int
 
-class DBTFailureHotspot(BaseModel):
+
+class DBTHotspotRow(BaseModel):
     district: str
-    failure_count: int
-    failure_rate: float
-    common_failure_codes: list[str]
+    applications_checked: int
+    failing: int
+    failure_rate_pct: float
+    issue_counts: dict[str, int]
 
-class TransitionEntry(BaseModel):
+
+class TransitionRow(BaseModel):
+    district: str
     from_scheme: str
     to_scheme: str
-    eligible_count: int
-    applied_count: int
-    conversion_rate: float
+    previous_year: str
+    current_year: str
+    eligible_cohort: int
+    applied: int
+    conversion_pct: Optional[float]
+
+
+class OutreachStudent(BaseModel):
+    record_ref: str
+    class_: int
+    pvtg: bool
+
 
 class OutreachList(BaseModel):
-    institution_code: str
-    institution_name: str
-    unreached_students_count: int
-    sent_to: str
+    udise_code: str
+    school_name: Optional[str]
+    unreached_count: int
+    students: Optional[list[OutreachStudent]]  # only for the school's own nodal officer

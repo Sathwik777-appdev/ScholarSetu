@@ -21,7 +21,7 @@ logger = logging.getLogger("scholarsetu.events")
 
 STREAM_NAME = "SCHOLARSETU"
 STREAM_SUBJECTS = ["application.>", "verification.>", "attestation.>", "payment.>", "deficiency.>",
-                   "pathway.>", "sla.>", "notification.>", "consent.>"]
+                   "pathway.>", "sla.>", "notification.>", "consent.>", "adapter.>", "dbt.>"]
 
 
 class BaseEvent(BaseModel):

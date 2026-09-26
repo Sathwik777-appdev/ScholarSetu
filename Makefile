@@ -13,16 +13,16 @@ keys:
 			&& echo "Created services/core/secrets/attestation_ed25519.pem")
 
 dev:
-	docker-compose -f infra/docker-compose.yml -f infra/docker-compose.override.yml up --build
+	docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.override.yml up --build
 
 down:
-	docker-compose -f infra/docker-compose.yml down
+	docker compose --env-file .env -f infra/docker-compose.yml down
 
 migrate:
-	docker-compose -f infra/docker-compose.yml exec core alembic upgrade head
+	docker compose --env-file .env -f infra/docker-compose.yml exec core alembic upgrade head
 
 seed:
-	docker-compose -f infra/docker-compose.yml -f infra/docker-compose.override.yml exec core python /scripts/seed_demo.py
+	docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.override.yml exec core python /scripts/seed_demo.py
 
 test:
 	pytest

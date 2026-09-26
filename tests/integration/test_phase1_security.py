@@ -184,8 +184,9 @@ async def test_officer_routes_need_officer_role(client, demo, users):
     student = await users.headers("sunita")
     assert (await client.get("/v1/review/cases", headers=student)).status_code == 403
     assert (await client.get("/v1/review/cases", headers=await users.headers("district"))).status_code == 200
-    r = await client.post(f"/v1/dbt/health-check/{demo['sunita_application']}", headers=student)
-    assert r.status_code == 403
+    # A student may check their own bank readiness (demo Scene 4) but never someone else's.
+    r = await client.post(f"/v1/dbt/health-check/{demo['sunita_application']}", headers=await users.headers("rahul"))
+    assert r.status_code == 404
 
 
 async def test_officers_only_see_their_jurisdiction(client, db, demo, users):

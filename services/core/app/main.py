@@ -25,13 +25,14 @@ from app.consent.router import router as consent_router
 from app.nudge.router import router as nudge_router
 from app.jago_skill.router import router as jago_skill_router
 from app.reach_radar.router import router as reach_radar_router
+from app.adapters.router import router as adapters_router
 
 logging.basicConfig(level=settings.LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("scholarsetu.core")
 
 NUDGE_SUBJECTS = {"application.>": "nudge-application", "deficiency.>": "nudge-deficiency",
                   "payment.>": "nudge-payment", "verification.>": "nudge-verification",
-                  "pathway.>": "nudge-pathway"}
+                  "pathway.>": "nudge-pathway", "dbt.>": "nudge-dbt"}
 
 
 async def _prepare_reference_data() -> None:
@@ -81,6 +82,28 @@ async def _run_event_bus(stop: asyncio.Event) -> None:
         set_event_bus(None)
 
 
+async def _poll_portals(stop: asyncio.Event) -> None:
+    """Periodically sync NSP/SFMP/NOS statuses into the ledger."""
+    from app.adapters.sync_service import AdapterSyncService
+    from app.verification.sources import SourceClient
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=settings.ADAPTER_SYNC_INTERVAL_SECONDS)
+            break
+        except asyncio.TimeoutError:
+            pass
+        client = SourceClient(settings.MOCK_SERVICE_URL)
+        try:
+            async with AsyncSessionLocal() as db:
+                results = await AdapterSyncService(db, client).sync_all()
+            logger.info("portal sync: %d students, %d imported, %d parked", len(results),
+                        sum(len(r.imported) for r in results), sum(r.parked for r in results))
+        except Exception:
+            logger.exception("portal sync failed")
+        finally:
+            await client.aclose()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting ScholarSetu core")
@@ -90,9 +113,10 @@ async def lifespan(app: FastAPI):
     stop = asyncio.Event()
     reference_task = asyncio.create_task(_prepare_reference_data())
     bus_task = asyncio.create_task(_run_event_bus(stop)) if settings.OUTBOX_PUBLISHER_ENABLED else None
+    poll_task = asyncio.create_task(_poll_portals(stop)) if settings.ADAPTER_SYNC_INTERVAL_SECONDS > 0 else None
     yield
     stop.set()
-    await asyncio.wait([t for t in (bus_task, reference_task) if t], timeout=5)
+    await asyncio.wait([t for t in (bus_task, reference_task, poll_task) if t], timeout=5)
     await engine.dispose()
     logger.info("ScholarSetu core stopped")
 
@@ -170,5 +194,5 @@ async def readiness():
 
 for router in (gateway_router, ledger_router, verification_router, attestation_router, eligibility_router,
                dbt_guardian_router, wallet_router, consent_router, nudge_router, jago_skill_router,
-               reach_radar_router):
+               reach_radar_router, adapters_router):
     app.include_router(router)

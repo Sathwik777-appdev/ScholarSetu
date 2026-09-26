@@ -54,8 +54,10 @@ async def _attest(db, student_id, claim, value):
 
 
 async def _verify(client, headers, app_id, claims):
+    from tests.conftest import grant_consent
+    consent_id = await grant_consent(client, headers, claims)
     r = await client.post("/v1/verify/claims", headers=headers,
-                          json={"application_id": app_id, "required_claims": claims, "consent_id": "c"})
+                          json={"application_id": app_id, "required_claims": claims, "consent_id": consent_id})
     assert r.status_code == 200, r.text
     return r.json()
 

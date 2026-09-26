@@ -18,11 +18,6 @@ class WalletDocumentResponse(BaseModel):
     metadata_json: Optional[Dict[str, Any]] = None
 
 
-class DigiLockerPullRequest(BaseModel):
-    doc_type: str = Field(..., example="MARKSHEET_10")
-    consent_id: str = Field("cst-dl-001")
-
-
 class WalletResponse(BaseModel):
     student_id: str
     total_documents: int

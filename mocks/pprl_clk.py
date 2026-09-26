@@ -1,18 +1,6 @@
-"""Privacy-preserving record linkage (ARCHITECTURE.md §6.8): the CLK v1 encoding.
+"""CLK v1 encoder, as run locally by the (mock) UDISE+ data holder.
 
-Each data holder encodes its own records; only encodings leave the holder. The same algorithm is
-implemented in mocks/pprl_clk.py for the (mock) UDISE+ side, and a test checks they agree bit for bit.
-
-Encoding (per record):
-  1. Inputs are normalised locally: names in Latin script (transliterate first), titles removed, per-token
-     phonetic keys; DOB as YYYY-MM-DD; district lower-case.
-  2. Per-field salting: each field has its own HMAC key derived from the shared secret, so the same
-     string in different fields sets unrelated bits.
-  3. Field q-grams (name: padded bigrams; DOB: year/month/day; district: whole value) set k bits each in
-     an m-bit Bloom filter via HMAC double hashing.
-  4. Balanced Bloom filter (Schnell 2016): filter || NOT filter, then a keyed permutation. Every encoding
-     has exactly m ones, which defeats frequency attacks that read information from bit counts.
-Similarity is Dice on the balanced filters; matching is greedy one-to-one above a threshold.
+Must stay identical to services/core/app/reach_radar/pprl.py; tests/unit/test_pprl.py checks parity.
 """
 
 import base64

@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379"
     NATS_URL: str = "nats://localhost:4222"
     MINIO_URL: str = "http://localhost:9000"
+    # Object storage for wallet documents. No defaults: without credentials the wallet reports 503.
+    MINIO_ACCESS_KEY: str | None = None
+    MINIO_SECRET_KEY: str | None = None
+    MINIO_BUCKET: str = "scholarsetu-wallet"
+    WALLET_MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024
     MOCK_SERVICE_URL: str = "http://localhost:8100"
 
     # No default: the app refuses to start without a strong secret.
@@ -79,6 +84,14 @@ class Settings(BaseSettings):
     # Versioned eligibility decision tables (rules/*.json). In the container they live at /rules.
     RULES_DIR: str = next((str(parent / "rules") for parent in Path(__file__).resolve().parents
                            if (parent / "rules").is_dir()), "/rules")
+    # Shared secret for privacy-preserving record linkage (CLK v1). No default: Reach Radar is off without it.
+    PPRL_HMAC_KEY: str | None = None
+
+    # Portal state maps (adapters/<portal>/state_map.yaml). In the container they live at /adapters.
+    ADAPTERS_DIR: str = next((str(parent / "adapters") for parent in Path(__file__).resolve().parents
+                              if (parent / "adapters" / "nsp" / "state_map.yaml").is_file()), "/adapters")
+    # How often the API polls the portals for status changes (0 disables polling).
+    ADAPTER_SYNC_INTERVAL_SECONDS: int = 300
     # Academic years start in this month (e.g. 4 = April: 2026-04-01 starts 2026-27).
     ACADEMIC_YEAR_START_MONTH: int = 4
 
@@ -92,6 +105,15 @@ class Settings(BaseSettings):
     def _strong_jwt_secret(cls, v: str) -> str:
         if len(v) < MIN_SECRET_LENGTH:
             raise ValueError(f"JWT_SECRET must be at least {MIN_SECRET_LENGTH} characters")
+        return v
+
+    @field_validator("PPRL_HMAC_KEY")
+    @classmethod
+    def _strong_pprl_key(cls, v: str | None) -> str | None:
+        if v in (None, ""):
+            return None
+        if len(v) < MIN_SECRET_LENGTH:
+            raise ValueError(f"PPRL_HMAC_KEY must be at least {MIN_SECRET_LENGTH} characters")
         return v
 
     @field_validator("SKILL_SERVICE_TOKEN")

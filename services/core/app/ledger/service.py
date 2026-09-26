@@ -101,7 +101,9 @@ class ChainCheck:
 
 
 def _aware(dt: datetime) -> datetime:
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    """Timezone-aware UTC. Event times are hashed, and Postgres returns them in UTC, so a time given in
+    another offset (e.g. a portal's +05:30) must be normalised before hashing or the chain will not verify."""
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
 
 
 def money(value: Decimal) -> float:
