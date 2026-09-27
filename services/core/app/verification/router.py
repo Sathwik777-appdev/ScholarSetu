@@ -54,7 +54,7 @@ async def get_review_cases(
     service: VerificationMeshService = Depends(get_verification_service),
 ):
     """Officer review queue, most urgent SLA deadline first."""
-    return await service.list_cases(status_filter)
+    return await service.list_cases(status_filter, officer)
 
 
 @router.post("/review/cases/{case_id}/decision", response_model=ReviewDecisionResponse)

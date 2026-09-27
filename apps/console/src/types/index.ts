@@ -1,101 +1,206 @@
-export enum CanonicalState {
-  DRAFT = 'DRAFT',
-  SUBMITTED = 'SUBMITTED',
-  INSTITUTE_VERIFICATION = 'INSTITUTE_VERIFICATION',
-  DEFICIENCY_RAISED = 'DEFICIENCY_RAISED',
-  RESUBMITTED = 'RESUBMITTED',
-  AUTHORITY_VERIFICATION = 'AUTHORITY_VERIFICATION',
-  SANCTIONED = 'SANCTIONED',
-  REJECTED = 'REJECTED',
-  PAYMENT_INITIATED = 'PAYMENT_INITIATED',
-  CREDITED = 'CREDITED',
-  PAYMENT_FAILED = 'PAYMENT_FAILED',
-  RENEWAL_DUE = 'RENEWAL_DUE',
+// Shapes returned by the ScholarSetu Core API (/v1). Keep in step with services/core/app/*/schemas.py.
+
+export type CanonicalState =
+  | 'DRAFT' | 'SUBMITTED' | 'INSTITUTE_VERIFICATION' | 'DEFICIENCY_RAISED' | 'RESUBMITTED'
+  | 'AUTHORITY_VERIFICATION' | 'SANCTIONED' | 'REJECTED' | 'PAYMENT_INITIATED' | 'CREDITED'
+  | 'PAYMENT_FAILED' | 'RENEWAL_DUE';
+
+export type SchemeType = 'PRE_MATRIC' | 'POST_MATRIC' | 'TOP_CLASS' | 'NFST' | 'NOS';
+
+export type UserRole =
+  | 'STUDENT' | 'GUARDIAN' | 'MITRA' | 'INSTITUTE_OFFICER' | 'DISTRICT_OFFICER' | 'STATE_OFFICER' | 'MINISTRY';
+
+export type ReviewDecision = 'APPROVE' | 'REJECT' | 'REQUEST_INFO';
+export type ReviewCaseStatus = 'PENDING' | 'INFO_REQUESTED' | 'APPROVED' | 'REJECTED' | 'RESOLVED_BY_SOURCE';
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  role: UserRole;
+  student_id: string | null;
+  household_id: string | null;
+  jurisdiction_state: string | null;
+  jurisdiction_district: string | null;
 }
 
-export enum SchemeType {
-  PRE_MATRIC = 'PRE_MATRIC',
-  POST_MATRIC = 'POST_MATRIC',
-  TOP_CLASS = 'TOP_CLASS',
-  NFST = 'NFST',
-  NOS = 'NOS',
+export interface AuthTokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: AuthUser;
+}
+
+export interface OfficerApplication {
+  id: string;
+  student_id: string;
+  student_name: string;
+  district: string;
+  state_name: string;
+  scheme: SchemeType;
+  academic_year: string;
+  source_system: string;
+  source_ref: string | null;
+  canonical_state: CanonicalState;
+  state_changed_at: string;
+  days_in_state: number;
+  details: Record<string, unknown>;
+  provisional_flags: string[];
+  created_at: string;
 }
 
 export interface Application {
   id: string;
-  display_id: string;
-  student_name: string;
+  student_id: string;
   scheme: SchemeType;
   academic_year: string;
+  source_system: string;
+  source_ref: string | null;
   canonical_state: CanonicalState;
-  applied_at: string;
-  district: string;
-  institution: string;
-  days_in_current_state: number;
+  state_changed_at: string;
+  details: Record<string, unknown>;
   provisional_flags: string[];
+  created_at: string;
 }
 
-export interface TimelineEvent {
+export interface LedgerEvent {
   event_id: string;
-  event_type: string;
-  occurred_at: string;
+  position: number;
+  application_id: string;
+  sequence_no: number;
+  type: string;
+  source: string;
   actor: string;
-  description: string;
-  details: Record<string, any>;
+  occurred_at: string;
+  payload: Record<string, unknown>;
+  hash_prev: string;
+  hash: string;
+}
+
+export interface ChainVerification {
+  application_id: string;
+  valid: boolean;
+  events_checked: number;
+  first_invalid_event_id: string | null;
+  reason: string | null;
 }
 
 export interface ReviewCase {
   id: string;
+  student_id: string;
+  student_name: string | null;
   application_id: string;
-  student_name: string;
-  reason: string;
   claim_type: string;
+  verification_status: string;
+  reason: string;
   explanation: string;
-  evidence_refs: string[];
+  identity_score: number | null;
+  evidence_refs: Record<string, unknown>[];
+  attestation_id: string | null;
+  status: ReviewCaseStatus;
+  decision: ReviewDecision | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  notes: string | null;
+  decision_event_id: string | null;
   sla_deadline: string;
-  days_remaining: number;
-  created_at: string;
 }
 
-export interface CoverageData {
-  state: string;
-  district: string;
-  total_enrolled: number;
-  total_scholarship: number;
-  coverage_pct: number;
-  pvtg_coverage_pct: number;
-}
-
-export interface BottleneckEntry {
-  state: string;
-  district: string;
-  stage: CanonicalState;
-  avg_days_stuck: number;
-  count: number;
-}
-
-export interface DBTFailure {
-  district: string;
-  failure_count: number;
-  failure_rate: number;
-  common_codes: string[];
+export interface ReviewDecisionResponse {
+  case: ReviewCase;
+  ledger_event_id: string;
+  attestation_id: string | null;
+  attestation_status: string | null;
 }
 
 export interface AnalyticsOverview {
+  scope: string;
   total_applications: number;
   total_students: number;
-  total_sanctioned_amount: number;
-  total_credited_amount: number;
-  by_scheme: { scheme: SchemeType; count: number; sanctioned: number; credited: number }[];
-  by_state: { state: CanonicalState; count: number }[];
-  avg_processing_days: number;
-  sla_breach_count: number;
+  by_state: { key: CanonicalState; count: number }[];
+  by_scheme: { scheme: SchemeType; applications: number; sanctioned: string; credited: string }[];
+  sanctioned_amount: string;
+  credited_amount: string;
+  failed_amount: string;
+  pending_amount: string;
+  payments_failed: number;
+  payments_total: number;
+  open_sla_breaches: number;
+  open_review_cases: number;
 }
 
-export interface PaymentSummary {
-  total_sanctioned: number;
-  total_credited: number;
-  total_failed: number;
-  total_pending: number;
-  failure_rate: number;
+export interface SLARow {
+  application_id: string;
+  scheme: SchemeType;
+  state: CanonicalState;
+  district: string;
+  state_name: string;
+  days_in_state: number;
+  sla_days: number;
+  breached: boolean;
+}
+
+export interface CoverageRow {
+  district: string;
+  block: string | null;
+  enrolled_st: number;
+  with_scholarship: number;
+  coverage_pct: number;
+  pvtg_enrolled: number;
+  pvtg_with_scholarship: number;
+  pvtg_coverage_pct: number | null;
+}
+
+export interface CoverageReport {
+  level: string;
+  method: string;
+  matched_by_apaar: number;
+  matched_by_clk: number;
+  rows: CoverageRow[];
+}
+
+export interface BottleneckRow {
+  district: string;
+  state_name: string;
+  stage: string;
+  open_applications: number;
+  avg_days_in_stage: number;
+  sla_breaches: number;
+}
+
+export interface DBTHotspotRow {
+  district: string;
+  applications_checked: number;
+  failing: number;
+  failure_rate_pct: number;
+  issue_counts: Record<string, number>;
+}
+
+export interface TransitionRow {
+  district: string;
+  from_scheme: string;
+  to_scheme: string;
+  previous_year: string;
+  current_year: string;
+  eligible_cohort: number;
+  applied: number;
+  conversion_pct: number | null;
+}
+
+export interface DBTStatus {
+  application_id: string;
+  latest_health_check: {
+    id: string;
+    overall_status: string;
+    issues: { code: string; message?: string }[];
+    bank_account_masked: string | null;
+    checked_at: string;
+  } | null;
+  payments: {
+    payment_id: string;
+    instalment: number;
+    amount: number;
+    state: string;
+    failure_code: string | null;
+  }[];
+  retries: { id: string; status: string }[];
 }

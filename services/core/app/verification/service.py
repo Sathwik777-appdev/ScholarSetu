@@ -319,18 +319,26 @@ class VerificationMeshService:
 
     # ── officer review ──────────────────────────────────────
 
-    async def list_cases(self, status: Optional[ReviewCaseStatus]) -> list[ReviewCaseOut]:
-        query = select(ReviewCase, Student.full_name).join(Student, Student.id == ReviewCase.student_id)
+    async def list_cases(self, status: Optional[ReviewCaseStatus], officer: User) -> list[ReviewCaseOut]:
+        """Cases for students inside the officer's jurisdiction, most urgent first."""
+        from app.dependencies import officer_covers
+        query = (select(ReviewCase, Student.full_name, Student.state, Student.district)
+                 .join(Student, Student.id == ReviewCase.student_id))
         if status is not None:
             query = query.where(ReviewCase.status == status)
         query = query.order_by(ReviewCase.sla_deadline, ReviewCase.created_at)
-        return [self._case_out(case, name) for case, name in (await self.db.execute(query)).all()]
+        return [self._case_out(case, name) for case, name, state, district in (await self.db.execute(query)).all()
+                if officer_covers(officer, state, district)]
 
     async def decide(self, case_id: str, decision: ReviewDecision, notes: str, officer: User,
                      claim_value: Optional[dict] = None) -> ReviewDecisionResponse:
         case = await self.db.get(ReviewCase, case_id, with_for_update=True)
         if case is None:
             raise ReviewCaseError(404, "Review case not found")
+        from app.dependencies import officer_covers
+        student = await self.db.get(Student, case.student_id)
+        if student is None or not officer_covers(officer, student.state, student.district):
+            raise ReviewCaseError(404, "Review case not found")  # outside jurisdiction: do not reveal it exists
         if case.status not in OPEN_CASE_STATUSES:
             raise ReviewCaseError(409, f"Case already decided ({case.status.value})")
         application = await self.ledger.get_application(case.application_id)

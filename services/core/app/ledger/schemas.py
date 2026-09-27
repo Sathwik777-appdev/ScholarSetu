@@ -1,3 +1,4 @@
+from decimal import Decimal
 from datetime import date, datetime
 from typing import Any, Optional
 
@@ -30,6 +31,43 @@ class ApplicationOut(BaseModel):
     details: dict[str, Any]
     provisional_flags: list[str] = []
     created_at: datetime
+
+
+class OfficerApplicationOut(ApplicationOut):
+    """An application as an officer sees it inside their jurisdiction."""
+    student_name: str
+    district: str
+    state_name: str
+    days_in_state: float
+
+
+class CountRow(BaseModel):
+    key: str
+    count: int
+
+
+class SchemeMoneyRow(BaseModel):
+    scheme: SchemeType
+    applications: int
+    sanctioned: Decimal
+    credited: Decimal
+
+
+class AnalyticsOverview(BaseModel):
+    """Totals computed from the ledger for the caller's jurisdiction."""
+    scope: str
+    total_applications: int
+    total_students: int
+    by_state: list[CountRow]
+    by_scheme: list[SchemeMoneyRow]
+    sanctioned_amount: Decimal
+    credited_amount: Decimal
+    failed_amount: Decimal
+    pending_amount: Decimal
+    payments_failed: int
+    payments_total: int
+    open_sla_breaches: int
+    open_review_cases: int
 
 
 class LedgerEventOut(BaseModel):

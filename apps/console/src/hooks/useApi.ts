@@ -1,48 +1,40 @@
-import { useState, useEffect } from 'react';
-import { apiClient } from '../api/client';
+import { useCallback, useEffect, useState } from 'react';
+import { apiClient, errorMessage } from '../api/client';
 
-export function useApi<T>(endpoint: string, fallbackData: T) {
-  const [data, setData] = useState<T>(fallbackData);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+export interface ApiState<T> {
+  data: T | null;
+  loading: boolean;
+  error: string | null;
+  reload: () => void;
+}
+
+/** GET an endpoint. There is no fallback data: on failure `data` stays null and `error` says why. */
+export function useApi<T>(endpoint: string | null, params?: Record<string, string | number | undefined>): ApiState<T> {
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(endpoint !== null);
+  const [error, setError] = useState<string | null>(null);
+  const [nonce, setNonce] = useState(0);
+  const paramKey = JSON.stringify(params ?? {});
 
   useEffect(() => {
-    let mounted = true;
-    
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const response = await apiClient.get<T>(endpoint);
-        if (mounted) {
-          setData(response.data);
-          setError(null);
-        }
-      } catch (err: any) {
-        if (mounted) {
-          console.warn(`API call to ${endpoint} failed, using fallback data.`, err.message);
-          setData(fallbackData);
-          setError(err);
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchData();
-
+    if (endpoint === null) return;
+    let active = true;
+    setLoading(true);
+    setError(null);
+    apiClient
+      .get<T>(endpoint, { params: JSON.parse(paramKey) })
+      .then((res) => active && setData(res.data))
+      .catch((err) => {
+        if (!active) return;
+        setData(null);
+        setError(errorMessage(err));
+      })
+      .finally(() => active && setLoading(false));
     return () => {
-      mounted = false;
+      active = false;
     };
-  }, [endpoint, fallbackData]);
+  }, [endpoint, paramKey, nonce]);
 
-  // If endpoint is empty, just return fallbackData
-  useEffect(() => {
-      if(!endpoint) {
-          setData(fallbackData)
-      }
-  }, [endpoint, fallbackData])
-
-  return { data, loading, error };
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
+  return { data, loading, error, reload };
 }

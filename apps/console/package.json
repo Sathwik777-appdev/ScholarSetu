@@ -1,5 +1,5 @@
 {
-  "name": "console",
+  "name": "scholarsetu-console",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,15 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "cap:build": "npm run build && npx cap copy android",
-    "cap:sync": "npm run build && npx cap sync android",
-    "cap:open": "npx cap open android"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@capacitor/android": "^8.5.2",
-    "@capacitor/cli": "^7.6.9",
-    "@capacitor/core": "^8.5.2",
     "@tailwindcss/vite": "^4.0.0",
     "axios": "^1.7.0",
     "lucide-react": "^0.300.0",

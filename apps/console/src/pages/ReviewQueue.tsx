@@ -1,392 +1,174 @@
-import React, { useState } from 'react';
-import { 
-  CheckCircle2, XCircle, AlertCircle, Clock, FileCheck2, 
-  ChevronDown, ChevronUp, UserCheck, Search, Filter, ShieldCheck, 
-  ExternalLink
-} from 'lucide-react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { CheckCircle2, Clock } from 'lucide-react';
+import { apiClient, errorMessage } from '../api/client';
+import { useApi } from '../hooks/useApi';
+import { ApiView, EmptyState, PageHeader } from '../components/States';
+import { formatDateTime, humanize } from '../utils/formatters';
+import type { ReviewCase, ReviewCaseStatus, ReviewDecision, ReviewDecisionResponse } from '../types';
 
-interface ReviewCase {
-  id: string;
-  application_id: string;
-  student_name: string;
-  state: string;
-  scheme: string;
-  reason: string;
-  claim_type: string;
-  explanation: string;
-  indic_comparison?: {
-    source_a: string;
-    source_b: string;
-    similarity: string;
-    devnagari: string;
-  };
-  evidence_type: string;
-  sla_deadline: string;
-  days_remaining: number;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
-}
-
-const initialCases: ReviewCase[] = [
-  {
-    id: 'case-001',
-    application_id: 'APP-2026-JH-8931',
-    student_name: 'Sunita Hansda (सुनीता हांसदा)',
-    state: 'Dumka, Jharkhand',
-    scheme: 'Post-Matric (Class 11 Science)',
-    reason: 'Indic Name Transliteration',
-    claim_type: 'Phonetic Suffix Variance',
-    explanation: "Aadhaar UIDAI record reads 'Sunita Hansda' while Class 10 school register reads 'Sunita Hansdah'. Devanagari transliteration 'सुनीता हांसदा' matches 100%. Father's name ('Babulal Hansda') and DOB ('12-Apr-2008') are identical.",
-    indic_comparison: {
-      source_a: 'Sunita Hansda (Aadhaar UIDAI)',
-      source_b: 'Sunita Hansdah (UDISE+ School)',
-      similarity: '94.2% (Double Metaphone Match)',
-      devnagari: 'सुनीता हांसदा (e-District Verified)',
-    },
-    evidence_type: 'Ed25519 Signed Marksheet & Aadhaar Hash',
-    sla_deadline: '24 Hours',
-    days_remaining: 1,
-    status: 'PENDING',
-  },
-  {
-    id: 'case-002',
-    application_id: 'APP-2026-OD-7412',
-    student_name: 'Sukurmani Marandi',
-    state: 'Mayurbhanj, Odisha',
-    scheme: 'National Overseas Scholarship (NOS)',
-    reason: 'Caste Certificate Attestation Reuse',
-    claim_type: 'ST Verification Mesh Reuse',
-    explanation: 'ST Certificate verified in 2024 for Post-Matric. Ed25519 digital signature valid with lifetime policy. No re-verification with local Tehsildar required.',
-    evidence_type: 'Scholarship Passport Attestation #ATT-ST-9912',
-    sla_deadline: '48 Hours',
-    days_remaining: 2,
-    status: 'PENDING',
-  },
-  {
-    id: 'case-003',
-    application_id: 'APP-2026-JH-3891',
-    student_name: 'Birsa Tudu',
-    state: 'Khunti, Jharkhand',
-    scheme: 'Top Class Education for ST',
-    reason: 'DBT Guardian Warning',
-    claim_type: 'Dormant Bank Account Catch',
-    explanation: "NPCI Aadhaar Mapper reports Bank of India account inactive for 14 months. Pre-sanction check halted payout. Local CSC Mitra alerted to collect ₹50 deposit to activate.",
-    evidence_type: 'NPCI Pre-Sanction Health Report (Mock Gateway)',
-    sla_deadline: '3 Days',
-    days_remaining: 3,
-    status: 'PENDING',
-  },
-  {
-    id: 'case-004',
-    application_id: 'APP-2026-MH-5520',
-    student_name: 'Anjali Pawara',
-    state: 'Nandurbar, Maharashtra',
-    scheme: 'Pre-Matric ST Scholarship',
-    reason: 'AISHE Enrolment Verification',
-    claim_type: 'Ashram School Roster Corroboration',
-    explanation: 'Institutional Headmaster verified physical attendance via Mitra Assisted Mode with time-boxed student OTP consent.',
-    evidence_type: 'DEPA Time-Boxed Consent #CON-8841',
-    sla_deadline: '5 Days',
-    days_remaining: 5,
-    status: 'PENDING',
-  },
+const FILTERS: { label: string; value: ReviewCaseStatus | '' }[] = [
+  { label: 'Pending', value: 'PENDING' },
+  { label: 'Info requested', value: 'INFO_REQUESTED' },
+  { label: 'Approved', value: 'APPROVED' },
+  { label: 'Rejected', value: 'REJECTED' },
+  { label: 'All', value: '' },
 ];
 
-export default function ReviewQueue() {
-  const [cases, setCases] = useState<ReviewCase[]>(initialCases);
-  const [expandedId, setExpandedId] = useState<string | null>('case-001');
-  const [filterQuery, setFilterQuery] = useState('');
-  const [actionNotice, setActionNotice] = useState<string | null>(null);
+function hoursLeft(deadline: string): number {
+  return Math.round((new Date(deadline).getTime() - Date.now()) / 3_600_000);
+}
 
-  const handleDecision = (id: string, decision: 'APPROVED' | 'REJECTED') => {
-    setCases((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: decision } : c))
-    );
-    const targetCase = cases.find((c) => c.id === id);
-    setActionNotice(
-      `Application ${targetCase?.application_id} marked as ${decision}. Audit record committed to ledger.`
-    );
-    setTimeout(() => setActionNotice(null), 4000);
+function SlaChip({ deadline }: { deadline: string }) {
+  const h = hoursLeft(deadline);
+  const tone = h < 0 ? 'bg-rose-100 text-rose-800' : h < 48 ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-700';
+  const text = h < 0 ? `Overdue by ${Math.abs(h) >= 48 ? `${Math.round(-h / 24)} days` : `${-h} h`}`
+    : h >= 48 ? `${Math.round(h / 24)} days left` : `${h} h left`;
+  return <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold ${tone}`}><Clock className="w-3 h-3" />{text}</span>;
+}
+
+function Evidence({ refs }: { refs: Record<string, unknown>[] }) {
+  if (!refs.length) return <p className="text-xs text-slate-500">No source returned evidence for this claim.</p>;
+  return (
+    <ul className="space-y-1">
+      {refs.map((ref, i) => (
+        <li key={i} className="text-xs font-mono bg-slate-50 border border-slate-200 rounded p-2 break-all">
+          {Object.entries(ref).map(([k, v]) => (
+            <span key={k} className="mr-3"><span className="text-slate-500">{k}:</span> {typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+          ))}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function DecisionForm({ item, onDecided }: { item: ReviewCase; onDecided: (r: ReviewDecisionResponse) => void }) {
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState<ReviewDecision | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const decide = async (decision: ReviewDecision) => {
+    setBusy(decision);
+    setError(null);
+    try {
+      const res = await apiClient.post<ReviewDecisionResponse>(`/review/cases/${item.id}/decision`, { decision, notes });
+      onDecided(res.data);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
   };
 
-  const filteredCases = cases.filter((c) =>
-    c.student_name.toLowerCase().includes(filterQuery.toLowerCase()) ||
-    c.application_id.toLowerCase().includes(filterQuery.toLowerCase()) ||
-    c.reason.toLowerCase().includes(filterQuery.toLowerCase())
+  const ready = notes.trim().length >= 3 && busy === null;
+  return (
+    <div className="space-y-2">
+      <label className="block text-xs font-semibold text-slate-700">
+        Reason for your decision (recorded in the ledger)
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
+          className="mt-1 w-full border border-slate-300 rounded p-2 text-sm font-normal" />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <button disabled={!ready} onClick={() => decide('APPROVE')} className="px-3 py-1.5 rounded bg-slate-900 text-white text-xs font-semibold disabled:opacity-50">
+          {busy === 'APPROVE' ? 'Recording…' : 'Approve'}
+        </button>
+        <button disabled={!ready} onClick={() => decide('REQUEST_INFO')} className="px-3 py-1.5 rounded border border-slate-300 text-xs font-semibold disabled:opacity-50">
+          {busy === 'REQUEST_INFO' ? 'Recording…' : 'Ask student for more'}
+        </button>
+        <button disabled={!ready} onClick={() => decide('REJECT')} className="px-3 py-1.5 rounded border border-rose-300 text-rose-700 text-xs font-semibold disabled:opacity-50">
+          {busy === 'REJECT' ? 'Recording…' : 'Reject'}
+        </button>
+      </div>
+      {error && <p role="alert" className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded p-2">Not recorded: {error}</p>}
+    </div>
   );
+}
+
+export default function ReviewQueue() {
+  const [status, setStatus] = useState<ReviewCaseStatus | ''>('PENDING');
+  const state = useApi<ReviewCase[]>('/review/cases', { status: status || undefined });
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [recorded, setRecorded] = useState<ReviewDecisionResponse | null>(null);
+
+  const onDecided = (res: ReviewDecisionResponse) => {
+    setRecorded(res);
+    setOpenId(null);
+    state.reload();
+  };
 
   return (
-    <div className="space-y-5">
-      {/* Executive Header */}
-      <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-2xs">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <PageHeader title="Review queue" subtitle="Claims the verification mesh could not confirm automatically, most urgent first." />
+
+      {recorded && (
+        <div role="status" className="mb-4 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-lg p-3 text-sm flex gap-2">
+          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
           <div>
-            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-              <span>Nodal Exception Processing</span>
-              <span>•</span>
-              <span>Statutory Human-in-the-Loop Review</span>
-            </div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight mt-0.5">
-              Nodal Officer Verification Queue
-            </h1>
-            <p className="text-xs text-slate-600 mt-0.5">
-              Indic phonetic variances, attestation reuse validations, and pre-sanction exceptions requiring administrative sign-off.
-            </p>
+            <p className="font-semibold">Recorded in ledger: {humanize(recorded.case.decision ?? '')} for {recorded.case.application_id}</p>
+            <p className="text-xs font-mono mt-0.5">Event {recorded.ledger_event_id}
+              {recorded.attestation_id && ` · attestation ${recorded.attestation_id} is ${recorded.attestation_status}`}</p>
           </div>
-
-          <div className="flex items-center gap-2 text-xs">
-            <span className="bg-rose-50 text-rose-700 px-2.5 py-1 rounded border border-rose-200 font-semibold">
-              1 SLA Urgent (24h)
-            </span>
-            <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded border border-slate-200 font-semibold">
-              {cases.filter((c) => c.status === 'PENDING').length} Pending Review
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Action Notification Toast */}
-      {actionNotice && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 px-4 py-3 rounded-lg flex items-center gap-2 text-xs font-semibold shadow-2xs">
-          <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-          <span>{actionNotice}</span>
         </div>
       )}
 
-      {/* Search Bar */}
-      <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs flex items-center justify-between gap-3">
-        <div className="relative w-full sm:w-96">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={filterQuery}
-            onChange={(e) => setFilterQuery(e.target.value)}
-            placeholder="Search candidate name, Application ID, or anomaly type..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-slate-700 font-medium"
-          />
-        </div>
-
-        <span className="hidden sm:inline text-xs text-slate-500 font-medium">
-          Showing {filteredCases.length} of {cases.length} records
-        </span>
-      </div>
-
-      {/* MOBILE CARDS VIEW (< 768px) */}
-      <div className="grid grid-cols-1 gap-3 md:hidden">
-        {filteredCases.map((c) => (
-          <div 
-            key={c.id} 
-            className={`bg-white rounded-lg border p-4 shadow-2xs space-y-3 ${
-              c.status === 'APPROVED' ? 'border-emerald-200 bg-emerald-50/20' :
-              c.status === 'REJECTED' ? 'border-rose-200 bg-rose-50/20' :
-              'border-slate-200'
-            }`}
-          >
-            {/* Top Row: App ID, Student Name, SLA Timer */}
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <span className="text-[11px] font-mono font-bold text-blue-900 block">
-                  {c.application_id}
-                </span>
-                <span className="text-base font-bold text-slate-900 leading-tight block">
-                  {c.student_name}
-                </span>
-                <span className="text-[11px] text-slate-500">{c.state}</span>
-              </div>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border whitespace-nowrap ${
-                c.days_remaining <= 1 ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                c.days_remaining <= 3 ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                'bg-slate-50 text-slate-600 border-slate-200'
-              }`}>
-                {c.days_remaining}d SLA Left
-              </span>
-            </div>
-
-            {/* Scheme & Reason Pill */}
-            <div className="flex flex-wrap items-center gap-1.5 text-xs">
-              <span className="bg-slate-100 text-slate-700 font-medium px-2 py-0.5 rounded border border-slate-200 text-[11px]">
-                {c.scheme}
-              </span>
-              <span className="bg-amber-50 text-amber-900 font-semibold px-2 py-0.5 rounded border border-amber-200 text-[11px]">
-                {c.reason}
-              </span>
-            </div>
-
-            {/* Indic Discrepancy Box if present */}
-            {c.indic_comparison && (
-              <div className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-1 text-xs">
-                <div className="flex items-center gap-1 font-bold text-slate-900 text-[11px]">
-                  <ShieldCheck className="w-3.5 h-3.5 text-blue-900" />
-                  <span>Indic Identity Resolution • {c.indic_comparison.similarity}</span>
-                </div>
-                <div className="text-slate-700 text-[11px] space-y-0.5 font-mono">
-                  <p><span className="text-slate-500 font-sans">Aadhaar:</span> {c.indic_comparison.source_a}</p>
-                  <p><span className="text-slate-500 font-sans">School:</span> {c.indic_comparison.source_b}</p>
-                  <p><span className="text-slate-500 font-sans">Devanagari:</span> {c.indic_comparison.devnagari}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Verification Evidence */}
-            <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-200 leading-relaxed">
-              <span className="font-bold text-slate-800 block mb-0.5">Verification Evidence:</span>
-              {c.explanation}
-            </div>
-
-            {/* Decision Status or Action Buttons */}
-            {c.status === 'PENDING' ? (
-              <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
-                <button
-                  onClick={() => handleDecision(c.id, 'APPROVED')}
-                  className="flex-1 py-1.5 bg-blue-900 hover:bg-blue-800 text-white font-semibold text-xs rounded transition flex items-center justify-center gap-1.5 shadow-2xs"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Approve Sanction</span>
-                </button>
-                <button
-                  onClick={() => handleDecision(c.id, 'REJECTED')}
-                  className="px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 font-semibold text-xs rounded transition flex items-center justify-center gap-1"
-                >
-                  <XCircle className="w-3.5 h-3.5" />
-                  <span>Reject</span>
-                </button>
-              </div>
-            ) : (
-              <div className="pt-1 border-t border-slate-100 flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-medium">Status:</span>
-                <span className={`font-bold px-2 py-0.5 rounded border ${
-                  c.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'
-                }`}>
-                  {c.status === 'APPROVED' ? 'APPROVED & SANCTIONED' : 'APPLICATION REJECTED'}
-                </span>
-              </div>
-            )}
-          </div>
+      <div className="flex flex-wrap gap-1 mb-4">
+        {FILTERS.map((f) => (
+          <button key={f.label} onClick={() => setStatus(f.value)}
+            className={`px-3 py-1 rounded text-xs font-semibold border ${status === f.value ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-300 text-slate-700'}`}>
+            {f.label}
+          </button>
         ))}
       </div>
 
-      {/* DESKTOP TABLE VIEW (>= 768px) */}
-      <div className="hidden md:block bg-white rounded-lg border border-slate-200 shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              <tr>
-                <th scope="col" className="px-4 py-3 text-left">Application ID</th>
-                <th scope="col" className="px-4 py-3 text-left">Candidate & Domicile</th>
-                <th scope="col" className="px-4 py-3 text-left">Scheme</th>
-                <th scope="col" className="px-4 py-3 text-left">Exception Reason</th>
-                <th scope="col" className="px-4 py-3 text-center">SLA Clock</th>
-                <th scope="col" className="px-4 py-3 text-center">Status</th>
-                <th scope="col" className="px-4 py-3 text-right">Administrative Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
-              {filteredCases.map((c) => (
-                <React.Fragment key={c.id}>
-                  <tr 
-                    className={`cursor-pointer hover:bg-slate-50 transition-colors ${
-                      expandedId === c.id ? 'bg-slate-50/80' : ''
-                    }`}
-                    onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}
-                  >
-                    <td className="px-4 py-3.5 whitespace-nowrap">
-                      <span className="font-mono font-bold text-blue-900 block">{c.application_id}</span>
-                      <span className="text-[10px] text-slate-400">Click to inspect</span>
-                    </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap">
-                      <div className="font-bold text-slate-900 text-sm">{c.student_name}</div>
-                      <div className="text-[11px] text-slate-500">{c.state}</div>
-                    </td>
-                    <td className="px-4 py-3.5 max-w-xs truncate text-slate-600">
-                      {c.scheme}
-                    </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap">
-                      <span className="bg-amber-50 text-amber-900 border border-amber-200 font-semibold px-2 py-0.5 rounded text-[11px]">
-                        {c.reason}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap text-center">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border ${
-                        c.days_remaining <= 1 ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                        c.days_remaining <= 3 ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                        'bg-slate-50 text-slate-600 border-slate-200'
-                      }`}>
-                        <Clock className="w-3 h-3" />
-                        {c.days_remaining}d left
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap text-center">
-                      <span className={`font-semibold px-2 py-0.5 rounded text-[11px] border ${
-                        c.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                        c.status === 'REJECTED' ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                        'bg-slate-100 text-slate-700 border-slate-200'
-                      }`}>
-                        {c.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap text-right">
-                      {c.status === 'PENDING' ? (
-                        <div className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => handleDecision(c.id, 'APPROVED')}
-                            className="px-2.5 py-1 bg-blue-900 hover:bg-blue-800 text-white font-semibold rounded text-xs transition shadow-2xs"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => handleDecision(c.id, 'REJECTED')}
-                            className="px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 font-semibold rounded text-xs transition"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 text-xs font-mono">Logged to Ledger</span>
-                      )}
-                    </td>
-                  </tr>
-
-                  {/* Expandable Evidence Inspection Drawer */}
-                  {expandedId === c.id && (
-                    <tr>
-                      <td colSpan={7} className="bg-slate-50 px-5 py-4 border-y border-slate-200">
-                        <div className="bg-white p-4 rounded border border-slate-200 shadow-2xs space-y-3">
-                          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                            <span className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                              <ShieldCheck className="w-4 h-4 text-blue-900" />
-                              Cryptographic Evidence & Indic Corroboration Engine
-                            </span>
-                            <span className="text-xs text-slate-500 font-mono">Reference: {c.evidence_type}</span>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                            <div>
-                              <span className="font-bold text-slate-800 block mb-1">Grounded Reasoning:</span>
-                              <p className="text-slate-600 leading-relaxed bg-slate-50 p-2.5 rounded border border-slate-200">
-                                {c.explanation}
-                              </p>
-                            </div>
-                            
-                            {c.indic_comparison && (
-                              <div className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-1 text-slate-700">
-                                <span className="font-bold text-slate-800 block mb-1">Phonological Resolution Metrics:</span>
-                                <p><span className="text-slate-500">Record A (UIDAI):</span> <strong className="text-slate-900">{c.indic_comparison.source_a}</strong></p>
-                                <p><span className="text-slate-500">Record B (School):</span> <strong className="text-slate-900">{c.indic_comparison.source_b}</strong></p>
-                                <p><span className="text-slate-500">Canonical Devanagari:</span> <strong className="text-slate-900">{c.indic_comparison.devnagari}</strong></p>
-                                <p><span className="text-slate-500">Double Metaphone Score:</span> <strong className="text-emerald-700">{c.indic_comparison.similarity}</strong></p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <ApiView state={state} isEmpty={(d) => d.length === 0}
+        empty={<EmptyState title="No cases" hint="Nothing in your jurisdiction matches this filter." />}>
+        {(cases) => (
+          <ul className="space-y-3">
+            {cases.map((c) => (
+              <li key={c.id} className="bg-white border border-slate-200 rounded-lg">
+                <button onClick={() => setOpenId(openId === c.id ? null : c.id)} className="w-full text-left p-4 flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-bold text-slate-900">{c.student_name ?? 'Unknown student'}</p>
+                    <p className="text-xs text-slate-500 font-mono">{c.application_id}</p>
+                    <p className="text-xs mt-1">
+                      <span className="font-semibold">{humanize(c.claim_type)}</span> · {humanize(c.reason)}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    {c.status === 'PENDING' || c.status === 'INFO_REQUESTED'
+                      ? <SlaChip deadline={c.sla_deadline} />
+                      : <span className="text-xs font-semibold text-slate-600">{humanize(c.status)}</span>}
+                    {c.identity_score !== null && (
+                      <span className="text-xs text-slate-600">Name similarity {c.identity_score.toFixed(2)} (identity resolver)</span>
+                    )}
+                  </div>
+                </button>
+                {openId === c.id && (
+                  <div className="border-t border-slate-200 p-4 space-y-3">
+                    <div>
+                      <p className="text-xs font-bold text-slate-700 mb-1">Why it needs review</p>
+                      <p className="text-sm text-slate-700">{c.explanation}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-700 mb-1">Evidence from sources</p>
+                      <Evidence refs={c.evidence_refs} />
+                    </div>
+                    <Link to={`/application/${c.application_id}`} className="inline-block text-xs text-blue-800 underline">Open application timeline</Link>
+                    {c.status === 'PENDING' || c.status === 'INFO_REQUESTED' ? (
+                      <DecisionForm item={c} onDecided={onDecided} />
+                    ) : (
+                      <p className="text-xs text-slate-600">
+                        Decided {c.decided_at && formatDateTime(c.decided_at)} by {c.decided_by}: “{c.notes}”
+                        {c.decision_event_id && <span className="font-mono"> · ledger event {c.decision_event_id}</span>}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </ApiView>
     </div>
   );
 }

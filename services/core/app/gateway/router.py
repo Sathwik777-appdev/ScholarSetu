@@ -35,6 +35,8 @@ class AuthUser(BaseModel):
     role: UserRole
     student_id: Optional[str] = None
     household_id: Optional[str] = None
+    jurisdiction_state: Optional[str] = None
+    jurisdiction_district: Optional[str] = None
 
 
 class AuthTokenResponse(BaseModel):
@@ -72,7 +74,8 @@ class MitraSessionResponse(BaseModel):
 
 def _user_out(user: User) -> AuthUser:
     return AuthUser(id=user.id, name=user.name, role=user.role, student_id=user.student_id,
-                    household_id=user.household_id)
+                    household_id=user.household_id, jurisdiction_state=user.jurisdiction_state,
+                    jurisdiction_district=user.jurisdiction_district)
 
 
 @router.post("/auth/otp/request", status_code=status.HTTP_202_ACCEPTED)

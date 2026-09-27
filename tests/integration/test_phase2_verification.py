@@ -235,3 +235,14 @@ async def test_reused_case_shows_latest_outcome(client, db, people, gov):
     case = await db.get(ReviewCase, case_id)
     assert case.reason.value == "IDENTITY_NOT_CONFIRMED" and "Hansdah" in case.explanation
     assert case.attestation_id == st["attestation_id"]
+
+
+async def test_review_queue_is_scoped_to_the_officers_jurisdiction(client, db, people, gov):
+    case_id, _ = await _open_hansdah_case(client, people)
+    await make_user(db, "9000000051", UserRole.DISTRICT_OFFICER, "DWO Ranchi", jurisdiction=("Jharkhand", "Ranchi"))
+    ranchi = bearer(await login(client, db, "9000000051"))
+    assert (await client.get("/v1/review/cases", headers=ranchi)).json() == []
+    r = await client.post(f"/v1/review/cases/{case_id}/decision", headers=ranchi,
+                          json={"decision": "APPROVE", "notes": "Not my district"})
+    assert r.status_code == 404
+    assert [c["id"] for c in (await client.get("/v1/review/cases", headers=bearer(people["officer"]))).json()] == [case_id]

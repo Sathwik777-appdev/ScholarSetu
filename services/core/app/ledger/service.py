@@ -436,11 +436,11 @@ class LedgerService:
         )).all()
         rows = []
         for app, district, state in apps:
-            limit = limits[app.canonical_state]
+            limit = (settings.sla_seconds(app.canonical_state) or 0) / 86400  # same clock as the SLA workflow
             days = (now - _aware(app.state_changed_at)).total_seconds() / 86400
             rows.append({"application_id": app.id, "scheme": app.scheme, "state": app.canonical_state,
                          "district": district, "state_name": state, "days_in_state": round(days, 1),
-                         "sla_days": limit, "breached": days > limit})
+                         "sla_days": round(limit, 4), "breached": days > limit})
         return sorted(rows, key=lambda r: r["days_in_state"] - r["sla_days"], reverse=True)
 
 
