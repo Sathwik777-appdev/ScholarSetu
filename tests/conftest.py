@@ -19,6 +19,7 @@ os.environ["DATABASE_URL"] = os.environ.get(
 os.environ["DATABASE_NULL_POOL"] = "true"
 os.environ["JWT_SECRET"] = secrets.token_hex(32)
 os.environ["SKILL_SERVICE_TOKEN"] = secrets.token_hex(24)
+os.environ["SMS_GATEWAY_TOKEN"] = secrets.token_hex(24)
 os.environ["PPRL_HMAC_KEY"] = secrets.token_hex(24)  # read by core and by the in-process UDISE+ mock
 os.environ["DEMO_MODE"] = "false"
 os.environ["OUTBOX_PUBLISHER_ENABLED"] = "false"

@@ -22,3 +22,4 @@ pgvector
 fastembed
 json-logic-qubit
 minio
+temporalio

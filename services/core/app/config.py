@@ -71,6 +71,19 @@ class Settings(BaseSettings):
     SLA_DAYS_PAYMENT_INITIATED: float = 10
     SLA_DAYS_PAYMENT_FAILED: float = 7
     ATTESTATION_EXPIRY_WARNING_DAYS: int = 30
+    # After a breach, the next officer tier is reminded after this long (institute -> district -> state).
+    SLA_ESCALATION_DAYS: float = 3
+    # DEMO_MODE only: every SLA and escalation interval becomes this many seconds, to show breaches live.
+    SLA_DEMO_SECONDS: int = 120
+
+    # Temporal (durable workflows: SLA timers, DBT retries). Empty = workflows disabled.
+    TEMPORAL_ADDRESS: str | None = None
+    TEMPORAL_NAMESPACE: str = "default"
+    TEMPORAL_TASK_QUEUE: str = "scholarsetu"
+    WORKFLOW_RECONCILE_SECONDS: int = 30
+
+    # Shared secret the SMS gateway sends on inbound webhooks (X-SMS-Gateway-Token). Empty = inbound disabled.
+    SMS_GATEWAY_TOKEN: str | None = None
 
     # JAGO guideline search (ARCHITECTURE.md §6.7): multilingual embeddings in pgvector + keyword match.
     EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -135,6 +148,16 @@ class Settings(BaseSettings):
     def sla_days(self) -> dict[CanonicalState, float]:
         return {state: getattr(self, f"SLA_DAYS_{state.value}")
                 for state in CanonicalState if hasattr(self, f"SLA_DAYS_{state.value}")}
+
+    def sla_seconds(self, state: CanonicalState) -> float | None:
+        days = self.sla_days.get(state)
+        if days is None:
+            return None
+        return float(self.SLA_DEMO_SECONDS) if self.DEMO_MODE else days * 86400
+
+    @property
+    def escalation_seconds(self) -> float:
+        return float(self.SLA_DEMO_SECONDS) if self.DEMO_MODE else self.SLA_ESCALATION_DAYS * 86400
 
     @property
     def cors_origins(self) -> list[str]:

@@ -61,6 +61,14 @@ TEMPLATES = {
         "en": "{name}: your scholarship payment cannot reach your bank account yet ({reason}). Open the app for the steps to fix it.",
         "hi": "{name}: आपकी छात्रवृत्ति का भुगतान अभी आपके बैंक खाते में नहीं पहुँच सकता ({reason})। सुधार के चरण ऐप में देखें।",
     },
+    "SLA_BREACH_STUDENT": {
+        "en": "{name}: your {scheme} application {app_id} has been at the {stage} stage for {waited}, longer than the {target} it should take. We have reminded the {tier}.",
+        "hi": "{name}: आपका {scheme} आवेदन {app_id} {waited} से {stage} चरण पर है, जबकि इसमें {target} लगने चाहिए। हमने {tier} को याद दिलाया है।",
+    },
+    "SLA_BREACH_OFFICER": {
+        "en": "Reminder: {count} application(s) in your jurisdiction are past their target time at {stage}. Latest: {app_id} ({student}), waiting {waited} against a target of {target}. Please act on them.",
+        "hi": "अनुस्मारक: आपके क्षेत्र के {count} आवेदन {stage} पर तय समय से अधिक लंबित हैं। नवीनतम: {app_id} ({student}), {waited} से लंबित; लक्ष्य {target}। कृपया कार्रवाई करें।",
+    },
     "TRANSITION_DETECTED": {
         "en": "{name}: you may be eligible for the {scheme}. A pre-filled application ({app_id}) is ready for you to check and submit.",
         "hi": "{name}: आप {scheme} के लिए पात्र हो सकते हैं। पहले से भरा आवेदन ({app_id}) जाँचने और जमा करने के लिए तैयार है।",
@@ -80,12 +88,34 @@ EVENT_TEMPLATES = {
     "PaymentFailed": ("PAYMENT_FAILED", True),
     "RenewalDue": ("RENEWAL_DUE", False),
     "TransitionDetected": ("TRANSITION_DETECTED", False),
+    "SLABreached": ("SLA_BREACH_STUDENT", False),
 }
+
+TIER_NAMES = {"INSTITUTE_OFFICER": {"en": "institute's scholarship officer", "hi": "संस्थान के छात्रवृत्ति अधिकारी"},
+              "DISTRICT_OFFICER": {"en": "district welfare officer", "hi": "जिला कल्याण अधिकारी"},
+              "STATE_OFFICER": {"en": "state tribal welfare department", "hi": "राज्य जनजातीय कल्याण विभाग"}}
+STAGE_NAMES = {"SUBMITTED": {"en": "submission", "hi": "जमा"},
+               "INSTITUTE_VERIFICATION": {"en": "institute verification", "hi": "संस्थान सत्यापन"},
+               "RESUBMITTED": {"en": "re-check by institute", "hi": "संस्थान द्वारा पुनः जाँच"},
+               "AUTHORITY_VERIFICATION": {"en": "district/state verification", "hi": "जिला/राज्य सत्यापन"},
+               "SANCTIONED": {"en": "payment release", "hi": "भुगतान जारी"},
+               "PAYMENT_INITIATED": {"en": "bank credit", "hi": "बैंक में जमा"},
+               "PAYMENT_FAILED": {"en": "payment retry", "hi": "भुगतान पुनः प्रयास"}}
 
 
 def render(template_key: str, language: str, params: dict[str, Any]) -> str:
     template = TEMPLATES[template_key]
     return template.get(language, template["en"]).format(**params)
+
+
+def duration(days: float, lang: str) -> str:
+    """Human-readable duration ("9 days", "3 hours", "1 minute"), in English or Hindi."""
+    units = [(1.0, "day", "दिन"), (1 / 24, "hour", "घंटे"), (1 / 1440, "minute", "मिनट")]
+    for size, en, hi in units:
+        if days >= size or size == units[-1][0]:
+            n = max(1, round(days / size))
+            return f"{n} {hi}" if lang == "hi" else f"{n} {en}{'' if n == 1 else 's'}"
+    return ""
 
 
 def _amount(value: Any) -> str:
@@ -135,6 +165,11 @@ class NudgeService:
             "due": (p.get("due_at") or "")[:10],
             "reason": p.get("failure_code") or ", ".join(p.get("issue_codes", [])) or "bank issue",
             "claim": p.get("claim_type", ""),
+            "stage": STAGE_NAMES.get(p.get("stage", ""), {}).get(language, p.get("stage", "")),
+            "waited": duration(float(p.get("days_in_stage", 0) or 0), language),
+            "target": duration(float(p.get("sla_days", 0) or 0), language),
+            "tier": TIER_NAMES.get(p.get("escalated_to", ""), {}).get(language, p.get("escalated_to", "")),
+            "student": student.full_name, "district": student.district,
         }
         body = render(template_key, language, params)
         stored = 0
@@ -150,5 +185,42 @@ class NudgeService:
                     stored += 1
                     if channel == NotificationChannel.SMS:
                         await send_sms(self.db, user.phone, body, f"NOTIFY_{template_key}")
+        if event.type == "SLABreached":
+            stored += await self._notify_officers(event, student, params)
         await self.db.commit()
         return stored
+
+    async def _notify_officers(self, event: BaseEvent, student: Student, params: dict) -> int:
+        """Remind officers of the escalated tier, as ONE digest per officer, stage and day (no alert floods)."""
+        from app.dependencies import officer_covers
+        role = UserRole(event.payload.get("escalated_to", "INSTITUTE_OFFICER"))
+        stage = event.payload.get("stage", "")
+        day = event.occurred_at[:10]
+        officers = (await self.db.execute(select(User).where(User.role == role, User.is_active.is_(True)))).scalars()
+        created = 0
+        for officer in officers:
+            if not officer_covers(officer, student.state, student.district):
+                continue
+            digest_id = f"sla-digest:{stage}:{day}"
+            existing = (await self.db.execute(select(Notification).where(
+                Notification.event_id == digest_id, Notification.user_id == officer.id,
+                Notification.channel == NotificationChannel.PUSH))).scalar_one_or_none()
+            app_ids = list((existing.data or {}).get("application_ids", [])) if existing else []
+            if params["app_id"] in app_ids:
+                continue  # this application is already in today's digest
+            app_ids.append(params["app_id"])
+            p = event.payload
+            body = render("SLA_BREACH_OFFICER", "en", {
+                **params, "count": len(app_ids),
+                "stage": STAGE_NAMES.get(stage, {}).get("en", stage),
+                "waited": duration(float(p.get("days_in_stage", 0) or 0), "en"),
+                "target": duration(float(p.get("sla_days", 0) or 0), "en")})
+            data = {"application_ids": app_ids, "stage": stage, "event_type": event.type}
+            if existing is None:
+                self.db.add(Notification(user_id=officer.id, student_id=None, event_id=digest_id,
+                                         template_key="SLA_BREACH_OFFICER", channel=NotificationChannel.PUSH,
+                                         language="en", body=body, data=data))
+                created += 1
+            else:
+                existing.body, existing.data, existing.read_at = body, data, None  # updated digest shows as unread
+        return created

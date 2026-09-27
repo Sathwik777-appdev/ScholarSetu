@@ -63,6 +63,43 @@ services:
       timeout: 3s
       retries: 20
 
+  temporal:
+    # Temporal dev server (durable SLA timers and DBT retries). UI on http://localhost:8233.
+    image: temporalio/temporal:1.9.1
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/home/temporal/temporal.db"]
+    ports:
+      - "7233:7233"
+      - "8233:8233"
+    volumes:
+      # Mounted on the image user's home so the volume is owned by that (non-root) user.
+      - temporal_data:/home/temporal
+    networks:
+      - scholarsetu-net
+
+  worker:
+    # Temporal worker: runs the SLA and DBT-retry workflows and starts them for open applications.
+    build:
+      context: ..
+      dockerfile: services/core/Dockerfile
+    command: ["python", "-m", "app.workflows.worker"]
+    env_file:
+      - ../.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://scholarsetu:scholarsetu_dev@postgres:5432/scholarsetu
+      - MOCK_SERVICE_URL=http://mock-services:8100
+      - TEMPORAL_ADDRESS=temporal:7233
+      - ATTESTATION_PRIVATE_KEY_PATH=/app/secrets/attestation_ed25519.pem
+    volumes:
+      - ../services/core/secrets:/app/secrets
+    depends_on:
+      core:
+        condition: service_started
+      temporal:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - scholarsetu-net
+
   mock-services:
     build:
       context: ../mocks
@@ -108,6 +145,7 @@ services:
 volumes:
   postgres_data:
   objectstore_data:
+  temporal_data:
 
 networks:
   scholarsetu-net:

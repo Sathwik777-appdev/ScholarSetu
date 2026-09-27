@@ -75,6 +75,8 @@ NEXT_ACTION = {
 
 
 def subject_for(event_type: str) -> str:
+    if event_type == "SLABreached":
+        return "sla.breached"
     if event_type.startswith("Deficiency"):
         return f"deficiency.{event_type}"
     if event_type.startswith("Payment"):

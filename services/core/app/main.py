@@ -26,13 +26,14 @@ from app.nudge.router import router as nudge_router
 from app.jago_skill.router import router as jago_skill_router
 from app.reach_radar.router import router as reach_radar_router
 from app.adapters.router import router as adapters_router
+from app.channels.router import router as channels_router
 
 logging.basicConfig(level=settings.LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("scholarsetu.core")
 
 NUDGE_SUBJECTS = {"application.>": "nudge-application", "deficiency.>": "nudge-deficiency",
                   "payment.>": "nudge-payment", "verification.>": "nudge-verification",
-                  "pathway.>": "nudge-pathway", "dbt.>": "nudge-dbt"}
+                  "pathway.>": "nudge-pathway", "dbt.>": "nudge-dbt", "sla.>": "nudge-sla"}
 
 
 async def _prepare_reference_data() -> None:
@@ -194,5 +195,5 @@ async def readiness():
 
 for router in (gateway_router, ledger_router, verification_router, attestation_router, eligibility_router,
                dbt_guardian_router, wallet_router, consent_router, nudge_router, jago_skill_router,
-               reach_radar_router, adapters_router):
+               reach_radar_router, adapters_router, channels_router):
     app.include_router(router)

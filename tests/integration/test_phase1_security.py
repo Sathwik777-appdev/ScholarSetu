@@ -24,7 +24,8 @@ PUBLIC_ROUTES = {
     ("POST", "/v1/attestations/verify-jws"),
     ("GET", "/v1/jago/guidelines/search"),      # public scheme text, no personal data
     ("POST", "/v1/skill/tools/{tool_name}"),    # service-token auth, tested separately
-    ("POST", "/v1/sms/inbound"),                # SMS gateway webhook: authenticates by registered phone
+    ("POST", "/v1/sms/inbound"),                # SMS gateway webhook: gateway token + registered phone
+    ("POST", "/v1/ivr/call"),                   # returns 501 Not Implemented
 }
 
 
