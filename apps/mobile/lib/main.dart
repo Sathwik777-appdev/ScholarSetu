@@ -31,9 +31,19 @@ Future<void> main() async {
 
   runApp(ProviderScope(
     retry: (retryCount, error) => null, // screens show errors; users retry explicitly
-    overrides: [servicesProvider.overrideWithValue(Services(api, db, secure))],
+    overrides: [
+      servicesProvider.overrideWithValue(Services(api, db, secure)),
+      currentApiOriginProvider.overrideWith(() => _InitialApiOriginNotifier(effectiveOrigin)),
+    ],
     child: const ScholarSetuApp(),
   ));
+}
+
+class _InitialApiOriginNotifier extends ApiOriginNotifier {
+  _InitialApiOriginNotifier(this._initial);
+  final String _initial;
+  @override
+  String build() => _initial;
 }
 
 class ScholarSetuApp extends ConsumerWidget {

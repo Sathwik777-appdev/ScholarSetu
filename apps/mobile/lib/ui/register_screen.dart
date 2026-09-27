@@ -17,13 +17,13 @@ class RegisterScreen extends ConsumerStatefulWidget {
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _form = GlobalKey<FormState>();
-  final _phone = TextEditingController();
-  final _otp = TextEditingController();
-  final _name = TextEditingController();
-  final _father = TextEditingController();
-  final _state = TextEditingController();
-  final _district = TextEditingController();
-  DateTime? _dob;
+  final _phone = TextEditingController(text: '8867494183');
+  final _otp = TextEditingController(text: '123456');
+  final _name = TextEditingController(text: 'Sunita Hansda');
+  final _father = TextEditingController(text: 'Babulal Hansda');
+  final _state = TextEditingController(text: 'Jharkhand');
+  final _district = TextEditingController(text: 'Dumka');
+  DateTime? _dob = DateTime(2008, 4, 12);
   String _gender = 'FEMALE';
   String _language = 'hi';
   bool _codeSent = false;
@@ -41,7 +41,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     });
     try {
       await ref.read(servicesProvider).api.post('/auth/register/start', {'phone': _phone.text.trim()});
-      setState(() => _codeSent = true);
+      setState(() {
+        _codeSent = true;
+        _otp.text = '123456';
+      });
     } catch (e) {
       setState(() => _error = errorText(e));
     } finally {

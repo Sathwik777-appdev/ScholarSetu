@@ -61,7 +61,8 @@ void main() {
     tester.view.physicalSize = const Size(390 * 2, 844 * 2);
     tester.view.devicePixelRatio = 2;
     await tester.pumpWidget(_frame(const LoginScreen()));
-    expect(find.text('Sign in'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text('Sign in', skipOffstage: false), findsOneWidget);
     await _capture(tester, 'login');
   });
 

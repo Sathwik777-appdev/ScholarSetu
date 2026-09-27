@@ -22,6 +22,15 @@ class Services {
   }
 }
 
+class ApiOriginNotifier extends Notifier<String> {
+  @override
+  String build() => defaultApiOrigin;
+
+  void setOrigin(String origin) => state = origin;
+}
+
+final currentApiOriginProvider = NotifierProvider<ApiOriginNotifier, String>(ApiOriginNotifier.new);
+
 final servicesProvider = Provider<Services>((ref) => throw UnimplementedError('overridden in main()'));
 
 // ── session ────────────────────────────────────────────────────────────────

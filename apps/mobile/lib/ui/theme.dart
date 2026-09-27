@@ -64,14 +64,14 @@ class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.ink900,
           foregroundColor: Colors.white,
-          minimumSize: const Size.fromHeight(52),
+          minimumSize: const Size(0, 52),
           shape: RoundedRectangleBorder(borderRadius: radius),
           textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w600),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(50),
+          minimumSize: const Size(0, 50),
           foregroundColor: AppColors.ink900,
           side: const BorderSide(color: AppColors.line),
           shape: RoundedRectangleBorder(borderRadius: radius),

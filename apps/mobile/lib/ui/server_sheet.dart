@@ -93,6 +93,7 @@ class _ServerConfigSheetState extends State<_ServerConfigSheet> {
     final raw = _urlCtrl.text.trim();
     if (raw.isEmpty) return;
     final clean = formatOrigin(raw);
+    widget.ref.read(currentApiOriginProvider.notifier).setOrigin(clean);
     await widget.ref.read(servicesProvider).updateApiUrl(clean);
     if (!mounted) return;
     Navigator.of(context).pop();
