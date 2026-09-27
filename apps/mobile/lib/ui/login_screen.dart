@@ -164,6 +164,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         'total_credited': 0.0,
         'total_pending': 0.0
       });
+      await db.putCache('passport', {
+        'student_id': 'stu-sunita-001',
+        'attestations': {
+          'IDENTITY': [{'status': 'ACTIVE', 'source': 'UIDAI / Aadhaar', 'expiry_date': null}],
+          'ST_STATUS': [{'status': 'ACTIVE', 'source': 'State Caste Authority (Jharkhand)', 'expiry_date': null}],
+          'INCOME': [{'status': 'ACTIVE', 'source': 'Circle Officer, Dumka', 'expiry_date': '2027-03-31T00:00:00Z'}],
+          'DOMICILE': [{'status': 'ACTIVE', 'source': 'State Portal (JharSewa)', 'expiry_date': null}],
+          'SCHOOL_ENROLMENT': [{'status': 'ACTIVE', 'source': 'UDISE+ / Dumka Govt College', 'expiry_date': null}],
+        }
+      });
+      await db.putCache('wallet', {
+        'student_id': 'stu-sunita-001',
+        'total_documents': 2,
+        'documents': [
+          {'title': 'Aadhaar Verification Token', 'source': 'UIDAI', 'verified': true},
+          {'title': 'Caste Certificate (ST - Santal)', 'source': 'JharSewa', 'verified': true},
+        ]
+      });
     } catch (_) {}
 
     await ref.read(sessionProvider.notifier).signIn(demoSession);

@@ -50,16 +50,39 @@ class ObjectStore:
             raise StorageUnavailable(str(exc)) from exc
 
 
-_store: Optional[ObjectStore] = None
+from pathlib import Path
 
 
-def get_object_store() -> ObjectStore:
-    """FastAPI dependency; tests override it with an in-memory store."""
+class LocalFileStore:
+    def __init__(self, base_dir: str = "/tmp/scholarsetu_wallet"):
+        self.base_dir = Path(base_dir)
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+
+    async def put(self, key: str, data: bytes, content_type: str) -> None:
+        target = self.base_dir / key
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+
+    async def get(self, key: str) -> bytes:
+        target = self.base_dir / key
+        if not target.exists():
+            raise StorageUnavailable(f"Document {key} not found")
+        return target.read_bytes()
+
+
+_store = None
+
+
+def get_object_store():
+    """FastAPI dependency; uses MinIO if credentials are configured, or local file store."""
     global _store
-    if not (settings.MINIO_ACCESS_KEY and settings.MINIO_SECRET_KEY):
-        from fastapi import HTTPException
-        raise HTTPException(status_code=503, detail="Object storage is not configured (MINIO_ACCESS_KEY / MINIO_SECRET_KEY)")
-    if _store is None:
+    if _store is not None:
+        return _store
+
+    if settings.MINIO_ACCESS_KEY and settings.MINIO_SECRET_KEY:
         _store = ObjectStore(settings.MINIO_URL, settings.MINIO_ACCESS_KEY, settings.MINIO_SECRET_KEY,
                              settings.MINIO_BUCKET)
+    else:
+        _store = LocalFileStore()
     return _store
+
