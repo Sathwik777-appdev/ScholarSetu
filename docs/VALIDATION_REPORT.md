@@ -2,7 +2,7 @@
 
 **Project:** SIH 2026 · PS 26238 · Team ACE
 **Reviewed against:** [ARCHITECTURE.md](ARCHITECTURE.md)
-**Date:** 2026-09-26
+**Date:** 2026-09-26 (findings) · 2026-09-27 (status after fixes, §8)
 
 ---
 
@@ -27,30 +27,32 @@ The repository follows the architecture's folder layout (§12), and the design v
 
 ## 2. Architecture coverage
 
-| Architecture component | Section | Status | Notes |
-|---|---|---|---|
-| D1 Scholarship Passport / attestations | §6.4.4 | 🟡 Partial | Ed25519 signing works. The key is regenerated on every start, and attestations are stored in memory. |
-| D2 Canonical Lifecycle Ledger | §6.2.1, §6.3 | 🔴 Stub | Events are kept in a Python list; read models are hardcoded; the hash chain fails its own verification. |
-| D3 Verification Mesh | §6.4 | 🔴 Stub | All 7 plugins return hardcoded results and none calls a mock service. Verification fails *open*. |
-| D3 Indic Identity Resolver | §6.4.3 | 🟠 Unsafe | Runs, but auto-verifies different people; no transliteration. |
-| D4 Eligibility & Pathway Engine | §6.5 | 🔴 Stub | `eval()` on rule strings; `rules/*.json` never loaded; one-scheme check always says "no conflict". |
-| D5 DBT Guardian | §6.6 | 🔴 Stub | Health check always returns PASS; the status endpoint crashes (HTTP 500). |
-| D6 Offline-first app | §6.1 | 🔴 UI only | No Drift, SQLCipher or delta sync; "offline" is a toggle that loads mock data. |
-| D6 Family mode | §6.1 | 🟡 Partial | Works for the one hardcoded household only. |
-| D6 Mitra mode | §6.1 | 🔴 Unsafe | No student OTP, no scope or time limits. |
-| D6 SMS / IVR | §6.1 | ⚫ Missing | Not implemented anywhere. |
-| D7 Reach Radar (PPRL) | §6.8 | 🔴 Stub | The Bloom-filter code exists but is never called; endpoints return fixed numbers. |
-| Consent Manager | §6.9 | 🔴 Stub | `verify_consent()` always returns `True` and nothing calls it. |
-| Nudge & Notification Engine | §6.10 | 🔴 Stub | `handle_event()` is `pass`; nothing subscribes to events. |
-| Scheme Adapter Layer | §6.2 | 🔴 Dead code | Nothing imports it; the NOS adapter crashes on import. |
-| JAGO Scholarship Skill | §6.7 | 🔴 Stub | Tool results are hardcoded and contradict the ledger. |
-| Temporal workflows / SLA timers | §5.1, §6.3 | ⚫ Missing | Not in `docker-compose.yml`, not in code. |
-| NATS JetStream | §5.1 | 🟡 Present, unused | The container runs, but the app always uses `InMemoryEventBus`. |
-| Keycloak / OIDC | §9 | ⚫ Missing | Replaced by a homemade JWT with an insecure default secret. |
-| MinIO | §11 | ⚫ Missing | Only an environment variable; no service. |
-| PostgreSQL persistence | §7 | 🔴 Broken | The migration can't run, and nothing writes to the DB. |
+| Architecture component | Section | Status (2026-09-26) | Notes | Status after fixes (2026-09-27) |
+|---|---|---|---|---|
+| D1 Scholarship Passport / attestations | §6.4.4 | 🟡 Partial | Ed25519 signing works. The key is regenerated on every start, and attestations are stored in memory. | 🟢 Key loaded from file; attestations in Postgres; Ed25519 compact JWS over every field; public key endpoint. No QR (§19). |
+| D2 Canonical Lifecycle Ledger | §6.2.1, §6.3 | 🔴 Stub | Events are kept in a Python list; read models are hardcoded; the hash chain fails its own verification. | 🟢 Postgres ledger; hash chain covers every field and verifies; read models from the tables; outbox → NATS. |
+| D3 Verification Mesh | §6.4 | 🔴 Stub | All 7 plugins return hardcoded results and none calls a mock service. Verification fails *open*. | 🟢 Seven plugins call the mocks over HTTP with consent; fails closed to review. |
+| D3 Indic Identity Resolver | §6.4.3 | 🟠 Unsafe | Runs, but auto-verifies different people; no transliteration. | 🟢 Transliteration, phonetic tokens, corroboration gate; never auto-verifies siblings or namesakes. Thresholds need pilot data. |
+| D4 Eligibility & Pathway Engine | §6.5 | 🔴 Stub | `eval()` on rule strings; `rules/*.json` never loaded; one-scheme check always says "no conflict". | 🟢 JSON-Logic over versioned `rules/*.json`; one-scheme check against the ledger. 🟡 12 scheme values await team verification. |
+| D5 DBT Guardian | §6.6 | 🔴 Stub | Health check always returns PASS; the status endpoint crashes (HTTP 500). | 🟢 NPCI/PFMS checks against mocks, Hindi/English fixes, retries followed by a Temporal workflow. |
+| D6 Offline-first app | §6.1 | 🔴 UI only | No Drift, SQLCipher or delta sync; "offline" is a toggle that loads mock data. | 🟢 Flutter: Drift over SQLCipher, persistent outbox, delta sync; unit-tested and APK built. Not yet exercised on a device. |
+| D6 Family mode | §6.1 | 🟡 Partial | Works for the one hardcoded household only. | 🟢 Any household (guardian login). No per-profile PINs (§19). |
+| D6 Mitra mode | §6.1 | 🔴 Unsafe | No student OTP, no scope or time limits. | 🟢 Server: student OTP, scope, time limit, audit. 🟡 App implements status checks only (§19). |
+| D6 SMS / IVR | §6.1 | ⚫ Missing | Not implemented anywhere. | 🟡 SMS `STATUS` simulated (registered phone only); IVR returns 501 (§19). |
+| D7 Reach Radar (PPRL) | §6.8 | 🔴 Stub | The Bloom-filter code exists but is never called; endpoints return fixed numbers. | 🟢 CLK linkage over synthetic UDISE+/APAAR data; computed coverage and transitions. |
+| Consent Manager | §6.9 | 🔴 Stub | `verify_consent()` always returns `True` and nothing calls it. | 🟢 Persisted, enforced in verification and wallet, revocable. |
+| Nudge & Notification Engine | §6.10 | 🔴 Stub | `handle_event()` is `pass`; nothing subscribes to events. | 🟢 NATS consumers create per-user notifications; officer digests; polled by the app (no FCM, §19). |
+| Scheme Adapter Layer | §6.2 | 🔴 Dead code | Nothing imports it; the NOS adapter crashes on import. | 🟢 NSP/SFMP/NOS adapters poll the mocks; unknown statuses parked and alerted. |
+| JAGO Scholarship Skill | §6.7 | 🔴 Stub | Tool results are hardcoded and contradict the ledger. | 🟢 Tools read the ledger; guideline answers cited. 🟡 Hindi/English only, no voice (§19). |
+| Temporal workflows / SLA timers | §5.1, §6.3 | ⚫ Missing | Not in `docker-compose.yml`, not in code. | 🟢 Temporal dev server + worker: SLA escalation and DBT retries (§19). |
+| NATS JetStream | §5.1 | 🟡 Present, unused | The container runs, but the app always uses `InMemoryEventBus`. | 🟢 The event bus in every deployment; in-memory bus only in tests. |
+| Keycloak / OIDC | §9 | ⚫ Missing | Replaced by a homemade JWT with an insecure default secret. | ⚪ Deviation documented: app-issued JWT (secret required, 15 min, role from DB) (§19). |
+| MinIO | §11 | ⚫ Missing | Only an environment variable; no service. | 🟢 S3 object storage via SeaweedFS (MinIO images unavailable; §19). |
+| PostgreSQL persistence | §7 | 🔴 Broken | The migration can't run, and nothing writes to the DB. | 🟢 Alembic migrations 0001–0004; every module reads and writes Postgres. |
 
-Legend: 🟢 done · 🟡 partial · 🟠 works but unsafe · 🔴 stub or broken · ⚫ missing
+Legend: 🟢 done · 🟡 partial · 🟠 works but unsafe · 🔴 stub or broken · ⚫ missing · ⚪ deviation documented
+
+The last column records the state after the 12-phase fix plan. Findings by ID, with the tests that prove each fix, are in §8.
 
 ---
 
@@ -299,3 +301,42 @@ At a minimum, fix **S1, S5, C1, C2, C5 and F1**. These are the issues a judge is
 - "verify the audit chain";
 - "ask JAGO about money";
 - "refresh the console after approving".
+
+---
+
+## 8. Status after fixes (2026-09-27)
+
+Every finding above, after the 12-phase fix plan (commits "Phase 2" … "Phase 12"). "Proved by" names the
+tests that fail if the problem comes back. Test paths are under `tests/` unless stated. Deviations are
+listed in [ARCHITECTURE.md §19](ARCHITECTURE.md#19-prototype-deviations).
+
+| ID | Finding | Status | Proved by |
+|---|---|---|---|
+| S1 | Anyone can obtain a MINISTRY token | **Fixed** | `integration/test_phase1_security.py::test_universal_otp_with_ministry_role_is_rejected`, `::test_role_in_request_body_is_ignored`, `::test_token_role_comes_from_database`; `integration/test_judge_probes.py::test_a_ministry_login_with_a_random_phone_is_denied` |
+| S2 | Requests without a token let through; IDOR on `/v1/me/*` | **Fixed** | `test_phase1_security.py::test_every_non_public_route_requires_a_token` (every route), `::test_me_routes_are_never_public`, `::test_student_sees_only_own_data`, `::test_officers_only_see_their_jurisdiction`; `test_phase2_verification.py::test_review_queue_is_scoped_to_the_officers_jurisdiction` |
+| S3 | Consent never enforced | **Fixed** | `integration/test_phase7_consent.py` (all six tests, e.g. `::test_verification_without_a_consent_is_403`, `::test_revoking_a_consent_blocks_the_next_verification`); `test_phase7_wallet.py::test_digilocker_pull_needs_a_wallet_consent` |
+| S4 | Mitra sessions skip the student's OTP | **Fixed** | `test_phase1_security.py::test_mitra_session_full_lifecycle`, `::test_expired_mitra_session_is_refused`, `::test_mitra_cannot_use_another_helpers_session`; `test_phase10_sync.py::test_mitra_outbox_respects_the_session_scope` |
+| S5 | Verification fails open | **Fixed** | `test_phase2_verification.py::test_every_source_down_gives_source_unavailable`, `::test_source_without_a_matching_record_is_never_verified`, `::test_claim_without_any_verifier_goes_to_review`; `test_phase7_dbt.py::test_pfms_down_is_unavailable_not_pass` |
+| S6 | Rules executed with `eval()` | **Fixed** | `test_phase6_eligibility.py::test_no_eval_anywhere`; `unit/test_rule_files.py::test_no_python_eval_anywhere` |
+| S7 | Secrets and key handling | **Fixed** | `unit/test_config_security.py` (missing/short secrets refused, `*` CORS refused, secrets never echoed); `test_attestations.py::test_missing_key_refuses_outside_demo_mode`. No key is tracked or in git history; `.gitignore` and `.dockerignore` exclude `*.pem`, `.env` and `secrets/` (checked by hand). |
+| C1 | Identity resolver auto-verifies different people | **Fixed** | `unit/test_identity_resolver.py` (one test per rule, e.g. `::test_twins_are_not_auto_verified`, `::test_corroboration_is_a_gate_not_a_bonus`); `identity_matching_eval/test_identity_eval.py`; `test_judge_probes.py::test_b_a_siblings_name_is_not_auto_verified`. Thresholds still need tuning on pilot data. |
+| C2 | Hash chain fails its own check | **Fixed** | `test_phase4_ledger.py::test_every_seeded_chain_verifies`, `::test_editing_an_event_by_hand_breaks_the_chain`, `::test_deleting_an_event_breaks_the_chain`; `unit/test_hash_chain.py` (every field); `test_judge_probes.py::test_c_the_audit_chain_verifies_and_detects_tampering` |
+| C3 | Eligibility never returns eligible | **Fixed** | `test_phase6_eligibility.py::test_rahul_is_eligible_for_pre_matric_after_verification`, `::test_sunita_is_eligible_for_post_matric_once_the_st_case_is_approved`, `::test_missing_facts_say_what_is_needed` |
+| C4 | Application IDs collide | **Fixed** | `test_phase4_ledger.py::test_two_applications_get_different_ids_and_chains` |
+| C5 | JAGO's money contradicts the ledger | **Fixed** | `test_phase5_jago.py::test_every_rupee_figure_matches_the_ledger`, `::test_unsanctioned_application_gets_no_invented_date`; `test_judge_probes.py::test_d_jago_money_matches_the_ledger`; smoke Scene 5 |
+| C6 | Endpoints and modules that crash | **Fixed** | `test_phase7_dbt.py::test_status_endpoint_explains_failed_payments`; `test_phase7_adapters.py::test_all_adapters_import_and_use_the_right_sources`, `::test_unknown_status_is_parked_and_alerted_not_guessed`; `unit/test_state_maps.py` |
+| C7 | Database layer cannot work | **Fixed** | `test_phase4_ledger.py::test_migrations_build_the_schema_on_an_empty_database` (upgrade, `alembic check`, downgrade, upgrade), `::test_data_survives_a_restart` |
+| C8 | Attestations unverifiable after restart | **Fixed** | `test_attestations.py::test_restart_does_not_invalidate_old_attestations`, `::test_signature_covers_every_field`, `::test_attestation_ids_are_uuidv7`, `::test_public_jwk_shape` |
+| F1 | Console never calls the backend | **Fixed** | `test_phase9_console_api.py` (the endpoints the console reads, scoped and computed from the ledger); `test_judge_probes.py::test_e_an_officer_approval_is_persisted`; `unit/test_docs_honesty.py` (console source). The console build and lint run in CI; its loading/error states have no browser test. |
+| F2 | Flutter app claims more than it does | **Fixed** | `apps/mobile/test/outbox_test.dart` (the local file is SQLCipher-encrypted and needs the key; the outbox survives a restart and is sent once; offline uploads go first; refusals are kept with the reason; offline reads show the saved copy or fail); `test_phase10_sync.py` (sync, outbox idempotency, registration); `flutter analyze` clean; `flutter build apk --debug` succeeded with `libsqlcipher.so`. Not yet run on a device in airplane mode. Mitra in the app covers status checks only (§19). |
+| F3 | README contradicts the code | **Fixed** | `unit/test_docs_honesty.py` (README, pitch, demo script, both apps: no Capacitor, 5 ms, 4 million, 30 %, Double Metaphone; README lists the real mock paths) |
+| F4 | Smoke test only proves HTTP 200 | **Fixed** | `scripts/demo_smoke_test.py` asserts content for all 8 scenes and exits 1 on any failure (checked against a live stack, including a failing rerun); `e2e/test_demo_smoke.py`; CI job `smoke` |
+| M1 | Scheme parameters disagree across sources | **Partially fixed** | Values live only in `rules/*.json`, each with its source and `verified_by_team: false`: `test_phase6_eligibility.py::test_every_parameter_is_sourced_and_unverified`, `unit/test_rule_files.py`. **12 conflicts** in `docs/RULE_VALUES_TO_VERIFY.md` need the team's decision; no value was changed. |
+| M2 | Mock data contradicts the demo story | **Fixed** | `test_phase7_dbt.py::test_scene4_sunita_is_not_aadhaar_seeded`, `::test_seeded_account_passes`; `test_phase2_verification.py::test_hansdah_certificate_opens_review_case_with_provisional_attestation`; smoke Scenes 3–4 |
+| M3 | PPRL privacy and matching gaps | **Fixed** | `unit/test_pprl.py` (key from env, keyed and balanced encodings, Devanagari names, 1:1 linkage, namesakes below threshold); `test_phase7_reach_radar.py::test_reach_radar_needs_the_linkage_key`, `::test_coverage_comes_from_linkage` |
+| M4 | Review pipeline not wired | **Fixed** | `test_phase2_verification.py::test_hansdah_certificate_opens_review_case_with_provisional_attestation`, `::test_only_review_decisions_are_accepted`, `::test_approve_activates_attestation_and_writes_ledger_event` |
+| M5 | Events go nowhere | **Fixed** | `test_phase4_ledger.py::test_outbox_publishes_to_nats_once`, `::test_nudge_notifies_student_and_guardian_once`; `contract/test_event_contract.py` (every published event matches the schema); `test_phase8_workflows.py::test_breach_tells_the_student_honestly_and_reminds_the_right_officers` |
+
+Found during the fixes and fixed as well: the ledger hash did not cover `actor`, `source`, `sequence_no`,
+`student_id` or `scheme` (judge probe c); the review queue was not scoped to the officer's jurisdiction;
+wallet uploads defaulted to `verified: true`; `contracts/events.schema.json` did not match the published events.

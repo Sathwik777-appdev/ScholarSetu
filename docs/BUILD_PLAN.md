@@ -1,5 +1,8 @@
 # ScholarSetu — Build Plan
 
+> The original build plan, kept for history. For what the prototype does today see the README and
+> ARCHITECTURE.md §19 (Prototype Deviations).
+
 ## Phase 1: Project Foundation & Infrastructure
 
 ### 1.1 Root Project Setup
