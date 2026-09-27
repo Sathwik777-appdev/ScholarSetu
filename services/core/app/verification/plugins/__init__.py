@@ -1,2 +1,4 @@
 # Expose base classes
-from .base import VerifierPlugin, SubjectRef, VerificationResult
+from .base import SubjectRef, VerificationResult, VerifierPlugin
+
+__all__ = ["SubjectRef", "VerificationResult", "VerifierPlugin"]

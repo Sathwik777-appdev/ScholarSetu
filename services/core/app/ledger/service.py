@@ -329,6 +329,7 @@ class LedgerService:
         )).scalars())
 
     async def student_dashboard(self, student_id: str) -> dict[str, Any]:
+        from app.eligibility.service import current_academic_year
         student = await self.db.get(Student, student_id)
         if student is None:
             raise LedgerError(404, f"Student {student_id} not found")
@@ -355,6 +356,7 @@ class LedgerService:
                         "household_id": student.household_id, "district": student.district},
             "applications": briefs,
             "total_received": money(sum(credited.values(), Decimal(0))),
+            "current_academic_year": current_academic_year(),
         }
 
     async def family_dashboard(self, household_id: str) -> dict[str, Any]:

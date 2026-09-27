@@ -108,6 +108,9 @@ class Settings(BaseSettings):
     # Academic years start in this month (e.g. 4 = April: 2026-04-01 starts 2026-27).
     ACADEMIC_YEAR_START_MONTH: int = 4
 
+    # Offline sync holds back ledger events younger than this, so a late-committing transaction is never skipped.
+    SYNC_SETTLE_SECONDS: int = 5
+
     # Publish the transactional outbox to NATS from the API process.
     OUTBOX_PUBLISHER_ENABLED: bool = True
 

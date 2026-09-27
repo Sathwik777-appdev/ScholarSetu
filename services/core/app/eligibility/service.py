@@ -6,6 +6,7 @@ Facts come from the student's ACTIVE attestations and ledger holdings. A rule wh
 missing yields "needs <fact>", never a silent false.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -81,11 +82,15 @@ def _course_level(text: str) -> Optional[str]:
 # ── rule files ───────────────────────────────────────────────────────────────
 
 
+def _read_rule_files(directory: Path) -> list[tuple[Path, bytes]]:
+    return [(path, path.read_bytes()) for path in sorted(directory.glob("*.json"))]
+
+
 async def load_rule_files(db: AsyncSession, rules_dir: Optional[str] = None) -> int:
     """Load rules/*.json into rule_versions. Refuses a changed file that kept the same version."""
     loaded = 0
-    for path in sorted(Path(rules_dir or settings.RULES_DIR).glob("*.json")):
-        raw = path.read_bytes()
+    files = await asyncio.to_thread(_read_rule_files, Path(rules_dir or settings.RULES_DIR))
+    for path, raw in files:
         table = json.loads(raw)
         digest = hashlib.sha256(raw).hexdigest()
         scheme, version = SchemeType(table["scheme"]), table["version"]

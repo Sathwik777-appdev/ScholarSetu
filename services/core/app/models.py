@@ -12,3 +12,4 @@ from app.nudge.models import Notification  # noqa: F401
 from app.students.models import Student  # noqa: F401
 from app.verification.models import ReviewCase  # noqa: F401
 from app.wallet.models import WalletDocument  # noqa: F401
+from app.sync.models import SyncReceipt  # noqa: F401

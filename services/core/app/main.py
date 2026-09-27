@@ -27,6 +27,7 @@ from app.jago_skill.router import router as jago_skill_router
 from app.reach_radar.router import router as reach_radar_router
 from app.adapters.router import router as adapters_router
 from app.channels.router import router as channels_router
+from app.sync.router import router as sync_router
 
 logging.basicConfig(level=settings.LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("scholarsetu.core")
@@ -195,5 +196,5 @@ async def readiness():
 
 for router in (gateway_router, ledger_router, verification_router, attestation_router, eligibility_router,
                dbt_guardian_router, wallet_router, consent_router, nudge_router, jago_skill_router,
-               reach_radar_router, adapters_router, channels_router):
+               reach_radar_router, adapters_router, channels_router, sync_router):
     app.include_router(router)

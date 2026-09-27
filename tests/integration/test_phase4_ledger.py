@@ -5,7 +5,6 @@ import json
 import os
 import subprocess
 import sys
-from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -17,8 +16,7 @@ from app.ledger.service import LedgerError, LedgerService
 from app.nudge.models import Notification
 from app.nudge.service import NudgeService
 from app.shared.events import BaseEvent, NATSEventBus, publish_pending
-from app.shared.types import CanonicalState, NotificationChannel, PaymentState, SchemeType
-from tests.conftest import PHONES
+from app.shared.types import CanonicalState, NotificationChannel, SchemeType
 
 CORE = Path(__file__).resolve().parents[2] / "services" / "core"
 NATS_URL = os.environ.get("TEST_NATS_URL", "nats://localhost:4223")

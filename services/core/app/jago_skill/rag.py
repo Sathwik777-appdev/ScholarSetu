@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from sqlalchemy import delete, func, literal, select, text
+from sqlalchemy import delete, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -70,7 +70,7 @@ async def ensure_index(db: AsyncSession, embedder: Embedder) -> int:
     await db.execute(delete(GuidelineChunk))
     db.add_all(GuidelineChunk(id=r["id"], scheme=r["scheme"], section=r["section"], text=r["text"],
                               source_title=r["source_title"], source_url=r["source_url"], effective=r["effective"],
-                              corpus_version=version, embedding=v) for r, v in zip(rows, vectors))
+                              corpus_version=version, embedding=v) for r, v in zip(rows, vectors, strict=True))
     await db.commit()
     logger.info("indexed %d guideline chunks (corpus %s)", len(rows), version[:12])
     return len(rows)
@@ -153,7 +153,7 @@ async def search(db: AsyncSession, embedder: Embedder, query: str, scheme: Optio
     terms = _terms(query)
     has_content_terms = any(t not in _SCHEME_WORDS for t in terms)
     scored = []
-    for chunk, sim, kw in candidates.values():
+    for chunk, sim, _kw in candidates.values():
         if has_content_terms:
             score = VECTOR_WEIGHT * sim + KEYWORD_WEIGHT * _coverage(terms, chunk.section, chunk.text)
         else:  # nothing to match lexically (e.g. untranslated Hindi): rely on the multilingual embedding

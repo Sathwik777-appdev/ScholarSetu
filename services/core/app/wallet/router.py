@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
+from typing import Optional
+
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -60,10 +62,27 @@ async def pull_from_digilocker(
 async def upload_document(
     document_type: str = Form(..., pattern=r"^[A-Z0-9_]{3,40}$"), title: str = Form(..., min_length=3, max_length=120),
     file: UploadFile = File(...),
+    response: Response = None,
+    idempotency_key: Optional[str] = Header(None, min_length=8, max_length=100, pattern=r"^[A-Za-z0-9_\-:.]+$"),
     principal: StudentPrincipal = Depends(student_principal(MitraScope.UPLOAD_DOCUMENTS)),
     service: WalletService = Depends(get_wallet_service),
 ):
-    """Upload a PDF, JPEG or PNG (the content is checked, not the file name)."""
+    """Upload a PDF, JPEG or PNG (the content is checked, not the file name).
+
+    An upload queued offline sends an Idempotency-Key: resending it returns the first upload (200) instead of
+    storing the document twice."""
+    from sqlalchemy.exc import IntegrityError
+    from app.sync.models import SyncReceipt
+    from app.sync.router import _receipt
+
+    user_id = principal.user.id
+    if idempotency_key:
+        existing = await _receipt(service.db, user_id, idempotency_key)
+        if existing is not None:
+            if existing.status != "APPLIED" or not existing.result:
+                raise HTTPException(status_code=existing.http_status, detail=existing.error)
+            response.status_code = 200
+            return WalletDocumentResponse(**existing.result)
     data = await file.read(settings.WALLET_MAX_UPLOAD_BYTES + 1)
     try:
         doc = await service.upload(principal.student_id, document_type, title, data, principal.user,
@@ -72,8 +91,18 @@ async def upload_document(
         raise _http(exc)
     except StorageUnavailable:
         raise HTTPException(status_code=503, detail="Document storage is unavailable; try again later")
-    await service.db.commit()
-    return to_response(doc)
+    out = to_response(doc)
+    if idempotency_key:
+        service.db.add(SyncReceipt(user_id=user_id, idempotency_key=idempotency_key, action="UPLOAD_DOCUMENT",
+                                   status="APPLIED", http_status=201, result=out.model_dump(mode="json")))
+    try:
+        await service.db.commit()
+    except IntegrityError:  # the same upload arrived twice at once; the first one wins
+        await service.db.rollback()
+        existing = await _receipt(service.db, user_id, idempotency_key)
+        response.status_code = 200
+        return WalletDocumentResponse(**existing.result)
+    return out
 
 
 @router.get("/wallet/documents/{document_id}/content")

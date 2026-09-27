@@ -32,7 +32,7 @@ class SourceSystem(str, Enum):
 
 class CanonicalState(str, Enum):
     """Canonical lifecycle states for a scholarship application.
-    
+
     All source-system-specific states are mapped to these.
     See adapters/<source>/state_map.yaml for mappings.
     """
@@ -170,6 +170,7 @@ class AssistSessionStatus(str, Enum):
 class OtpPurpose(str, Enum):
     LOGIN = "LOGIN"
     MITRA_CONSENT = "MITRA_CONSENT"
+    REGISTRATION = "REGISTRATION"
 
 
 class Gender(str, Enum):

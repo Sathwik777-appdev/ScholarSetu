@@ -23,7 +23,6 @@ for candidate in (REPO / "services" / "core", Path("/app")):
         break
 RULES_DIR = next(p for p in (REPO / "rules", Path("/rules")) if p.is_dir())
 
-from sqlalchemy import select  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
 from app.database import AsyncSessionLocal, engine  # noqa: E402
@@ -172,7 +171,8 @@ async def main() -> None:
     from app.eligibility.service import current_academic_year
     async with AsyncSessionLocal() as db:
         ids = await seed(db)
-    roster = httpx.get(f"{settings.MOCK_SERVICE_URL}/udise/_synthetic/roster", timeout=30).json()
+    async with httpx.AsyncClient(timeout=30) as client:
+        roster = (await client.get(f"{settings.MOCK_SERVICE_URL}/udise/_synthetic/roster")).json()
     async with AsyncSessionLocal() as db:
         ids["synthetic_scholarship_registrations"] = await seed_synthetic_population(db, roster, current_academic_year())
     await engine.dispose()

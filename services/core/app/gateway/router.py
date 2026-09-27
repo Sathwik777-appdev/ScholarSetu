@@ -1,6 +1,6 @@
 """Auth (OTP login), DigiLocker callback and Mitra (assisted) sessions."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,8 +11,10 @@ from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user, require_role
 from app.gateway.models import AssistSession, User
-from app.gateway.service import AuthService, MitraService, MitraSessionError, OtpRejected
-from app.shared.types import AssistSessionStatus, MitraScope, UserRole
+from app.gateway.service import (
+    AuthService, MitraService, MitraSessionError, OtpRejected, RegistrationError, RegistrationService,
+)
+from app.shared.types import AssistSessionStatus, Gender, MitraScope, UserRole
 
 router = APIRouter(prefix="/v1", tags=["Auth & Gateway"])
 
@@ -27,6 +29,19 @@ class OTPVerifyRequest(BaseModel):
     # Unknown fields (e.g. "role") are ignored: the role always comes from the users table.
     phone: str = Field(..., pattern=PHONE_PATTERN)
     otp: str = Field(..., pattern=r"^[0-9]{6}$")
+
+
+class RegistrationComplete(BaseModel):
+    model_config = {"extra": "forbid"}
+    phone: str = Field(..., pattern=PHONE_PATTERN)
+    otp: str = Field(..., pattern=r"^[0-9]{6}$")
+    full_name: str = Field(..., min_length=2, max_length=100)
+    dob: date
+    gender: Gender
+    state: str = Field(..., min_length=2, max_length=60)
+    district: str = Field(..., min_length=2, max_length=60)
+    father_name: Optional[str] = Field(None, max_length=100)
+    preferred_language: str = Field("hi", pattern=r"^[a-z]{2,3}$")
 
 
 class AuthUser(BaseModel):
@@ -94,6 +109,27 @@ async def verify_otp(req: OTPVerifyRequest, db: AsyncSession = Depends(get_db)):
         if exc.too_many_attempts:
             raise HTTPException(status_code=429, detail="Too many attempts. Request a new OTP.")
         raise HTTPException(status_code=401, detail="Invalid or expired OTP")
+    return AuthTokenResponse(access_token=token, expires_in=expires_in, user=_user_out(user))
+
+
+@router.post("/auth/register/start", status_code=status.HTTP_202_ACCEPTED)
+async def start_registration(req: OTPRequest, db: AsyncSession = Depends(get_db)):
+    """Step 1: send a code to the phone. The response never reveals whether the number is registered."""
+    await RegistrationService(db).start(req.phone)
+    return {"status": "accepted", "message": f"A message has been sent to {req.phone[:2]}******{req.phone[-2:]}."}
+
+
+@router.post("/auth/register/complete", response_model=AuthTokenResponse, status_code=status.HTTP_201_CREATED)
+async def complete_registration(req: RegistrationComplete, db: AsyncSession = Depends(get_db)):
+    """Step 2: the code confirms the phone; the student account is created. No application is submitted."""
+    if req.dob >= date.today():
+        raise HTTPException(status_code=422, detail="Date of birth must be in the past")
+    details = req.model_dump(exclude={"phone", "otp"})
+    details["full_name"] = details["full_name"].strip()
+    try:
+        user, token, expires_in = await RegistrationService(db).complete(req.phone, req.otp, details)
+    except RegistrationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
     return AuthTokenResponse(access_token=token, expires_in=expires_in, user=_user_out(user))
 
 

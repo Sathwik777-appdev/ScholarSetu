@@ -115,6 +115,7 @@ class StudentDashboard(BaseModel):
     student: StudentBrief
     applications: list[ApplicationBrief]
     total_received: float
+    current_academic_year: str  # the year a new application is for (server rule, ACADEMIC_YEAR_START_MONTH)
 
 
 class FamilyDashboard(BaseModel):

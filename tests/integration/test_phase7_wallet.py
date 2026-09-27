@@ -87,3 +87,18 @@ async def test_tampered_bytes_fail_the_integrity_check(client, users, store):
     key = next(iter(store.objects))
     store.objects[key] = PDF.replace(b"1 0 obj", b"9 9 obj")
     assert (await client.get(f"/v1/wallet/documents/{doc_id}/content", headers=sunita)).status_code == 500
+
+
+async def test_upload_queued_offline_is_stored_once(client, users, store, db):
+    from sqlalchemy import func, select
+    from app.wallet.models import WalletDocument
+    sunita = {**await users.headers("sunita"), "Idempotency-Key": "dev1-upload-0001"}
+    form = {"document_type": "INCOME_CERT", "title": "Income certificate 2026-27"}
+    first = await client.post("/v1/me/wallet/documents", headers=sunita, data=form,
+                              files={"file": ("income.pdf", PDF, "application/pdf")})
+    again = await client.post("/v1/me/wallet/documents", headers=sunita, data=form,
+                              files={"file": ("income.pdf", PDF, "application/pdf")})
+    assert first.status_code == 201 and again.status_code == 200
+    assert again.json()["id"] == first.json()["id"] and first.json()["verified"] is False  # self-uploaded
+    assert await db.scalar(select(func.count()).select_from(WalletDocument)
+                           .where(WalletDocument.document_type == "INCOME_CERT")) == 1

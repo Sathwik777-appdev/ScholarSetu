@@ -145,6 +145,57 @@ class AuthService:
         return user, token, expires_in
 
 
+class RegistrationError(Exception):
+    def __init__(self, status_code: int, detail: str):
+        super().__init__(detail)
+        self.status_code, self.detail = status_code, detail
+
+
+class RegistrationService:
+    """Self-registration by a student: the phone must be confirmed by OTP before any account exists.
+
+    Registration creates the student record and login only. It does NOT submit an application, and nothing
+    the student typed is treated as verified: the verification mesh checks it against sources later."""
+
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def start(self, phone: str) -> None:
+        existing = await AuthService(self.db)._active_user_by_phone(phone)
+        if existing is not None:
+            # Same response to the caller either way; the phone's owner learns they can simply log in.
+            await send_sms(self.db, phone, "This number is already registered with ScholarSetu. "
+                                           "Log in with it instead.", "REGISTRATION_EXISTS")
+        else:
+            otp = await _issue_challenge(self.db, phone, OtpPurpose.REGISTRATION, None)
+            await send_sms(self.db, phone, f"ScholarSetu registration code: {otp}. Valid for "
+                           f"{settings.OTP_TTL_MINUTES} minutes. Do not share it.", "OTP_REGISTRATION")
+        await self.db.commit()
+
+    async def complete(self, phone: str, otp: str, details: dict[str, Any]) -> tuple[User, str, int]:
+        from app.students.models import Student
+        if await self.db.scalar(select(User.id).where(User.phone == phone)) is not None:
+            raise RegistrationError(409, "This number is already registered. Log in instead.")
+        try:
+            await _check_challenge(self.db, phone, OtpPurpose.REGISTRATION, None, otp)
+        except OtpRejected as exc:
+            raise RegistrationError(429 if exc.too_many_attempts else 401,
+                                    "Too many attempts. Request a new code." if exc.too_many_attempts
+                                    else "Invalid or expired code")
+        student = Student(id=f"stu-{new_id()}", name_variants=[], **details)
+        self.db.add(student)
+        await self.db.flush()
+        user = User(phone=phone, name=student.full_name, role=UserRole.STUDENT, student_id=student.id,
+                    is_demo=False)
+        self.db.add(user)
+        await self.db.flush()
+        await record_audit(self.db, "REGISTERED", actor=user, student_id=student.id,
+                           details={"phone_confirmed_by": "OTP"})
+        token, expires_in = create_access_token(user.id, user.role.value)
+        await self.db.commit()
+        return user, token, expires_in
+
+
 class MitraService:
     def __init__(self, db: AsyncSession):
         self.db = db

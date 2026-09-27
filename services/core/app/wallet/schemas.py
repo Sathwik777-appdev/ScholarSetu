@@ -1,6 +1,5 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
-from datetime import datetime
 
 
 class WalletDocumentResponse(BaseModel):
@@ -14,7 +13,7 @@ class WalletDocumentResponse(BaseModel):
     mime_type: str
     size_bytes: int
     uploaded_at: str
-    verified: bool = True
+    verified: bool = False  # true only when the issuer signed the document (e.g. DigiLocker)
     metadata_json: Optional[Dict[str, Any]] = None
 
 

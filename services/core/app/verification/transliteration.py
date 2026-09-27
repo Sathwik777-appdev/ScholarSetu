@@ -151,7 +151,7 @@ def _delete_schwas(word: str, base: int) -> str:
 
     out = list(word)
     virama = chr(base + _VIRAMA)
-    for u, pos in sorted(zip(units, positions), key=lambda t: -t[1]):
+    for u, pos in sorted(zip(units, positions, strict=True), key=lambda t: -t[1]):
         if u.deleted:
             out.insert(pos + 1, virama)
     return "".join(out)

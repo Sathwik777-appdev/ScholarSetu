@@ -19,6 +19,8 @@ PUBLIC_ROUTES = {
     ("GET", "/health/ready"),
     ("POST", "/v1/auth/otp/request"),
     ("POST", "/v1/auth/otp/verify"),
+    ("POST", "/v1/auth/register/start"),     # sends a code; reveals nothing about the number
+    ("POST", "/v1/auth/register/complete"),  # needs that code
     ("POST", "/v1/auth/digilocker/callback"),  # returns 501 Not Implemented
     ("GET", "/v1/attestations/public-key"),
     ("POST", "/v1/attestations/verify-jws"),

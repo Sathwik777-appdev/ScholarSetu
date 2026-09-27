@@ -219,7 +219,7 @@ class IndicIdentityResolver:
         return sum(scores) / len(scores) * settings.IDENTITY_EXTRA_TOKEN_PENALTY ** extra, pairs
 
     def _score_split(self, a: PreparedName, b_tokens: list[tuple[str, str]], reordered: bool) -> NameMatchResult:
-        a_tok = list(zip(a.tokens, a.keys))
+        a_tok = list(zip(a.tokens, a.keys, strict=True))
         ga, sa = (a_tok[:-1], a_tok[-1]) if len(a_tok) >= 2 else (a_tok, None)
         gb, sb = (b_tokens[:-1], b_tokens[-1]) if len(b_tokens) >= 2 else (b_tokens, None)
 
@@ -256,7 +256,7 @@ class IndicIdentityResolver:
         if not a.tokens or not b.tokens:
             return NameMatchResult(name_a, name_b, 0.0, None, None, True, False, None, [], ["a name is empty"])
 
-        b_tok = list(zip(b.tokens, b.keys))
+        b_tok = list(zip(b.tokens, b.keys, strict=True))
         best = self._score_split(a, b_tok, reordered=False)
         if len(b_tok) <= 4:  # try other token orders (e.g. surname written first in school registers)
             for perm in permutations(b_tok):
