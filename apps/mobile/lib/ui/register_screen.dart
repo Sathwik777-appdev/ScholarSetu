@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/providers.dart';
+import 'server_sheet.dart';
 import 'widgets.dart';
 
 /// Registration: the phone is confirmed by an SMS code before any account exists. Registering does NOT
@@ -84,7 +85,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Register')),
+      appBar: AppBar(
+        title: const Text('Register'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.dns_rounded),
+            tooltip: 'Server connection settings',
+            onPressed: () => showServerConfigSheet(context, ref),
+          ),
+        ],
+      ),
       body: Form(
         key: _form,
         child: ListView(

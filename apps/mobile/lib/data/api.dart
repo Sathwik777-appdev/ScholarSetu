@@ -30,8 +30,13 @@ class ApiException implements Exception {
 
 /// The server could not be reached (no network, DNS failure, timeout).
 class OfflineException implements Exception {
+  OfflineException([this.serverUrl]);
+  final String? serverUrl;
+
   @override
-  String toString() => 'No connection to ScholarSetu.';
+  String toString() => serverUrl != null
+      ? 'No connection to ScholarSetu ($serverUrl).'
+      : 'No connection to ScholarSetu.';
 }
 
 typedef ReachabilityListener = void Function(bool reachable);
@@ -39,7 +44,7 @@ typedef ReachabilityListener = void Function(bool reachable);
 class Api {
   Api(this.baseUrl, {http.Client? client}) : _client = client ?? http.Client();
 
-  final String baseUrl;
+  String baseUrl;
   final http.Client _client;
   String? token;
   String? mitraSessionId;
@@ -80,16 +85,16 @@ class Api {
       res = await call().timeout(_timeout);
     } on SocketException {
       onReachability?.call(false);
-      throw OfflineException();
+      throw OfflineException(baseUrl);
     } on TimeoutException {
       onReachability?.call(false);
-      throw OfflineException();
+      throw OfflineException(baseUrl);
     } on http.ClientException {
       onReachability?.call(false);
-      throw OfflineException();
+      throw OfflineException(baseUrl);
     } on HandshakeException {
       onReachability?.call(false);
-      throw OfflineException();
+      throw OfflineException(baseUrl);
     }
     onReachability?.call(true);
     final text = utf8.decode(res.bodyBytes);

@@ -5,6 +5,8 @@ import '../data/api.dart';
 import '../data/repository.dart';
 import '../state/providers.dart';
 import 'labels.dart';
+import 'server_sheet.dart';
+import 'theme.dart';
 
 /// Says what is actually happening: whether the server answered the last request, how many saved
 /// changes are waiting, and what was refused. Hidden while online with nothing pending.
@@ -103,27 +105,70 @@ class CachedView extends ConsumerWidget {
   }
 }
 
-class ErrorBox extends StatelessWidget {
-  const ErrorBox({super.key, required this.message, this.onRetry});
+class ErrorBox extends ConsumerWidget {
+  const ErrorBox({super.key, required this.message, this.onRetry, this.onConfigureServer});
 
   final String message;
   final VoidCallback? onRetry;
+  final VoidCallback? onConfigureServer;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isConnectionError = message.toLowerCase().contains('connection') ||
+        message.toLowerCase().contains('scholarsetu');
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.red.shade100)),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.red.shade100),
+      ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(Icons.error_outline_rounded, color: Colors.red.shade700),
         const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(message, style: TextStyle(color: Colors.red.shade900, height: 1.35)),
-          if (onRetry != null)
-            TextButton(style: TextButton.styleFrom(padding: EdgeInsets.zero), onPressed: onRetry, child: const Text('Try again')),
-        ])),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message, style: TextStyle(color: Colors.red.shade900, height: 1.35)),
+              if (onRetry != null || onConfigureServer != null || isConnectionError)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      if (onRetry != null)
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          onPressed: onRetry,
+                          child: const Text('Try again'),
+                        ),
+                      if (onConfigureServer != null || isConnectionError)
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            visualDensity: VisualDensity.compact,
+                            backgroundColor: Colors.white,
+                            side: BorderSide(color: Colors.red.shade200),
+                          ),
+                          icon: const Icon(Icons.settings_ethernet_rounded, size: 14, color: AppColors.ink900),
+                          label: const Text(
+                            'Server settings',
+                            style: TextStyle(fontSize: 12, color: AppColors.ink900, fontWeight: FontWeight.w600),
+                          ),
+                          onPressed: onConfigureServer ?? () => showServerConfigSheet(context, ref),
+                        ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
       ]),
     );
   }

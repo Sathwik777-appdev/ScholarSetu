@@ -22,7 +22,13 @@ export default function Layout() {
       {menuOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-ink-950/60 backdrop-blur-sm" onClick={() => setMenuOpen(false)} />
-          <div className="absolute inset-y-0 left-0 w-72 shadow-lift">
+          <div 
+            className="absolute inset-y-0 left-0 w-72 shadow-lift bg-white"
+            style={{
+              paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)',
+              paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)'
+            }}
+          >
             <button onClick={() => setMenuOpen(false)} className="absolute right-3 top-5 z-10 p-1 text-slate-400" aria-label="Close menu">
               <X className="w-5 h-5" />
             </button>
@@ -31,7 +37,12 @@ export default function Layout() {
         </div>
       )}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="lg:hidden sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200/70 bg-white/80 px-4 py-3 backdrop-blur-xl">
+        <header 
+          className="lg:hidden sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200/70 bg-white/90 px-4 py-3 backdrop-blur-xl"
+          style={{
+            paddingTop: 'max(env(safe-area-inset-top, 0px), 14px)'
+          }}
+        >
           <button onClick={() => setMenuOpen(true)} className="rounded-lg p-1.5 text-slate-700 hover:bg-slate-100" aria-label="Open menu">
             <Menu className="w-5 h-5" />
           </button>

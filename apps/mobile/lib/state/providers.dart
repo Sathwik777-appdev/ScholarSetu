@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../config.dart';
 import '../data/api.dart';
 import '../data/local_db.dart';
 import '../data/repository.dart';
@@ -13,6 +14,12 @@ class Services {
   final LocalDb db;
   final SecureStore secure;
   final Repository repo;
+
+  Future<void> updateApiUrl(String newOrigin) async {
+    final cleanOrigin = formatOrigin(newOrigin);
+    api.baseUrl = formatBaseUrl(cleanOrigin);
+    await secure.setApiUrl(cleanOrigin);
+  }
 }
 
 final servicesProvider = Provider<Services>((ref) => throw UnimplementedError('overridden in main()'));

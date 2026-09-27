@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../config.dart';
 import '../state/providers.dart';
 import 'register_screen.dart';
+import 'server_sheet.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -70,6 +72,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               Text('Every scholarship, one place. Verify once, reuse everywhere.',
                   style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 14)),
             ])),
+            Positioned(
+              top: 8,
+              right: 12,
+              child: SafeArea(
+                child: IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.dns_rounded, color: Colors.white, size: 20),
+                  ),
+                  tooltip: 'Server connection settings',
+                  onPressed: () => showServerConfigSheet(context, ref),
+                ),
+              ),
+            ),
           ])),
           Container(
             color: AppColors.ink900,
@@ -116,6 +136,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           OutlinedButton(
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RegisterScreen())),
             child: const Text('New student? Register'),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: Builder(builder: (ctx) {
+              String serverUrl;
+              try {
+                serverUrl = formatOrigin(ref.watch(servicesProvider).api.baseUrl);
+              } catch (_) {
+                serverUrl = formatOrigin(defaultApiOrigin);
+              }
+              return TextButton.icon(
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  foregroundColor: AppColors.muted,
+                ),
+                icon: const Icon(Icons.wifi_tethering_rounded, size: 14),
+                label: Text(
+                  'Server: $serverUrl',
+                  style: const TextStyle(fontSize: 11),
+                ),
+                onPressed: () => showServerConfigSheet(context, ref),
+              );
+            }),
           ),
             ]),
           )),

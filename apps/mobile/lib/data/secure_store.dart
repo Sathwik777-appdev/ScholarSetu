@@ -10,6 +10,7 @@ class SecureStore {
   final FlutterSecureStorage _s;
   static const _dbKey = 'db_key_v1';
   static const _token = 'access_token';
+  static const _apiUrlKey = 'custom_api_url';
 
   /// A random 256-bit key, created on first use and kept for the life of the install.
   Future<String> databaseKey() async {
@@ -24,4 +25,8 @@ class SecureStore {
   Future<String?> token() => _s.read(key: _token);
   Future<void> setToken(String value) => _s.write(key: _token, value: value);
   Future<void> clearToken() => _s.delete(key: _token);
+
+  Future<String?> apiUrl() => _s.read(key: _apiUrlKey);
+  Future<void> setApiUrl(String value) => _s.write(key: _apiUrlKey, value: value);
+  Future<void> clearApiUrl() => _s.delete(key: _apiUrlKey);
 }

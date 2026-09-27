@@ -22,9 +22,16 @@ Future<void> main() async {
     runApp(_FatalApp(e.toString()));
     return;
   }
+
+  final customUrl = await secure.apiUrl();
+  final effectiveOrigin = (customUrl != null && customUrl.trim().isNotEmpty)
+      ? customUrl.trim()
+      : defaultApiOrigin;
+  final api = Api(formatBaseUrl(effectiveOrigin));
+
   runApp(ProviderScope(
     retry: (retryCount, error) => null, // screens show errors; users retry explicitly
-    overrides: [servicesProvider.overrideWithValue(Services(Api(apiBaseUrl), db, secure))],
+    overrides: [servicesProvider.overrideWithValue(Services(api, db, secure))],
     child: const ScholarSetuApp(),
   ));
 }
