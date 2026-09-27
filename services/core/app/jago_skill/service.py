@@ -5,11 +5,14 @@ official guideline corpus, and is placed into a deterministic template. There is
 generation, so no amount, date or status can be invented.
 """
 
+import logging
 from datetime import datetime
 from typing import Any, Optional
 
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger("scholarsetu.jago")
 
 from app.config import settings
 from app.database import get_db
@@ -113,8 +116,46 @@ class JAGOSkillService:
             text, citations = await self._answer_guideline(message, lang, calls)
         else:
             text = T["help"][lang]
+
+        if settings.GEMINI_API_KEY and text:
+            text = await self._synthesize_with_gemini(message, text, lang)
+
         return JAGOResponse(response_text=text, intent=intent.value, language=lang, language_note=note,
                             tool_calls_made=calls, citations=citations)
+
+    async def _synthesize_with_gemini(self, message: str, facts: str, lang: str) -> str:
+        """Synthesize a friendly, empathetic response using Gemini, grounded strictly in verified facts."""
+        if not settings.GEMINI_API_KEY:
+            return facts
+        try:
+            import httpx
+            system_prompt = (
+                "You are JAGO (जागो), an empathetic, polite AI scholarship assistant for Indian students "
+                "(including rural and tribal scholars) on the ScholarSetu platform. "
+                f"Respond naturally in language '{lang}' ('hi' for Hindi, 'en' for English). "
+                "Base your response strictly and faithfully on the verified official records provided below. "
+                "Never invent any dates, amounts, application IDs, or scholarship schemes. "
+                "Keep the tone encouraging, respectful, and clear (within 2-4 sentences)."
+            )
+            user_content = f"Student's question: {message}\n\nVerified official records:\n{facts}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.GEMINI_MODEL}:generateContent?key={settings.GEMINI_API_KEY}"
+            payload = {
+                "system_instruction": {"parts": [{"text": system_prompt}]},
+                "contents": [{"parts": [{"text": user_content}]}],
+                "generationConfig": {"temperature": 0.3, "maxOutputTokens": 1024}
+            }
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                res = await client.post(url, json=payload)
+                if res.status_code == 200:
+                    data = res.json()
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts and "text" in parts[0]:
+                            return parts[0]["text"].strip()
+        except Exception as exc:
+            logger.warning("Gemini synthesis fallback to deterministic facts: %s", exc)
+        return facts
 
     async def _answer_status(self, student_id: str, lang: str, calls: list) -> str:
         dash = await self.get_applications(student_id)
