@@ -142,6 +142,19 @@ services:
     networks:
       - scholarsetu-net
 
+  console:
+    # Officer/ministry console: static build served by unprivileged nginx (CSP limits calls to the API origin).
+    build:
+      context: ../apps/console
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - core
+    networks:
+      - scholarsetu-net
+
 volumes:
   postgres_data:
   objectstore_data:

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
 import { ApiView, EmptyState, PageHeader } from '../components/States';
 import StatusBadge from '../components/StatusBadge';
-import { SCHEME_LABELS, STATE_LABELS, schemeLabel } from '../utils/formatters';
+import { SCHEME_LABELS, STATE_LABELS, formatDays, schemeLabel } from '../utils/formatters';
 import type { OfficerApplication } from '../types';
 
 const PAGE = 50;
@@ -39,10 +39,10 @@ export default function Applications() {
           const shown = rows.filter((r) => !q || r.student_name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q));
           return (
             <>
-              <div className="bg-white border border-slate-200 rounded-lg overflow-x-auto">
+              <div className="rise bg-white border border-slate-200/70 rounded-2xl overflow-x-auto shadow-soft">
                 <table className="min-w-full text-sm">
                   <thead className="bg-slate-50 text-xs uppercase text-slate-500 text-left">
-                    <tr><th className="p-3">Application</th><th className="p-3">Student</th><th className="p-3">Scheme</th><th className="p-3">Stage</th><th className="p-3 text-right">Days in stage</th></tr>
+                    <tr><th className="p-3">Application</th><th className="p-3">Student</th><th className="p-3">Scheme</th><th className="p-3">Stage</th><th className="p-3 text-right">In this stage</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {shown.map((a) => (
@@ -51,7 +51,7 @@ export default function Applications() {
                         <td className="p-3"><p className="font-semibold">{a.student_name}</p><p className="text-xs text-slate-500">{a.district}, {a.state_name}</p></td>
                         <td className="p-3">{schemeLabel(a.scheme)} <span className="text-xs text-slate-500">{a.academic_year}</span></td>
                         <td className="p-3"><StatusBadge status={a.canonical_state} /></td>
-                        <td className="p-3 text-right tabular-nums">{a.days_in_state}</td>
+                        <td className="p-3 text-right tabular-nums">{formatDays(a.days_in_state)}</td>
                       </tr>
                     ))}
                   </tbody>

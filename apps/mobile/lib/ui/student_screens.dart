@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/repository.dart';
 import '../state/providers.dart';
+import 'components.dart';
 import 'labels.dart';
+import 'theme.dart';
 import 'widgets.dart';
 
 // ── home ───────────────────────────────────────────────────────────────────
@@ -35,7 +37,13 @@ class StudentHomeTab extends ConsumerWidget {
               final apps = (data['applications'] as List).cast<Map<String, dynamic>>();
               final submitted = apps.where((a) => a['current_state'] != 'DRAFT').toList();
               return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Text('Hello, ${data['student']['name']}', style: Theme.of(context).textTheme.headlineSmall),
+                Reveal(child: HeroHeader(
+                  title: 'Hello, ${(data['student']['name'] as String).split(' ').first}',
+                  subtitle: submitted.isEmpty ? 'Let\'s get your scholarship started.' : 'Here is where your scholarships stand.',
+                  image: 'assets/images/badge.webp',
+                  imageSize: 96,
+                  trailing: Figure(label: 'Received so far', value: rupees(data['total_received'] as num), color: Colors.white),
+                )),
                 if (queuedApplications.isNotEmpty)
                   Card(
                     color: Colors.amber.shade50,
@@ -66,18 +74,8 @@ class StudentHomeTab extends ConsumerWidget {
                   ),
                 const Section('Your applications'),
                 if (apps.isEmpty) const Text('No applications yet.'),
-                for (final a in apps)
-                  Card(
-                    child: ListTile(
-                      title: Text('${schemeLabel(a['scheme'] as String)} ${a['academic_year']}'),
-                      subtitle: Text('${stateLabel(a['current_state'] as String)}\n${a['next_action'] ?? ''}'),
-                      isThreeLine: true,
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) => ApplicationScreen(applicationId: a['id'] as String))),
-                    ),
-                  ),
-                Text('Money received so far: ${rupees(data['total_received'] as num)}'),
+                for (final (i, a) in apps.indexed)
+                  Reveal(index: i + 1, child: ApplicationCard(application: a)),
               ]);
             },
           ),
@@ -117,6 +115,54 @@ class StudentHomeTab extends ConsumerWidget {
                     '${data['transition_trigger'] == null ? '' : ' — ${data['transition_trigger']}'}'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One application: scheme, stage pill, the six-step tracker and the next action, all from the ledger.
+class ApplicationCard extends StatelessWidget {
+  const ApplicationCard({super.key, required this.application});
+
+  final Map<String, dynamic> application;
+
+  @override
+  Widget build(BuildContext context) {
+    final a = application;
+    final state = a['current_state'] as String;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => ApplicationScreen(applicationId: a['id'] as String))),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(child: Text(schemeLabel(a['scheme'] as String), style: Theme.of(context).textTheme.titleMedium)),
+              Text(a['academic_year'] as String, style: const TextStyle(fontSize: 12.5, color: AppColors.muted, fontWeight: FontWeight.w500)),
+            ]),
+            const SizedBox(height: 2),
+            Text(a['id'] as String, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+            const SizedBox(height: 10),
+            StatePill(state),
+            const SizedBox(height: 16),
+            StageTracker(state),
+            if ((a['next_action'] ?? '').toString().isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14)),
+                child: Row(children: [
+                  const Icon(Icons.arrow_forward_rounded, size: 18, color: AppColors.saffron),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(a['next_action'] as String, style: const TextStyle(fontSize: 13.5, height: 1.35))),
+                ]),
+              ),
+            ],
+          ]),
+        ),
       ),
     );
   }
@@ -337,20 +383,22 @@ class MoneyTab extends StatelessWidget {
         builder: (context, data) {
           final apps = (data['applications'] as List).cast<Map<String, dynamic>>();
           return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('Credited: ${rupees(data['total_credited'] as num)} of ${rupees(data['total_sanctioned'] as num)} sanctioned',
-                style: Theme.of(context).textTheme.titleMedium),
-            if ((data['total_failed'] as num) > 0)
-              Text('Failed: ${rupees(data['total_failed'] as num)}', style: TextStyle(color: Colors.red.shade800)),
+            Reveal(child: HeroHeader(
+              title: rupees(data['total_credited'] as num),
+              subtitle: 'credited to your bank, of ${rupees(data['total_sanctioned'] as num)} sanctioned',
+              image: 'assets/images/coins.webp',
+              imageSize: 104,
+              trailing: Wrap(spacing: 20, runSpacing: 8, children: [
+                Figure(label: 'On the way', value: rupees(data['total_pending'] as num), color: Colors.white),
+                if ((data['total_failed'] as num) > 0)
+                  Figure(label: 'Failed', value: rupees(data['total_failed'] as num), color: const Color(0xFFFDA4AF)),
+              ]),
+            )),
             if (apps.isEmpty) const Padding(padding: EdgeInsets.only(top: 12), child: Text('Nothing sanctioned yet.')),
             for (final a in apps) ...[
               Section('${schemeLabel(a['scheme'] as String)} ${a['academic_year']}'),
               for (final i in (a['instalments'] as List).cast<Map<String, dynamic>>())
-                ListTile(
-                  title: Text('${i['description']}: ${rupees(i['amount'] as num)}'),
-                  subtitle: Text(humanize(i['state'] as String) +
-                      (i['failure_code'] == null ? '' : ' (${i['failure_code']})') +
-                      (i['credited_at'] == null ? '' : ' on ${whenIso(i['credited_at'] as String)}')),
-                ),
+                _InstalmentTile(i),
             ],
           ]);
         },
@@ -377,9 +425,13 @@ class PassportTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return ListView(padding: const EdgeInsets.all(16), children: [
-      Text('Verified once, reused everywhere', style: Theme.of(context).textTheme.titleMedium),
-      const Text('Active items were confirmed by the issuing office and signed by ScholarSetu. Provisional ones are '
-          'still being reviewed by an officer.', style: TextStyle(fontSize: 12)),
+      const Reveal(child: HeroHeader(
+        title: 'Scholarship Passport',
+        subtitle: 'Active items were confirmed by the issuing office and signed by ScholarSetu. '
+            'Provisional ones are still being reviewed by an officer.',
+        image: 'assets/images/badge.webp',
+        imageSize: 100,
+      )),
       CachedView(
         provider: passportProvider,
         builder: (context, data) {
@@ -455,5 +507,29 @@ class AlertsTab extends ConsumerWidget {
         },
       ),
     ]);
+  }
+}
+
+class _InstalmentTile extends StatelessWidget {
+  const _InstalmentTile(this.i);
+
+  final Map<String, dynamic> i;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = i['state'] as String;
+    final color = state == 'CREDITED' ? AppColors.teal : state == 'FAILED' ? AppColors.rose : AppColors.saffron;
+    final icon = state == 'CREDITED' ? Icons.check_rounded : state == 'FAILED' ? Icons.close_rounded : Icons.schedule_rounded;
+    return Card(
+      child: ListTile(
+        leading: CircleAvatar(backgroundColor: color.withValues(alpha: 0.12), child: Icon(icon, color: color)),
+        title: Text(i['description'] as String, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(humanize(state) +
+            (i['failure_code'] == null ? '' : ' (${i['failure_code']})') +
+            (i['credited_at'] == null ? '' : ' on ${whenIso(i['credited_at'] as String)}')),
+        trailing: Text(rupees(i['amount'] as num),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+      ),
+    );
   }
 }

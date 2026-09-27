@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/providers.dart';
 import 'register_screen.dart';
+import 'theme.dart';
 import 'widgets.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -53,20 +54,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('ScholarSetu')),
+      backgroundColor: AppColors.surface,
       body: ListView(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.zero,
         children: [
-          Text('Sign in with your mobile number', style: Theme.of(context).textTheme.titleLarge),
+          Container(color: AppColors.ink900, child: Stack(children: [
+            Image.asset('assets/images/hero.webp', height: 300, width: double.infinity, fit: BoxFit.cover,
+                semanticLabel: 'A bridge carrying students across'),
+            Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
+                begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                colors: [AppColors.ink900.withValues(alpha: 0), AppColors.ink900])))),
+            Positioned(left: 24, right: 24, bottom: 18, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('ScholarSetu', style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white)),
+              const SizedBox(height: 4),
+              Text('Every scholarship, one place. Verify once, reuse everywhere.',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 14)),
+            ])),
+          ])),
+          Container(
+            color: AppColors.ink900,
+            child: Container(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+            decoration: const BoxDecoration(color: AppColors.surface,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('Sign in', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 4),
-          const Text('For students, parents/guardians and registered helpers (Mitra).'),
+          const Text('Students, parents/guardians and registered helpers (Mitra).', style: TextStyle(color: AppColors.muted)),
           const SizedBox(height: 24),
           TextField(
             controller: _phone,
             enabled: !_codeSent,
             keyboardType: TextInputType.phone,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
-            decoration: const InputDecoration(labelText: 'Mobile number', border: OutlineInputBorder()),
+            decoration: const InputDecoration(labelText: 'Mobile number', prefixIcon: Icon(Icons.phone_iphone_rounded)),
           ),
           if (_codeSent) ...[
             const SizedBox(height: 12),
@@ -77,7 +98,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               keyboardType: TextInputType.number,
               autofillHints: const [AutofillHints.oneTimeCode],
               inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
-              decoration: const InputDecoration(labelText: 'Code from SMS', border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: 'Code from SMS', prefixIcon: Icon(Icons.password_rounded)),
             ),
           ],
           const SizedBox(height: 16),
@@ -96,6 +117,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RegisterScreen())),
             child: const Text('New student? Register'),
           ),
+            ]),
+          )),
         ],
       ),
     );

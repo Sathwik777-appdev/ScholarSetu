@@ -26,6 +26,18 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
 
 # The local database is encrypted with SQLCipher, built by package:sqlite3's native-assets hook.
 # (sqlcipher_flutter_libs is end-of-life for sqlite3 3.x.) The app refuses to open the cache if

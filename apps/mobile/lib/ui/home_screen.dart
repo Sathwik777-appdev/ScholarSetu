@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config.dart';
 import '../state/providers.dart';
+import 'components.dart';
 import 'family_screen.dart';
 import 'jago_screen.dart';
 import 'labels.dart';
@@ -156,11 +157,13 @@ class SyncScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text(outbox.lastSync == null ? 'Not synced yet.' : 'Last synced ${when(outbox.lastSync!)}.'),
-          const SizedBox(height: 4),
-          Text('Information saved on this phone is encrypted (SQLCipher ${services.db.cipherVersion}); '
-              'the key is kept in the phone\'s secure storage.',
-              style: const TextStyle(fontSize: 12)),
+          HeroHeader(
+            title: outbox.lastSync == null ? 'Not synced yet' : 'Synced ${when(outbox.lastSync!)}',
+            subtitle: 'Information saved on this phone is encrypted (SQLCipher ${services.db.cipherVersion}); '
+                'the key is kept in the phone\'s secure storage.',
+            image: 'assets/images/shield.webp',
+            imageSize: 96,
+          ),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: () async {

@@ -8,6 +8,7 @@ import 'data/secure_store.dart';
 import 'state/providers.dart';
 import 'ui/home_screen.dart';
 import 'ui/login_screen.dart';
+import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,7 +39,7 @@ class ScholarSetuApp extends ConsumerWidget {
     return MaterialApp(
       title: 'ScholarSetu',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: const Color(0xFF1E3A8A), useMaterial3: true),
+      theme: AppTheme.light(),
       home: session.checking
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : session.user == null

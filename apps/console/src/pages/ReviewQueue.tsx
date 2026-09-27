@@ -114,7 +114,7 @@ export default function ReviewQueue() {
       <div className="flex flex-wrap gap-1 mb-4">
         {FILTERS.map((f) => (
           <button key={f.label} onClick={() => setStatus(f.value)}
-            className={`px-3 py-1 rounded text-xs font-semibold border ${status === f.value ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-300 text-slate-700'}`}>
+            className={`px-3.5 py-1.5 rounded-full text-xs font-medium ring-1 transition ${status === f.value ? 'bg-ink-900 text-white ring-ink-900' : 'bg-white text-slate-700 ring-slate-200 hover:ring-slate-300'}`}>
             {f.label}
           </button>
         ))}
@@ -125,7 +125,7 @@ export default function ReviewQueue() {
         {(cases) => (
           <ul className="space-y-3">
             {cases.map((c) => (
-              <li key={c.id} className="bg-white border border-slate-200 rounded-lg">
+              <li key={c.id} className="rise bg-white border border-slate-200/70 rounded-2xl shadow-soft transition hover:shadow-lift">
                 <button onClick={() => setOpenId(openId === c.id ? null : c.id)} className="w-full text-left p-4 flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <p className="font-bold text-slate-900">{c.student_name ?? 'Unknown student'}</p>

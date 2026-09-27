@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { ShieldCheck } from 'lucide-react';
 import { errorMessage, useAuth } from '../auth/AuthContext';
+import { Hero3D } from '../components/Lazy3D';
+import { BrandMark } from '../components/Sidebar';
 
 export default function Login() {
   const { user, requestOtp, verifyOtp } = useAuth();
@@ -45,50 +47,69 @@ export default function Login() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
-        <div className="flex items-center gap-2 mb-1">
-          <ShieldCheck className="w-5 h-5 text-slate-800" />
-          <h1 className="text-lg font-bold text-slate-900">ScholarSetu console</h1>
-        </div>
-        <p className="text-xs text-slate-500 mb-5">For institute, district and state officers and the Ministry of Tribal Affairs.</p>
+  const input = 'mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] shadow-sm outline-none transition focus:border-saffron-500 focus:ring-4 focus:ring-saffron-400/20';
+  const button = 'w-full rounded-xl bg-ink-900 py-2.5 text-sm font-semibold text-white shadow-lift transition hover:bg-ink-800 disabled:opacity-60';
 
-        {step === 'phone' ? (
-          <form onSubmit={submitPhone} className="space-y-3">
-            <label className="block text-xs font-semibold text-slate-700">
-              Registered mobile number
-              <input
-                type="tel" inputMode="numeric" autoComplete="tel" required pattern="[0-9]{10}"
-                value={phone} onChange={(e) => setPhone(e.target.value.trim())}
-                className="mt-1 w-full border border-slate-300 rounded px-3 py-2 text-sm"
-                placeholder="10-digit mobile number"
-              />
-            </label>
-            <button disabled={busy} className="w-full bg-slate-900 text-white rounded py-2 text-sm font-semibold disabled:opacity-60">
-              {busy ? 'Sending…' : 'Send OTP'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={submitOtp} className="space-y-3">
-            {notice && <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded p-2">{notice}</p>}
-            <label className="block text-xs font-semibold text-slate-700">
-              One-time password
-              <input
-                type="text" inputMode="numeric" autoComplete="one-time-code" required pattern="[0-9]{6}"
-                value={otp} onChange={(e) => setOtp(e.target.value.trim())}
-                className="mt-1 w-full border border-slate-300 rounded px-3 py-2 text-sm tracking-widest"
-              />
-            </label>
-            <button disabled={busy} className="w-full bg-slate-900 text-white rounded py-2 text-sm font-semibold disabled:opacity-60">
-              {busy ? 'Checking…' : 'Sign in'}
-            </button>
-            <button type="button" onClick={() => { setStep('phone'); setOtp(''); }} className="w-full text-xs text-slate-500">
-              Use a different number
-            </button>
-          </form>
-        )}
-        {error && <p role="alert" className="mt-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded p-2">{error}</p>}
+  return (
+    <div className="min-h-dvh grid lg:grid-cols-[1.15fr_1fr] bg-white">
+      <div className="relative min-h-[38vh] lg:min-h-dvh overflow-hidden bg-ink-900">
+        <Hero3D className="absolute inset-0" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink-950/90 via-ink-950/20 to-transparent" />
+        <div className="absolute left-6 right-6 bottom-6 lg:left-12 lg:bottom-12 text-white">
+          <div className="flex items-center gap-3">
+            <BrandMark />
+            <span className="text-lg font-semibold tracking-tight">ScholarSetu</span>
+          </div>
+          <p className="mt-4 max-w-md text-2xl lg:text-4xl font-semibold leading-tight tracking-tight">
+            Verify once, reuse everywhere.
+          </p>
+          <p className="mt-2 max-w-md text-sm text-slate-300">
+            One view of every tribal student's scholarship, from application to money in the bank.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-center px-6 py-10 sm:px-12">
+        <div className="rise w-full max-w-sm">
+          <div className="flex items-center gap-2 text-saffron-500">
+            <ShieldCheck className="w-5 h-5" />
+            <span className="text-xs font-semibold uppercase tracking-wider">Officers &amp; ministry</span>
+          </div>
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">Sign in</h1>
+          <p className="mt-1 text-sm text-slate-500">We send a one-time code to your registered mobile number.</p>
+
+          {step === 'phone' ? (
+            <form onSubmit={submitPhone} className="mt-8 space-y-4">
+              <label className="block text-sm font-medium text-slate-700">
+                Mobile number
+                <input
+                  type="tel" inputMode="numeric" autoComplete="tel" required pattern="[0-9]{10}"
+                  value={phone} onChange={(e) => setPhone(e.target.value.trim())}
+                  className={input} placeholder="10-digit number"
+                />
+              </label>
+              <button disabled={busy} className={button}>{busy ? 'Sending…' : 'Send code'}</button>
+            </form>
+          ) : (
+            <form onSubmit={submitOtp} className="mt-8 space-y-4">
+              {notice && <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600 ring-1 ring-slate-200">{notice}</p>}
+              <label className="block text-sm font-medium text-slate-700">
+                One-time code
+                <input
+                  type="text" inputMode="numeric" autoComplete="one-time-code" required pattern="[0-9]{6}"
+                  value={otp} onChange={(e) => setOtp(e.target.value.trim())}
+                  className={`${input} tracking-[0.5em] text-center font-semibold`}
+                />
+              </label>
+              <button disabled={busy} className={button}>{busy ? 'Checking…' : 'Sign in'}</button>
+              <button type="button" onClick={() => { setStep('phone'); setOtp(''); }} className="w-full text-sm text-slate-500 hover:text-slate-800">
+                Use a different number
+              </button>
+            </form>
+          )}
+          {error && <p role="alert" className="rise mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200">{error}</p>}
+          <p className="mt-10 text-xs text-slate-400">Students and families use the ScholarSetu mobile app.</p>
+        </div>
       </div>
     </div>
   );

@@ -59,6 +59,9 @@ The demo code works only for these seeded accounts and only while `DEMO_MODE=tru
 
 ### Console (officers and ministry)
 
+`make up` also builds the production console (unprivileged nginx, strict CSP) at http://localhost:8080.
+For development with hot reload:
+
 ```bash
 cd apps/console
 cp .env.example .env        # VITE_API_URL=http://localhost:8000
@@ -77,6 +80,20 @@ flutter build apk --debug
 
 See [apps/mobile/README.md](apps/mobile/README.md).
 
+## Design
+
+One visual language across the web console and the mobile app: deep ink surfaces, a saffron accent,
+teal for "verified", and the Inter typeface (bundled, never fetched from a CDN).
+
+- **3D in the console** (`apps/console/src/three/`): react-three-fiber scenes with physically based
+  materials (glass, brushed metal) lit by procedural studio light panels, so no HDRI or font is
+  downloaded at runtime. The login hero is a glass *setu* (bridge) that students cross; the dashboard
+  and coverage pages show real API figures as 3D bars (coverage is scaled out of 100%). three.js loads
+  only on those views; without WebGL, or with reduced motion, the pages fall back to 2D charts and tables.
+- **3D in the mobile app**: Flutter cannot run three.js, so the same scenes are rendered to images
+  (`apps/console/scripts/render-assets.mjs` → `apps/mobile/assets/images/`) and used in the app's
+  headers. The app's stage tracker, cards and animations are native Flutter.
+
 ## Services and ports
 
 | Service | Host port | Notes |
@@ -88,6 +105,7 @@ See [apps/mobile/README.md](apps/mobile/README.md).
 | Object storage (SeaweedFS, S3 API) | 9002 | wallet documents |
 | Temporal dev server | 7233 (web UI 8233) | SLA and DBT-retry workflows; the `worker` container runs them |
 | Redis | 6380 | provisioned; not used by the API yet (§19) |
+| Console (production build) | 8080 | nginx container in compose |
 | Console (Vite dev server) | 5173 | `npm run dev` |
 
 ### Mock government services (`http://localhost:8100`)

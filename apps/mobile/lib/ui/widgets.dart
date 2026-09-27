@@ -16,7 +16,7 @@ class OfflineBanner extends ConsumerWidget {
     final conn = ref.watch(connectionProvider);
     final outbox = ref.watch(outboxProvider);
     final lines = <String>[];
-    Color color = Colors.amber.shade100;
+    Color color = Colors.amber.shade50;
     if (conn.reachable == false) {
       lines.add('No connection to ScholarSetu since ${when(conn.since!)}. '
           'You are seeing information saved on this phone.');
@@ -28,18 +28,31 @@ class OfflineBanner extends ConsumerWidget {
           : '${outbox.pending} saved change(s) waiting to be sent.');
     }
     if (outbox.refused.isNotEmpty) {
-      color = Colors.red.shade100;
+      color = Colors.red.shade50;
       lines.add('${outbox.refused.length} saved change(s) were refused by the server. Open "Sync" to see why.');
     }
     if (lines.isEmpty) return const SizedBox.shrink();
-    return Material(
-      color: color,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [for (final l in lines) Text(l, style: const TextStyle(fontSize: 13))],
+    final problem = outbox.refused.isNotEmpty;
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 250),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: problem ? Colors.red.shade200 : Colors.amber.shade300),
         ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(conn.reachable == false ? Icons.cloud_off_rounded : problem ? Icons.error_outline : Icons.sync_rounded,
+              size: 20, color: problem ? Colors.red.shade800 : Colors.brown.shade700),
+          const SizedBox(width: 10),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [for (final l in lines) Padding(padding: const EdgeInsets.only(bottom: 2),
+                child: Text(l, style: const TextStyle(fontSize: 13, height: 1.35)))],
+          )),
+        ]),
       ),
     );
   }
@@ -57,7 +70,7 @@ class CachedView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final value = ref.watch(provider);
     return value.when(
-      loading: () => const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())),
+      loading: () => const _Skeleton(),
       error: (e, _) => ErrorBox(
         message: e is OfflineException
             ? 'No connection, and nothing has been saved on this phone yet. Connect once to load your information.'
@@ -68,10 +81,20 @@ class CachedView extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (cached.fromCache)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text('Saved copy. Last updated ${when(cached.updatedAt)}',
-                  style: TextStyle(color: Colors.brown.shade700, fontSize: 12, fontStyle: FontStyle.italic)),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(99),
+                    border: Border.all(color: Colors.amber.shade200)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.history_rounded, size: 14, color: Colors.brown.shade700),
+                  const SizedBox(width: 6),
+                  Text('Saved copy. Last updated ${when(cached.updatedAt)}',
+                      style: TextStyle(color: Colors.brown.shade800, fontSize: 12, fontWeight: FontWeight.w500)),
+                ]),
+              ),
             ),
           builder(context, cached.data),
         ],
@@ -88,15 +111,20 @@ class ErrorBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: Colors.red.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(message, style: TextStyle(color: Colors.red.shade900)),
-          if (onRetry != null) TextButton(onPressed: onRetry, child: const Text('Try again')),
-        ]),
-      ),
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.red.shade100)),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(Icons.error_outline_rounded, color: Colors.red.shade700),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(message, style: TextStyle(color: Colors.red.shade900, height: 1.35)),
+          if (onRetry != null)
+            TextButton(style: TextButton.styleFrom(padding: EdgeInsets.zero), onPressed: onRetry, child: const Text('Try again')),
+        ])),
+      ]),
     );
   }
 }
@@ -108,8 +136,9 @@ class Section extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 16, bottom: 8),
-        child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+        padding: const EdgeInsets.only(top: 22, bottom: 10),
+        child: Text(title.toUpperCase(),
+            style: const TextStyle(fontSize: 12, letterSpacing: 0.8, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
       );
 }
 
@@ -117,3 +146,40 @@ void showMessage(BuildContext context, String text) =>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
 String errorText(Object e) => e is ApiException || e is OfflineException ? e.toString() : 'Something went wrong.';
+
+class _Skeleton extends StatefulWidget {
+  const _Skeleton();
+
+  @override
+  State<_Skeleton> createState() => _SkeletonState();
+}
+
+class _SkeletonState extends State<_Skeleton> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))
+    ..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Loading',
+      child: FadeTransition(
+        opacity: Tween(begin: 0.45, end: 1.0).animate(_c),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          for (final w in [0.5, 1.0, 0.8])
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              height: w == 1.0 ? 84 : 16,
+              width: MediaQuery.of(context).size.width * w,
+              decoration: BoxDecoration(color: const Color(0xFFE8ECF4), borderRadius: BorderRadius.circular(12)),
+            ),
+        ]),
+      ),
+    );
+  }
+}

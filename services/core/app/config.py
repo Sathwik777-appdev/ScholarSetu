@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     SKILL_SERVICE_TOKEN: str | None = None
 
     # Comma-separated list of browser origins allowed to call the API with credentials.
-    CORS_ALLOWED_ORIGINS: str = "http://localhost:5173"
+    CORS_ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:8080"  # Vite dev server, compose console
 
     MITRA_MAX_SESSION_MINUTES: int = 30
 

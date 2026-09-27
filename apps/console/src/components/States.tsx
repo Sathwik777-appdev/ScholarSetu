@@ -4,15 +4,18 @@ import type { ApiState } from '../hooks/useApi';
 
 export function Loading({ label = 'Loading…' }: { label?: string }) {
   return (
-    <div className="flex items-center gap-2 text-sm text-slate-500 p-6" role="status">
-      <Loader2 className="w-4 h-4 animate-spin" /> {label}
+    <div className="space-y-3 p-1" role="status" aria-label={label}>
+      <div className="skeleton h-5 w-1/3" />
+      <div className="skeleton h-24 w-full" />
+      <div className="skeleton h-5 w-2/3" />
+      <span className="sr-only flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {label}</span>
     </div>
   );
 }
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div className="bg-rose-50 border border-rose-200 text-rose-900 rounded-lg p-4 text-sm flex items-start gap-3" role="alert">
+    <div className="rise bg-rose-50/80 border border-rose-200 text-rose-900 rounded-2xl p-4 text-sm flex items-start gap-3 backdrop-blur" role="alert">
       <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
       <div className="flex-1">
         <p className="font-semibold">Could not load this data</p>
@@ -29,7 +32,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="border border-dashed border-slate-300 rounded-lg p-8 text-center text-sm text-slate-500">
+    <div className="rise border border-dashed border-slate-300 rounded-2xl p-10 text-center text-sm text-slate-500 bg-white/60">
       <Inbox className="w-6 h-6 mx-auto mb-2 text-slate-400" />
       <p className="font-semibold text-slate-700">{title}</p>
       {hint && <p className="mt-1">{hint}</p>}
@@ -53,10 +56,10 @@ export function ApiView<T>({ state, isEmpty, empty, children }: {
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-5">
+    <div className="rise flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-6">
       <div>
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">{title}</h1>
-        {subtitle && <p className="text-sm text-slate-600 mt-0.5">{subtitle}</p>}
+        <h1 className="text-2xl sm:text-[28px] font-semibold text-slate-900 tracking-tight">{title}</h1>
+        {subtitle && <p className="text-sm text-slate-500 mt-1 max-w-2xl">{subtitle}</p>}
       </div>
       {actions}
     </div>
@@ -65,8 +68,8 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
 
 export function Card({ title, children, className = '' }: { title?: string; children: ReactNode; className?: string }) {
   return (
-    <section className={`bg-white rounded-lg border border-slate-200 p-4 ${className}`}>
-      {title && <h2 className="text-sm font-bold text-slate-800 mb-3">{title}</h2>}
+    <section className={`rise bg-white rounded-2xl border border-slate-200/70 p-5 shadow-soft ${className}`}>
+      {title && <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-500 mb-4">{title}</h2>}
       {children}
     </section>
   );

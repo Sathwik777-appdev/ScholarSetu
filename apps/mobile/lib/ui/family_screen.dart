@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/providers.dart';
 import 'home_screen.dart';
+import 'components.dart';
 import 'labels.dart';
 import 'student_screens.dart';
 import 'widgets.dart';
@@ -29,21 +30,18 @@ class FamilyScreen extends ConsumerWidget {
                 builder: (context, data) {
                   final children = (data['students'] as List).cast<Map<String, dynamic>>();
                   return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Text(data['guardian_name'] as String, style: Theme.of(context).textTheme.headlineSmall),
+                    HeroHeader(
+                      title: data['guardian_name'] as String,
+                      subtitle: '${children.length} ${children.length == 1 ? 'child' : 'children'} · family view (read-only)',
+                      image: 'assets/images/badge.webp',
+                      imageSize: 88,
+                    ),
                     for (final child in children) ...[
                       Section(child['student']['name'] as String),
                       if ((child['applications'] as List).isEmpty)
                         const Text('Registered — application NOT submitted.'),
                       for (final a in (child['applications'] as List).cast<Map<String, dynamic>>())
-                        Card(
-                          child: ListTile(
-                            title: Text('${schemeLabel(a['scheme'] as String)} ${a['academic_year']}'),
-                            subtitle: Text('${stateLabel(a['current_state'] as String)}\n${a['next_action'] ?? ''}'),
-                            isThreeLine: true,
-                            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                                builder: (_) => ApplicationScreen(applicationId: a['id'] as String))),
-                          ),
-                        ),
+                        ApplicationCard(application: a),
                       Text('Received: ${rupees(child['total_received'] as num)}'),
                     ],
                   ]);

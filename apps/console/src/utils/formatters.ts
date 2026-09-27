@@ -60,3 +60,11 @@ export const ROLE_LABELS: Record<string, string> = {
 
 export const stateLabel = (s: string) => STATE_LABELS[s as CanonicalState] ?? humanize(s);
 export const schemeLabel = (s: string) => SCHEME_LABELS[s as SchemeType] ?? s;
+
+/** "9 days", "5 h", "1 min": SLA targets are seconds long in demo mode, days long otherwise. */
+export function formatDays(days: number): string {
+  if (days >= 1) return `${Math.round(days * 10) / 10} day${days >= 1 && days < 1.05 ? '' : 's'}`;
+  const hours = days * 24;
+  if (hours >= 1) return `${Math.round(hours)} h`;
+  return `${Math.max(1, Math.round(hours * 60))} min`;
+}
