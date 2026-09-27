@@ -108,6 +108,64 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         'jurisdiction_district': 'Dumka',
       }
     };
+
+    // Pre-populate offline cache for smooth presentation even when fully disconnected
+    try {
+      final db = ref.read(servicesProvider).db;
+      await db.putCache('dashboard', {
+        'student': {
+          'id': 'stu-sunita-001',
+          'name': 'Sunita Hansda',
+          'dob': '2008-04-12',
+          'household_id': 'hh_hansda_001',
+          'district': 'Dumka'
+        },
+        'applications': [
+          {
+            'id': 'APP-PM-2026-000002',
+            'scheme': 'POST_MATRIC',
+            'academic_year': '2026-27',
+            'current_state': 'AUTHORITY_VERIFICATION',
+            'state_since': '2026-09-18T17:00:00Z',
+            'source_system': 'SCHOLARSETU',
+            'next_action': 'The district/state authority is verifying your application',
+            'money_received': 0.0
+          }
+        ],
+        'total_received': 0.0,
+        'current_academic_year': '2026-27'
+      });
+      await db.putCache('pending', []);
+      await db.putCache('pathway', {
+        'current_scheme': 'POST_MATRIC',
+        'current_state': 'AUTHORITY_VERIFICATION',
+        'current_application_id': 'APP-PM-2026-000002',
+        'ladder': ['PRE_MATRIC', 'POST_MATRIC', 'TOP_CLASS', 'NFST', 'NOS'],
+        'ladder_position': 1,
+        'education_stage': null,
+        'next_eligible': null,
+        'transition_trigger': null,
+        'prefilled_application_id': null
+      });
+      await db.putCache('payments', {
+        'applications': [
+          {
+            'application_id': 'APP-PM-2026-000002',
+            'scheme': 'POST_MATRIC',
+            'academic_year': '2026-27',
+            'state': 'AUTHORITY_VERIFICATION',
+            'sanctioned': 0.0,
+            'credited': 0.0,
+            'pending': 0.0,
+            'instalments': []
+          }
+        ],
+        'total_sanctioned': 0.0,
+        'total_credited': 0.0,
+        'total_pending': 0.0
+      });
+    } catch (_) {}
+
     await ref.read(sessionProvider.notifier).signIn(demoSession);
   }
 
