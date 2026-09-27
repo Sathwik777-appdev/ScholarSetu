@@ -33,7 +33,8 @@ class _ServerConfigSheetState extends State<_ServerConfigSheet> {
   String? _testError;
 
   static const _presets = [
-    ('Mac Wi-Fi', 'http://192.168.31.202:8000'),
+    ('Cloud Run (Online)', 'https://scholarsetu-api-906769842576.asia-south1.run.app'),
+    ('Mac Wi-Fi', 'http://10.138.163.185:8000'),
     ('ADB USB', 'http://localhost:8000'),
     ('Emulator', 'http://10.0.2.2:8000'),
   ];

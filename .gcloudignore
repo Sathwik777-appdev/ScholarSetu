@@ -1,0 +1,17 @@
+.git
+.idea
+.vscode
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/secrets/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/node_modules/
+apps/
+docs/
+tests/
+infra/
+.gcloudignore

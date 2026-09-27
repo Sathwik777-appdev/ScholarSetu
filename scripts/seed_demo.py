@@ -171,10 +171,13 @@ async def main() -> None:
     from app.eligibility.service import current_academic_year
     async with AsyncSessionLocal() as db:
         ids = await seed(db)
-    async with httpx.AsyncClient(timeout=30) as client:
-        roster = (await client.get(f"{settings.MOCK_SERVICE_URL}/udise/_synthetic/roster")).json()
-    async with AsyncSessionLocal() as db:
-        ids["synthetic_scholarship_registrations"] = await seed_synthetic_population(db, roster, current_academic_year())
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            roster = (await client.get(f"{settings.MOCK_SERVICE_URL}/udise/_synthetic/roster")).json()
+        async with AsyncSessionLocal() as db:
+            ids["synthetic_scholarship_registrations"] = await seed_synthetic_population(db, roster, current_academic_year())
+    except Exception as exc:
+        print(f"Note: synthetic school roster not seeded (mock service offline: {exc})")
     await engine.dispose()
     print("Seeded demo world:")
     for key, value in ids.items():
