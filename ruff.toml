@@ -1,0 +1,15 @@
+line-length = 120
+target-version = "py312"  # the API image runs Python 3.12
+extend-exclude = ["apps", "node_modules", "services/core/alembic/versions"]
+
+[lint]
+select = ["E", "F", "W", "B", "ASYNC"]
+ignore = [
+    "E501",   # no formatter is enforced; long lines are reviewed by eye
+    "B008",   # FastAPI's Depends()/Query() in argument defaults is the framework's idiom
+    "B904",   # handlers translate domain errors into HTTPException inside `except` on purpose
+]
+
+[lint.per-file-ignores]
+# Tests may block the event loop (reading fixtures, running alembic in a subprocess).
+"tests/**" = ["ASYNC"]

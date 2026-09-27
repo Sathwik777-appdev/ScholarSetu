@@ -1,10 +1,16 @@
-.PHONY: setup keys dev down migrate seed test smoke-test console mobile cap-build cap-open
+# ScholarSetu developer commands. Run `make env keys dev` on a fresh clone, then `make seed`.
+COMPOSE = docker compose --env-file .env -f infra/docker-compose.yml
+DEV = $(COMPOSE) -f infra/docker-compose.override.yml
 
-setup:
-	@echo "Setting up ScholarSetu environment..."
-	@echo "Available targets: dev, down, migrate, seed, smoke-test, console, cap-build, cap-open"
+.PHONY: env demo-env keys dev up down migrate seed lint test smoke-test console console-build mobile-check
 
-keys:
+env:            ## create .env with fresh secrets (DEMO_MODE=false)
+	python3 scripts/make_env.py
+
+demo-env:       ## create .env for a local demo (DEMO_MODE=true)
+	python3 scripts/make_env.py --demo
+
+keys:           ## create the Ed25519 attestation signing key (never overwritten)
 	@mkdir -p services/core/secrets
 	@test -f services/core/secrets/attestation_ed25519.pem \
 		&& echo "Attestation key already exists (not overwritten)." \
@@ -12,29 +18,35 @@ keys:
 			&& chmod 600 services/core/secrets/attestation_ed25519.pem \
 			&& echo "Created services/core/secrets/attestation_ed25519.pem")
 
-dev:
-	docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.override.yml up --build
+dev:            ## run the whole stack with live code reload
+	$(DEV) up --build
+
+up:             ## run the whole stack in the background (built images, no reload)
+	$(COMPOSE) up --build -d
 
 down:
-	docker compose --env-file .env -f infra/docker-compose.yml down
+	$(COMPOSE) down
 
 migrate:
-	docker compose --env-file .env -f infra/docker-compose.yml exec core alembic upgrade head
+	$(COMPOSE) exec core alembic upgrade head
 
-seed:
-	docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.override.yml exec core python /scripts/seed_demo.py
+seed:           ## load the demo world (Sunita, Rahul, officers) and the synthetic population
+	$(COMPOSE) exec core python /scripts/seed_demo.py
 
-test:
+lint:
+	ruff check .
+
+test:           ## backend tests; needs the compose postgres on localhost:5434
 	pytest
 
-smoke-test:
-	python3 scripts/demo_smoke_test.py
+smoke-test:     ## the 8 demo scenes against a freshly seeded demo stack
+	set -a; . ./.env; set +a; python3 scripts/demo_smoke_test.py
 
 console:
 	cd apps/console && npm run dev
 
-cap-build:
-	cd apps/console && npm run cap:build
+console-build:
+	cd apps/console && npm ci && npm run lint && npm run build
 
-cap-open:
-	cd apps/console && npx cap open android
+mobile-check:
+	cd apps/mobile && flutter pub get && flutter analyze && flutter test

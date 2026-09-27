@@ -160,7 +160,10 @@ class LedgerService:
         event = LedgerEvent(
             event_id=event_id, application_id=app.id, sequence_no=sequence_no, student_id=app.student_id,
             type=event_type, scheme=app.scheme, source=source, actor=actor, occurred_at=occurred_at, payload=payload,
-            hash_prev=hash_prev, hash=event_hash(event_id, event_type, app.id, occurred_at, payload, hash_prev),
+            hash_prev=hash_prev,
+            hash=event_hash(event_id=event_id, event_type=event_type, application_id=app.id, sequence_no=sequence_no,
+                            student_id=app.student_id, scheme=app.scheme.value, source=source.value, actor=actor,
+                            occurred_at=occurred_at, payload=payload, hash_prev=hash_prev),
         )
         self.db.add(event)
         await emit(self.db, subject_for(event_type), event_type,
@@ -304,7 +307,10 @@ class LedgerService:
                 return ChainCheck(application_id, False, index, e.event_id, "sequence gap or reorder")
             if e.hash_prev != prev:
                 return ChainCheck(application_id, False, index, e.event_id, "hash_prev does not match previous event")
-            expected = event_hash(e.event_id, e.type, e.application_id, _aware(e.occurred_at), e.payload, e.hash_prev)
+            expected = event_hash(event_id=e.event_id, event_type=e.type, application_id=e.application_id,
+                                  sequence_no=e.sequence_no, student_id=e.student_id, scheme=e.scheme.value,
+                                  source=e.source.value, actor=e.actor, occurred_at=_aware(e.occurred_at),
+                                  payload=e.payload, hash_prev=e.hash_prev)
             if expected != e.hash:
                 return ChainCheck(application_id, False, index, e.event_id, "event content does not match its hash")
             prev = e.hash

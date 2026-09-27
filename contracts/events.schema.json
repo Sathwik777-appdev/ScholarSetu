@@ -1,14 +1,22 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ScholarSetu Event Schema",
-  "description": "Canonical event schema for the ScholarSetu event bus",
+  "$id": "https://scholarsetu.example/contracts/events.schema.json",
+  "title": "ScholarSetu event envelope",
+  "description": "What every message on the NATS JetStream stream SCHOLARSETU carries (built by app.shared.events.emit and published from the transactional outbox). tests/contract/test_event_contract.py validates every event the core publishes against this file.",
   "type": "object",
-  "required": ["event_id", "type", "application_id", "student_id", "scheme", "source", "occurred_at", "payload"],
+  "required": [
+    "event_id",
+    "type",
+    "occurred_at",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
   "properties": {
     "event_id": {
       "type": "string",
-      "format": "uuid",
-      "description": "Unique event identifier"
+      "minLength": 1,
+      "description": "UUIDv7. Also the NATS Msg-Id, so redelivery is deduplicated. For ledger events it equals the ledger row's event_id."
     },
     "type": {
       "type": "string",
@@ -16,71 +24,122 @@
         "ApplicationCreated",
         "ApplicationSubmitted",
         "InstituteVerificationStarted",
-        "InstituteVerified",
         "DeficiencyRaised",
-        "DeficiencyResolved",
+        "DeficiencyResponded",
         "Resubmitted",
         "AuthorityVerificationStarted",
-        "AuthorityVerified",
         "Sanctioned",
         "Rejected",
         "PaymentInitiated",
         "PaymentCredited",
         "PaymentFailed",
         "RenewalDue",
-        "VerificationCompleted",
-        "AttestationIssued",
-        "AttestationExpired",
-        "AttestationRevoked",
-        "DBTHealthCheckCompleted",
-        "DBTRetryInitiated",
-        "TransitionDetected",
-        "EligibilityChecked",
+        "OneSchemeRuleAcknowledged",
+        "ReviewDecisionRecorded",
         "SLABreached",
+        "VerificationCompleted",
+        "ReviewCaseOpened",
+        "DBTHealthChecked",
+        "TransitionDetected",
+        "AdapterStateParked",
         "ConsentGranted",
         "ConsentRevoked"
       ],
-      "description": "Event type from the canonical vocabulary"
-    },
-    "application_id": {
-      "type": ["string", "null"],
-      "description": "Application this event pertains to (null for student-level events)"
-    },
-    "student_id": {
-      "type": "string",
-      "format": "uuid",
-      "description": "Student this event pertains to"
-    },
-    "scheme": {
-      "type": ["string", "null"],
-      "enum": ["PRE_MATRIC", "POST_MATRIC", "TOP_CLASS", "NFST", "NOS", null],
-      "description": "Scheme type"
-    },
-    "source": {
-      "type": "string",
-      "enum": ["NSP", "SFMP", "NOS_PORTAL", "SCHOLARSETU"],
-      "description": "Source system that originated this event"
+      "description": "Event name. A new name must be added here (the contract test fails otherwise)."
     },
     "occurred_at": {
       "type": "string",
       "format": "date-time",
-      "description": "When the event occurred (ISO 8601)"
-    },
-    "payload": {
-      "type": "object",
-      "description": "Event-specific payload data"
+      "description": "When the event was queued (UTC, ISO 8601)."
     },
     "correlation_id": {
-      "type": ["string", "null"],
-      "description": "Correlation ID for tracing related events"
-    },
-    "hash_prev": {
-      "type": ["string", "null"],
-      "description": "Hash of the previous event in the chain (per application)"
-    },
-    "hash": {
       "type": "string",
-      "description": "SHA-256 hash of this event data for tamper detection"
+      "description": "The application id for application events; empty otherwise."
+    },
+    "payload": {
+      "type": "object"
     }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "enum": [
+              "ApplicationCreated",
+              "ApplicationSubmitted",
+              "InstituteVerificationStarted",
+              "DeficiencyRaised",
+              "DeficiencyResponded",
+              "Resubmitted",
+              "AuthorityVerificationStarted",
+              "Sanctioned",
+              "Rejected",
+              "PaymentInitiated",
+              "PaymentCredited",
+              "PaymentFailed",
+              "RenewalDue",
+              "OneSchemeRuleAcknowledged",
+              "ReviewDecisionRecorded",
+              "SLABreached"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "description": "Ledger events: the appended ledger row's identity plus the event's own fields.",
+            "type": "object",
+            "required": [
+              "application_id",
+              "student_id",
+              "scheme",
+              "sequence_no",
+              "actor"
+            ],
+            "properties": {
+              "application_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "student_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "scheme": {
+                "enum": [
+                  "PRE_MATRIC",
+                  "POST_MATRIC",
+                  "TOP_CLASS",
+                  "NFST",
+                  "NOS"
+                ]
+              },
+              "sequence_no": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Position in the application's hash chain."
+              },
+              "actor": {
+                "type": "string",
+                "pattern": "^(user|system|source):"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "x-subjects": {
+    "application.*": "lifecycle changes",
+    "deficiency.*": "deficiencies",
+    "payment.*": "payments",
+    "verification.*": "verification results and review cases",
+    "sla.breached": "SLA breaches",
+    "pathway.*": "scheme transitions",
+    "dbt.*": "bank-readiness checks",
+    "consent.*": "consent changes",
+    "adapter.*": "portal statuses parked for review"
   }
 }

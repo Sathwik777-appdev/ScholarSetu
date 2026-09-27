@@ -13,12 +13,20 @@ def canonical_json(obj: Any) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
-def event_hash(event_id: str, event_type: str, application_id: str, occurred_at: datetime,
-               payload: dict[str, Any], hash_prev: str) -> str:
+def event_hash(*, event_id: str, event_type: str, application_id: str, sequence_no: int, student_id: str,
+               scheme: str, source: str, actor: str, occurred_at: datetime, payload: dict[str, Any],
+               hash_prev: str) -> str:
+    """Covers every stored field of the event (who, what, when, where from, and its place in the chain),
+    so changing any of them, including the actor who approved something, breaks verification."""
     body = {
         "event_id": event_id,
         "type": event_type,
         "application_id": application_id,
+        "sequence_no": sequence_no,
+        "student_id": student_id,
+        "scheme": scheme,
+        "source": source,
+        "actor": actor,
         "occurred_at": occurred_at.isoformat(),
         "payload": payload,
         "hash_prev": hash_prev,
