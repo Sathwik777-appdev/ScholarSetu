@@ -113,7 +113,7 @@ teal for "verified", and the Inter typeface (bundled, never fetched from a CDN).
 | Path | Stands in for |
 |---|---|
 | `/uidai` | UIDAI e-KYC (demographic match by Aadhaar reference token) |
-| `/digilocker` | DigiLocker documents (caste certificate, marksheets) |
+| `/digilocker` | The test DigiLocker: the partner API shape (`/public/oauth2/1/authorize`, `/token`, `/2/files/issued`, `/1/file/{uri}`, OAuth 2.0 + PKCE). Sign in with a demo student's mobile number and the code shown on the page. Its documents are stamped TEST DOCUMENT, stored as "DigiLocker (test)", never issuer-signed, and count as proof only in demo mode. |
 | `/edistrict` | e-District (income, domicile, caste certificates) |
 | `/aishe`, `/udise`, `/apaar` | Higher-education and school enrolment, APAAR IDs; `/udise` also publishes PPRL encodings |
 | `/nta` | UGC-NET / JRF results |
@@ -121,6 +121,10 @@ teal for "verified", and the Inter typeface (bundled, never fetched from a CDN).
 | `/nsp`, `/sfmp`, `/nos` | The three scholarship portals (application status feeds) |
 
 Unknown records return 404; there is no language-AI (Bhashini) mock.
+
+"Get from DigiLocker" in the app runs the real partner flow against the test DigiLocker. Going live changes only
+configuration: `DIGILOCKER_MODE=production`, `DIGILOCKER_API_URL`, `DIGILOCKER_AUTHORIZE_URL`, `DIGILOCKER_CLIENT_ID`
+and the client secret in Secret Manager (ARCHITECTURE.md §19, row 44).
 
 ## Deploying to Google Cloud
 

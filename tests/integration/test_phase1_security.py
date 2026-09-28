@@ -23,6 +23,9 @@ PUBLIC_ROUTES = {
     ("POST", "/v1/auth/register/complete"),  # needs that code
     ("GET", "/v1/geo/districts"),              # place names with an officer, for registration pickers
     ("POST", "/v1/auth/digilocker/callback"),  # returns 501 Not Implemented
+    ("GET", "/v1/digilocker/callback"),        # OAuth redirect: needs the one-time state of a session
+    ("GET", "/v1/digilocker-test/authorize"),  # test DigiLocker sign-in page (mock mode only; 404 otherwise)
+    ("POST", "/v1/digilocker-test/authorize"),
     ("GET", "/v1/attestations/public-key"),
     ("POST", "/v1/attestations/verify-jws"),
     ("GET", "/v1/jago/guidelines/search"),      # public scheme text, no personal data

@@ -95,6 +95,9 @@ secrets() {
   put_secret pprl-key "$(rand 32)"
   put_secret sms-token "$(rand 24)"
   put_secret skill-token "$(rand 24)"
+  # DigiLocker partner client secret. In mock mode it is shared with the test DigiLocker on the VM; going live,
+  # replace its value with the secret DigiLocker issues (and set DIGILOCKER_MODE/API_URL/AUTHORIZE_URL/CLIENT_ID).
+  put_secret digilocker-client-secret "$(rand 24)"
   if ! exists g secrets describe "scholarsetu-$ENV-attestation-key"; then
     local key; key=$(mktemp); openssl genpkey -algorithm ed25519 -out "$key" 2>/dev/null
     g secrets create "scholarsetu-$ENV-attestation-key" --replication-policy=automatic --data-file="$key" >/dev/null
@@ -141,10 +144,19 @@ run_flags() {  # shared by the API service and the migration job
   secrets+=",MINIO_ACCESS_KEY=scholarsetu-$ENV-hmac-access:latest,MINIO_SECRET_KEY=scholarsetu-$ENV-hmac-secret:latest"
   exists g secrets describe "scholarsetu-$ENV-gemini-key" && secrets+=",GEMINI_API_KEY=scholarsetu-$ENV-gemini-key:latest"
   secrets+=",/secrets/attestation/key.pem=scholarsetu-$ENV-attestation-key:latest"
+  exists g secrets describe "scholarsetu-$ENV-digilocker-client-secret" && \
+    secrets+=",DIGILOCKER_CLIENT_SECRET=scholarsetu-$ENV-digilocker-client-secret:latest"
+  # DigiLocker: mock by default. Going live: DIGILOCKER_MODE=production DIGILOCKER_API_URL=... DIGILOCKER_CLIENT_ID=...
+  local number public dl
+  number=$(g projects describe "$PROJECT" --format='value(projectNumber)')
+  public=https://$SERVICE-$number.$REGION.run.app
+  dl="DIGILOCKER_MODE=${DIGILOCKER_MODE:-mock},DIGILOCKER_CLIENT_ID=${DIGILOCKER_CLIENT_ID:-scholarsetu-$ENV},PUBLIC_BASE_URL=$public"
+  [ -n "${DIGILOCKER_API_URL:-}" ] && dl+=",DIGILOCKER_API_URL=$DIGILOCKER_API_URL"
+  [ -n "${DIGILOCKER_AUTHORIZE_URL:-}" ] && dl+=",DIGILOCKER_AUTHORIZE_URL=$DIGILOCKER_AUTHORIZE_URL"
   echo --image "$REPO/scholarsetu-core:$TAG" --region "$REGION" --service-account "$SA_EMAIL" \
     --set-cloudsql-instances "$CONNECTION" --network default --subnet default --vpc-egress private-ranges-only \
     --set-secrets "$secrets" \
-    --set-env-vars "DEMO_MODE=$DEMO_MODE,RUN_MIGRATIONS=false,OUTBOX_PUBLISHER_ENABLED=false,ADAPTER_SYNC_INTERVAL_SECONDS=0,MOCK_SERVICE_URL=http://$(vm_ip):8100,MINIO_URL=https://storage.googleapis.com,MINIO_BUCKET=$BUCKET,ATTESTATION_PRIVATE_KEY_PATH=/secrets/attestation/key.pem,SLA_DEMO_SECONDS=3600,DATABASE_POOL_SIZE=3,DATABASE_MAX_OVERFLOW=2,GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}" \
+    --set-env-vars "DEMO_MODE=$DEMO_MODE,RUN_MIGRATIONS=false,OUTBOX_PUBLISHER_ENABLED=false,ADAPTER_SYNC_INTERVAL_SECONDS=0,MOCK_SERVICE_URL=http://$(vm_ip):8100,MINIO_URL=https://storage.googleapis.com,MINIO_BUCKET=$BUCKET,ATTESTATION_PRIVATE_KEY_PATH=/secrets/attestation/key.pem,SLA_DEMO_SECONDS=3600,DATABASE_POOL_SIZE=3,DATABASE_MAX_OVERFLOW=2,GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash},$dl" \
     --cpu 1 --memory 2Gi
 }
 

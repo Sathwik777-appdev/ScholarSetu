@@ -41,6 +41,7 @@ from app.verification.models import ReviewCase
 from app.verification.plugins.aishe_verifier import AISHEVerifier
 from app.verification.plugins.apaar_verifier import APAARVerifier
 from app.verification.plugins.base import SubjectRef, VerificationResult, VerifierPlugin
+from app.config import settings
 from app.verification.plugins.digilocker_verifier import DigiLockerVerifier
 from app.verification.plugins.edistrict_verifier import EDistrictVerifier
 from app.verification.plugins.nta_verifier import NTAVerifier
@@ -72,7 +73,10 @@ class ReviewCaseError(Exception):
 
 
 def default_plugins() -> list[VerifierPlugin]:
-    return [UIDAIeKYCVerifier(), DigiLockerVerifier(), EDistrictVerifier(), UDISEVerifier(), AISHEVerifier(),
+    # The DigiLocker lookup exists only in the test DigiLocker, whose documents count as proof only in demo
+    # mode; otherwise it takes no part, so it can neither confirm a claim nor hide another source's outage.
+    digilocker = [DigiLockerVerifier()] if settings.DIGILOCKER_MODE == "mock" and settings.DEMO_MODE else []
+    return [UIDAIeKYCVerifier(), *digilocker, EDistrictVerifier(), UDISEVerifier(), AISHEVerifier(),
             APAARVerifier(), NTAVerifier()]
 
 

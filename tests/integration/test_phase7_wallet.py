@@ -27,7 +27,9 @@ async def test_digilocker_pull_stores_the_issued_document_once(client, users, go
     r = await _pull(client, sunita, consent)
     assert r.status_code == 201, r.text
     doc = r.json()
-    assert doc["verified"] is True and doc["mime_type"] == "application/pdf" and doc["source"] == "DIGILOCKER"
+    # The test DigiLocker's documents are test data: labelled, never issuer-signed or shown as verified.
+    assert doc["verified"] is False and doc["mime_type"] == "application/pdf" and doc["source"] == "DIGILOCKER_TEST"
+    assert doc["source_label"] == "DigiLocker (test)" and doc["test_document"] is True
     assert doc["digilocker_uri"] == "in.gov.jac-MARKSHEET_10-2026-109283"
     [stored] = store.objects.values()
     assert stored.startswith(b"%PDF-") and b"SUNITA HANSDA" in stored

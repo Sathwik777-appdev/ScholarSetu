@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/repository.dart';
 import '../state/providers.dart';
 import 'components.dart';
+import 'digilocker_screen.dart';
 import 'labels.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -407,6 +408,14 @@ class MoneyTab extends StatelessWidget {
   }
 }
 
+/// Where a wallet document came from, as the server labels it. "Verified" only when the issuer signed it.
+String documentSourceText(Map<String, dynamic> d) {
+  final label = (d['source_label'] as String?)?.isNotEmpty == true ? d['source_label'] as String : '${d['source']}';
+  if (d['verified'] == true) return 'From $label · issuer-signed';
+  if (d['test_document'] == true) return 'From $label · test data, not verified';
+  return '$label · not verified';
+}
+
 class PassportTab extends ConsumerWidget {
   const PassportTab({super.key});
 
@@ -461,13 +470,19 @@ class PassportTab extends ConsumerWidget {
             if (docs.isEmpty) const Text('No documents yet.'),
             for (final d in docs)
               ListTile(
-                leading: const Icon(Icons.description_outlined),
+                leading: Icon(d['verified'] == true ? Icons.verified_outlined : Icons.description_outlined,
+                    color: d['test_document'] == true ? Colors.orange.shade800 : null),
                 title: Text(d['title'] as String),
-                subtitle: Text(d['verified'] == true ? 'From ${d['source']} (issuer-signed)' : 'Uploaded by you (not verified)'),
+                subtitle: Text(documentSourceText(d)),
               ),
           ]);
         },
       ),
+      FilledButton.icon(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DigiLockerScreen())),
+          icon: const Icon(Icons.cloud_download_outlined),
+          label: const Text('Get from DigiLocker')),
+      const SizedBox(height: 8),
       OutlinedButton.icon(onPressed: () => _upload(context, ref), icon: const Icon(Icons.upload_file),
           label: const Text('Upload a document')),
     ]);

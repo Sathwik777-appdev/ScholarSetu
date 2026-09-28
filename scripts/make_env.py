@@ -18,6 +18,7 @@ GENERATED = {
     "PPRL_HMAC_KEY": lambda: secrets.token_hex(32),
     "SMS_GATEWAY_TOKEN": lambda: secrets.token_hex(24),
     "SKILL_SERVICE_TOKEN": lambda: secrets.token_hex(24),
+    "DIGILOCKER_CLIENT_SECRET": lambda: secrets.token_hex(24),  # shared with the test DigiLocker (mocks)
 }
 
 

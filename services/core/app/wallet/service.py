@@ -32,11 +32,24 @@ def sniff_mime(data: bytes) -> Optional[str]:
     return next((mime for magic, mime in SIGNATURES if data.startswith(magic)), None)
 
 
+SOURCE_LABELS = {"DIGILOCKER": "DigiLocker", "DIGILOCKER_TEST": "DigiLocker (test)", "UPLOAD": "Uploaded by you"}
+
+
+def digilocker_source() -> tuple[str, bool]:
+    """(source, issuer_signed) for a document fetched from DigiLocker: only the real service yields
+    issuer-signed documents; a mock or sandbox DigiLocker yields test data."""
+    from app.config import settings
+    return ("DIGILOCKER_TEST", False) if settings.digilocker_is_test else ("DIGILOCKER", True)
+
+
 def to_response(doc: WalletDocument) -> WalletDocumentResponse:
     return WalletDocumentResponse(
         id=doc.id, student_id=doc.student_id, document_type=doc.document_type, title=doc.title, source=doc.source,
+        source_label=SOURCE_LABELS.get(doc.source, doc.source), test_document=doc.source == "DIGILOCKER_TEST",
         digilocker_uri=doc.source_ref, content_hash=f"sha256:{doc.content_sha256}", mime_type=doc.mime_type,
-        size_bytes=doc.size_bytes, uploaded_at=doc.created_at.isoformat(), verified=doc.issuer_signed,
+        size_bytes=doc.size_bytes, uploaded_at=doc.created_at.isoformat(),
+        # A test-DigiLocker document is never shown as verified, whatever the row says.
+        verified=bool(doc.issuer_signed) and doc.source == "DIGILOCKER",
         metadata_json=doc.metadata_json,
     )
 
@@ -64,6 +77,10 @@ class WalletService:
 
     async def pull_from_digilocker(self, student_id: str, doc_type: str, consent_id: str, actor: User,
                                    sources: SourceClient) -> WalletDocument:
+        from app.config import settings
+        if settings.DIGILOCKER_MODE != "mock":
+            raise WalletError(501, "Direct DigiLocker lookup exists only in the test DigiLocker; use "
+                                   "POST /v1/me/digilocker/connect")
         try:
             await ConsentService(self.db).require(consent_id, student_id, "SCHOLARSETU_WALLET", [f"DIGILOCKER:{doc_type}"])
         except ConsentError as exc:
@@ -85,10 +102,11 @@ class WalletService:
         mime = sniff_mime(data or b"")
         if mime is None:
             raise WalletError(502, "DigiLocker returned a file that is not a PDF or image")
+        source, signed = digilocker_source()
         doc = await self._store(student_id, data, mime, document_type=doc_type,
                                 title=f"{doc_type.replace('_', ' ').title()} ({meta.get('issuer', 'DigiLocker')})",
-                                source="DIGILOCKER", source_ref=meta["doc_id"], issuer=meta.get("issuer"),
-                                issuer_signed=True, uploaded_by=actor.id,
+                                source=source, source_ref=meta["doc_id"], issuer=meta.get("issuer"),
+                                issuer_signed=signed, uploaded_by=actor.id,
                                 metadata_json={"holder_name": meta.get("holder_name"), "consent_id": consent_id})
         await record_audit(self.db, "WALLET_DIGILOCKER_PULL", actor=actor, student_id=student_id,
                            details={"document_id": doc.id, "doc_type": doc_type, "consent_id": consent_id})

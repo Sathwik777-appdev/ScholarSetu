@@ -4,6 +4,7 @@ from app.adapters.models import ParkedEvent  # noqa: F401
 from app.attestation.models import Attestation  # noqa: F401
 from app.jago_skill.models import GuidelineChunk  # noqa: F401
 from app.consent.models import Consent  # noqa: F401
+from app.digilocker.models import DigiLockerSession  # noqa: F401
 from app.dbt_guardian.models import DbtHealthCheck, DbtRetry  # noqa: F401
 from app.eligibility.models import EligibilityDecision, RuleVersion  # noqa: F401
 from app.gateway.models import AssistSession, AuditLog, OtpChallenge, OutboundSms, User  # noqa: F401

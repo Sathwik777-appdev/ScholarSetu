@@ -1,3 +1,4 @@
+from app.config import settings
 from app.shared.types import ClaimType, ConsentArtefact, VerificationStatus
 from app.verification.identity_resolver import IdentityRecord
 from app.verification.plugins.base import SubjectRef, VerificationResult, not_confirmed, parse_date
@@ -8,11 +9,18 @@ _DOC_TYPE = {ClaimType.ST_STATUS: "CASTE_CERTIFICATE", ClaimType.ACADEMIC_RECORD
 
 class DigiLockerVerifier:
     claim_types = (ClaimType.ST_STATUS, ClaimType.ACADEMIC_RECORDS)
-    source_name = "DigiLocker"
+    source_name = "DigiLocker (test)"  # the lookup exists only in the test DigiLocker (see verify)
     priority = 1
 
     async def verify(self, claim_type: ClaimType, subject: SubjectRef, consent: ConsentArtefact,
                      client: SourceClient) -> VerificationResult:
+        # The direct lookup below exists only in the test DigiLocker. Its documents are test data: they count
+        # as proof only in DEMO_MODE, and are never presented as issuer-signed.
+        if settings.DIGILOCKER_MODE != "mock":
+            return not_confirmed(self.source_name, "DigiLocker lookup without the student's sign-in is not "
+                                                   "available; the student imports documents from DigiLocker")
+        if not settings.DEMO_MODE:
+            return not_confirmed(self.source_name, "The test DigiLocker is not accepted as proof outside demo mode")
         if not subject.aadhaar_ref:
             return not_confirmed(self.source_name, "No Aadhaar reference on the student record")
         doc_type = _DOC_TYPE[claim_type]
@@ -32,5 +40,5 @@ class DigiLockerVerifier:
             subject_record=IdentityRecord(f"DigiLocker {doc_type}", body["holder_name"],
                                           parse_date(body.get("holder_dob")), body.get("gender"),
                                           body.get("father_name"), None, body.get("district")),
-            reasons=[f"Issuer-signed {doc_type} {body['doc_id']} found in DigiLocker"],
+            reasons=[f"{doc_type} {body['doc_id']} found in the test DigiLocker (demo data, not issuer-signed)"],
         )

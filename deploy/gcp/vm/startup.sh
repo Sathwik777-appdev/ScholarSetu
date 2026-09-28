@@ -25,6 +25,8 @@ SMS_GATEWAY_TOKEN=$(secret sms-token)
 DEMO_MODE=${DEMO_MODE}
 SLA_DEMO_SECONDS=3600
 LOG_LEVEL=INFO
+DIGILOCKER_CLIENT_ID=scholarsetu-${ENV_NAME}
+DIGILOCKER_CLIENT_SECRET=$(secret digilocker-client-secret || true)
 ENV
 cat > compose.env <<ENV
 REPO=${REPO}

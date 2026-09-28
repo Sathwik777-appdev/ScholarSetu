@@ -57,6 +57,20 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str | None = None
     GEMINI_MODEL: str = "gemini-3.8-flash"
 
+    # DigiLocker, authorised-partner OAuth 2.0 (authorisation code + PKCE).
+    #   mock       the test DigiLocker in mocks/: documents are test data, never issuer-signed, and never
+    #              count as proof in verification unless DEMO_MODE is on
+    #   sandbox    DigiLocker's partner sandbox (also test data)
+    #   production the real service
+    # Going live changes configuration only: DIGILOCKER_MODE, the two URLs and the client credentials.
+    DIGILOCKER_MODE: str = "mock"
+    DIGILOCKER_API_URL: str | None = None        # server-to-server base; mock default MOCK_SERVICE_URL/digilocker
+    DIGILOCKER_AUTHORIZE_URL: str | None = None  # the page the student's browser opens (see digilocker_authorize_url)
+    DIGILOCKER_CLIENT_ID: str | None = None
+    DIGILOCKER_CLIENT_SECRET: str | None = None
+    # Public address of this API, for OAuth redirects (e.g. https://scholarsetu-api-....run.app).
+    PUBLIC_BASE_URL: str = "http://localhost:8000"
+
     # Comma-separated list of browser origins allowed to call the API with credentials.
     CORS_ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:8080"  # Vite dev server, compose console
 
@@ -180,6 +194,33 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.CORS_ALLOWED_ORIGINS.split(",") if o.strip()]
+
+    @field_validator("DIGILOCKER_MODE")
+    @classmethod
+    def _digilocker_mode(cls, v: str) -> str:
+        if v not in ("mock", "sandbox", "production"):
+            raise ValueError("DIGILOCKER_MODE must be mock, sandbox or production")
+        return v
+
+    @property
+    def digilocker_is_test(self) -> bool:
+        """Documents from a mock or sandbox DigiLocker are test data: never issuer-signed."""
+        return self.DIGILOCKER_MODE != "production"
+
+    @property
+    def digilocker_api_url(self) -> str:
+        return (self.DIGILOCKER_API_URL or f"{self.MOCK_SERVICE_URL.rstrip('/')}/digilocker").rstrip("/")
+
+    @property
+    def digilocker_authorize_url(self) -> str:
+        # The mock runs on a private network, so in mock mode its sign-in page is served through this API.
+        default = (f"{self.PUBLIC_BASE_URL.rstrip('/')}/v1/digilocker-test/authorize" if self.DIGILOCKER_MODE == "mock"
+                   else f"{self.digilocker_api_url}/public/oauth2/1/authorize")
+        return self.DIGILOCKER_AUTHORIZE_URL or default
+
+    @property
+    def digilocker_redirect_uri(self) -> str:
+        return f"{self.PUBLIC_BASE_URL.rstrip('/')}/v1/digilocker/callback"
 
 
 settings = Settings()

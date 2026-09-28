@@ -28,6 +28,7 @@ from app.reach_radar.router import router as reach_radar_router
 from app.adapters.router import router as adapters_router
 from app.channels.router import router as channels_router
 from app.sync.router import router as sync_router
+from app.digilocker.router import router as digilocker_router
 
 logging.basicConfig(level=settings.LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("scholarsetu.core")
@@ -164,7 +165,8 @@ async def unhandled_error(request: Request, exc: Exception):
 @app.get("/health", tags=["System"])
 async def health_check():
     """Liveness: the API process is up."""
-    return {"status": "ok", "service": "scholarsetu-core", "version": app.version}
+    return {"status": "ok", "service": "scholarsetu-core", "version": app.version,
+            "digilocker": {"mode": settings.DIGILOCKER_MODE, "test_service": settings.digilocker_is_test}}
 
 
 @app.get("/health/ready", tags=["System"])
@@ -196,5 +198,5 @@ async def readiness():
 
 for router in (gateway_router, ledger_router, verification_router, attestation_router, eligibility_router,
                dbt_guardian_router, wallet_router, consent_router, nudge_router, jago_skill_router,
-               reach_radar_router, adapters_router, channels_router, sync_router):
+               reach_radar_router, adapters_router, channels_router, sync_router, digilocker_router):
     app.include_router(router)

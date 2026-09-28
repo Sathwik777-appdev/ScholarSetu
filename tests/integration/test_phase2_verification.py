@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app.attestation.models import Attestation
+from app.config import settings
 from app.ledger.models import OutboxMessage
 from app.shared.types import UserRole
 from app.verification.models import ReviewCase
@@ -49,13 +50,14 @@ async def test_every_source_down_gives_source_unavailable(client, db, people, go
     assert reasons == {"SOURCE_UNAVAILABLE"}
 
 
-async def test_one_source_down_and_one_without_record_is_manual_review(client, people, gov):
+async def test_one_source_down_and_one_without_record_is_manual_review(client, people, gov, monkeypatch):
+    monkeypatch.setattr(settings, "DEMO_MODE", True)  # the test DigiLocker takes part only in demo mode
     gov.down.add("/edistrict")  # DigiLocker answers (no caste certificate), e-District is down
     report = (await _verify(client, people["sunita"], ["ST_STATUS"])).json()
     st = _claims(report)["ST_STATUS"]
     assert st["status"] == "MANUAL_REVIEW" and report["overall_status"] == "MANUAL_REVIEW"
     assert {s["source"]: s["status"] for s in st["sources_consulted"]} == {
-        "DigiLocker": "MANUAL_REVIEW", "e-District": "SOURCE_UNAVAILABLE"}
+        "DigiLocker (test)": "MANUAL_REVIEW", "e-District": "SOURCE_UNAVAILABLE"}
 
 
 async def test_source_without_a_matching_record_is_never_verified(client, people, gov):
@@ -112,7 +114,8 @@ async def test_confirmed_claims_are_verified_and_then_reused(client, people, gov
 # ── Hansda / Hansdah → review case ──────────────────────────────────────────
 
 
-async def test_hansdah_certificate_opens_review_case_with_provisional_attestation(client, db, people, gov):
+async def test_hansdah_certificate_opens_review_case_with_provisional_attestation(client, db, people, gov, monkeypatch):
+    monkeypatch.setattr(settings, "DEMO_MODE", True)  # demo scene 3: the test DigiLocker takes part
     report = (await _verify(client, people["sunita"], ["ST_STATUS"])).json()
     st = _claims(report)["ST_STATUS"]
     assert st["status"] == "PROVISIONAL" and report["overall_status"] == "PROVISIONAL"
@@ -126,7 +129,7 @@ async def test_hansdah_certificate_opens_review_case_with_provisional_attestatio
     assert case["id"] == st["review_case_id"] and case["claim_type"] == "ST_STATUS"
     assert case["reason"] == "IDENTITY_NOT_CONFIRMED" and case["status"] == "PENDING"
     assert case["attestation_id"] == st["attestation_id"] and case["student_name"] == "Sunita Hansda"
-    assert {e["source"] for e in case["evidence_refs"]} == {"DigiLocker", "e-District"}
+    assert {e["source"] for e in case["evidence_refs"]} == {"DigiLocker (test)", "e-District"}
 
     db.expire_all()
     subjects = {m.subject for m in (await db.execute(select(OutboxMessage))).scalars()}
