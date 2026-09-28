@@ -39,6 +39,13 @@ def verify_account(payload: dict):
 
 @router.post("/dbt/initiate-payment")
 def initiate_payment(payload: dict):
+    # Idempotent on the caller's reference, like a real payment rail: a resent request returns the same
+    # transaction instead of paying twice.
+    reference = payload.get("reference")
+    if reference:
+        for existing in PAYMENTS.values():
+            if existing["reference"] == reference:
+                return {"txn_ref": existing["txn_ref"], "status": "PENDING"}
     account = _account(payload.get("aadhaar_ref", ""))
     txn_ref = f"PFMS-{uuid.uuid4().hex[:12].upper()}"
     if not account["seeded"]:

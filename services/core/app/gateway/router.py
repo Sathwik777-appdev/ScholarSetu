@@ -12,7 +12,8 @@ from app.database import get_db
 from app.dependencies import get_current_user, require_role
 from app.gateway.models import AssistSession, User
 from app.gateway.service import (
-    AuthService, MitraService, MitraSessionError, OtpRejected, RegistrationError, RegistrationService,
+    AuthService, MitraService, MitraSessionError, OtpRateLimited, OtpRejected, RegistrationError,
+    RegistrationService,
 )
 from app.shared.types import AssistSessionStatus, Gender, MitraScope, UserRole
 
@@ -96,7 +97,10 @@ def _user_out(user: User) -> AuthUser:
 @router.post("/auth/otp/request", status_code=status.HTTP_202_ACCEPTED)
 async def request_otp(req: OTPRequest, db: AsyncSession = Depends(get_db)):
     """Send a login OTP by SMS. The response is identical whether or not the phone is registered."""
-    await AuthService(db).request_login_otp(req.phone)
+    try:
+        await AuthService(db).request_login_otp(req.phone)
+    except OtpRateLimited:
+        raise HTTPException(status_code=429, detail="Too many codes requested for this number. Try again in an hour.")
     return {"status": "accepted",
             "message": f"If {req.phone[:2]}******{req.phone[-2:]} is registered, an OTP has been sent."}
 
@@ -115,7 +119,10 @@ async def verify_otp(req: OTPVerifyRequest, db: AsyncSession = Depends(get_db)):
 @router.post("/auth/register/start", status_code=status.HTTP_202_ACCEPTED)
 async def start_registration(req: OTPRequest, db: AsyncSession = Depends(get_db)):
     """Step 1: send a code to the phone. The response never reveals whether the number is registered."""
-    await RegistrationService(db).start(req.phone)
+    try:
+        await RegistrationService(db).start(req.phone)
+    except OtpRateLimited:
+        raise HTTPException(status_code=429, detail="Too many codes requested for this number. Try again in an hour.")
     return {"status": "accepted", "message": f"A message has been sent to {req.phone[:2]}******{req.phone[-2:]}."}
 
 

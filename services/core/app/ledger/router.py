@@ -12,6 +12,7 @@ from app.dependencies import (
     student_principal,
 )
 from app.gateway.models import User
+from app.gateway.service import record_audit
 from app.ledger.models import Application
 from app.ledger.schemas import (
     AnalyticsOverview, ApplicationCreate, ApplicationOut, ChainVerification, CountRow, OfficerApplicationOut,
@@ -320,14 +321,77 @@ async def officer_raise_deficiency(application_id: str, body: RaiseDeficiencyReq
 async def officer_sanction(application_id: str, body: SanctionRequest,
                            officer: User = Depends(require_role(UserRole.DISTRICT_OFFICER, UserRole.STATE_OFFICER)),
                            ledger: LedgerService = Depends(get_ledger_service)):
-    """Sanction with the instalment plan. Amounts are recorded here, once, and read by every other view."""
+    """Sanction with the instalment plan. Amounts are recorded here, once, and read by every other view.
+
+    Refused (409) while a review case is open or while the student holds another scholarship that is
+    not surrendered in this same step. Not eligible under the current rules, or an amount outside the
+    rules, is refused (422) unless the officer gives an override reason, which the ledger records."""
+    from app.eligibility.service import EligibilityError, EligibilityService
+    from app.ledger.sanction_policy import check_instalments
+    from app.verification.models import ReviewCase
+    from app.verification.service import OPEN_CASE_STATUSES
+
     app = await ensure_application_access(ledger, application_id, Reader(officer, None))
+    if app.canonical_state != CanonicalState.AUTHORITY_VERIFICATION:
+        raise HTTPException(status_code=409, detail=f"Only applications in authority verification can be "
+                                                    f"sanctioned (this one is {app.canonical_state.value})")
+    db = ledger.db
+    open_cases = (await db.execute(select(ReviewCase.id, ReviewCase.claim_type).where(
+        ReviewCase.application_id == app.id, ReviewCase.status.in_(list(OPEN_CASE_STATUSES))))).all()
+    if open_cases:
+        raise HTTPException(status_code=409, detail={
+            "code": "OPEN_REVIEW_CASES",
+            "message": "Decide the open review cases first: " + ", ".join(c.claim_type.value for c in open_cases),
+            "review_case_ids": [c.id for c in open_cases]})
+
+    eligibility = EligibilityService(db)
+    actor = actor_of(officer)
+    # One scheme at a time: another scholarship held this year must be surrendered in this same step.
+    held = [h for h in await eligibility.active_holdings(app.student_id, app.academic_year) if h.id != app.id]
+    if held and body.surrender_application_id != held[0].id:
+        raise HTTPException(status_code=409, detail={
+            "code": "ONE_SCHEME_RULE",
+            "message": f"The student holds {held[0].scheme.value} ({held[0].id}) for {app.academic_year}. "
+                       f"Resend with surrender_application_id={held[0].id} to surrender it with this sanction.",
+            "holding_application_id": held[0].id})
+    if body.surrender_application_id and not held:
+        raise HTTPException(status_code=422, detail="There is no other scholarship to surrender")
     try:
-        await ledger.sanction(app, [(i.description, Decimal(str(i.amount))) for i in body.instalments],
-                              actor_of(officer))
+        if held:
+            await ledger.surrender(held[0], f"Surrendered for {app.scheme.value} ({app.id})", actor, app.id)
+        result = await eligibility.check_eligibility(app.student_id, app.scheme, record=True)
+        version = await eligibility.rule_version(app.scheme)
+    except EligibilityError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
     except LedgerError as exc:
         raise _http(exc)
-    await ledger.db.commit()
+
+    violations = [] if result.eligible else [f"Not eligible under rules {result.rule_version}: "
+                                             + " ".join(result.reasons)]
+    violations += check_instalments(version.decision_table.get("amounts", {}), body.instalments)
+    if violations and not body.override_reason:
+        raise HTTPException(status_code=422, detail={
+            "code": "OUTSIDE_RULES", "message": "This sanction is outside the scheme rules.",
+            "violations": violations,
+            "how_to_proceed": "Correct the plan, or resend with override_reason explaining why."})
+    record = {
+        "rule_version": result.rule_version, "eligibility_decision_id": result.decision_id,
+        "eligibility_status": result.status,
+        "components": [{"instalment": n, "component": i.component, "months": i.months,
+                        "evidence_note": i.evidence_note} for n, i in enumerate(body.instalments, start=1)],
+    }
+    if violations:
+        record["override"] = {"reason": body.override_reason, "violations": violations, "by": actor}
+    if body.note:
+        record["note"] = body.note
+    try:
+        await ledger.sanction(app, [(i.description, Decimal(str(i.amount))) for i in body.instalments],
+                              actor, record=record)
+    except LedgerError as exc:
+        raise _http(exc)
+    await record_audit(db, "SANCTIONED_WITH_OVERRIDE" if violations else "SANCTIONED", actor=officer,
+                       student_id=app.student_id, details={"application_id": app.id, "violations": violations})
+    await db.commit()
     return _app_out(app)
 
 

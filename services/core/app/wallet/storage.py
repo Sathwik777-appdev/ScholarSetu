@@ -2,7 +2,7 @@
 
 import asyncio
 import io
-from typing import Optional
+from pathlib import Path
 from urllib.parse import urlparse
 
 from app.config import settings
@@ -49,8 +49,6 @@ class ObjectStore:
         except Exception as exc:
             raise StorageUnavailable(str(exc)) from exc
 
-
-from pathlib import Path
 
 
 class LocalFileStore:

@@ -5,7 +5,7 @@ import logging
 from typing import Optional
 
 from fastapi import Depends
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -178,12 +178,20 @@ class DBTGuardianService:
         )
 
     async def request_retry(self, app: Application, payment_id: str, actor: str) -> DBTRetryOut:
-        """The student says the bank problem is fixed: re-check, then re-request the payment from PFMS."""
-        payment = await self.db.get(Payment, payment_id)
+        """The student says the bank problem is fixed: re-check, then re-request the payment from PFMS.
+
+        The payment row is locked for the whole request, so two retries (a double tap, app and SMS) are
+        serialised: the second sees the payment is no longer FAILED and is refused. PFMS gets a reference
+        unique to this attempt, so resending the same attempt can never create a second transfer."""
+        payment = (await self.db.execute(
+            select(Payment).where(Payment.id == payment_id).with_for_update())).scalar_one_or_none()
         if payment is None or payment.application_id != app.id:
             raise DBTError(404, "Payment not found")
+        await self.db.refresh(payment)  # the state as committed by whoever held the lock before us
         if payment.state != PaymentState.FAILED:
             raise DBTError(409, f"Only failed payments can be retried (this one is {payment.state.value})")
+        attempt = 1 + (await self.db.scalar(select(func.count()).select_from(DbtRetry).where(
+            DbtRetry.payment_id == payment.id, DbtRetry.status.in_(("SUBMITTED", "CREDITED", "FAILED")))) or 0)
         check = await self.health_check(app, actor)
         retry = DbtRetry(payment_id=payment.id, application_id=app.id, status="BLOCKED",
                          health_check_id=check.id, requested_by=actor)
@@ -196,7 +204,8 @@ class DBTGuardianService:
         student = await self.db.get(Student, app.student_id)
         try:
             submitted = await self.sources.request("POST", "/pfms/dbt/initiate-payment", json={
-                "aadhaar_ref": student.aadhaar_ref_token, "amount": money(payment.amount), "reference": payment.id})
+                "aadhaar_ref": student.aadhaar_ref_token, "amount": money(payment.amount),
+                "reference": f"{payment.id}:retry-{attempt}"})
         except SourceUnavailable:
             raise DBTError(503, "PFMS could not be reached; the retry was not sent. Try again later.")
         retry.status, retry.pfms_ref = "SUBMITTED", submitted["txn_ref"]

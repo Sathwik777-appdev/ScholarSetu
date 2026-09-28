@@ -199,9 +199,18 @@ class InstalmentPlan(BaseModel):
     model_config = {"extra": "forbid"}
     description: str = Field(..., min_length=3, max_length=200)
     amount: float = Field(..., gt=0, le=10_000_000)
+    # The entitlement this instalment pays, as a path into the scheme's rules file "amounts",
+    # e.g. "hosteller_per_year.class_9", "group_1.hosteller_monthly", "tuition_fee".
+    component: str = Field(..., min_length=2, max_length=80, pattern=r"^[a-z0-9_]+(\.[a-z0-9_]+)?$")
+    months: Optional[int] = Field(None, ge=1, le=12)          # for monthly amounts
+    evidence_note: Optional[str] = Field(None, min_length=5, max_length=300)  # for "actual cost" items
 
 
 class SanctionRequest(BaseModel):
     model_config = {"extra": "forbid"}
     instalments: list[InstalmentPlan] = Field(..., min_length=1, max_length=24)
     note: str = Field("", max_length=1000)
+    # One scheme at a time: the scholarship the student gives up for this one (checked against the ledger).
+    surrender_application_id: Optional[str] = None
+    # Sanctioning outside the rules (not eligible, or above an amount) needs a recorded reason.
+    override_reason: Optional[str] = Field(None, min_length=15, max_length=1000)

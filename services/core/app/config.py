@@ -38,6 +38,10 @@ class Settings(BaseSettings):
 
     OTP_TTL_MINUTES: int = 5
     OTP_MAX_ATTEMPTS: int = 5
+    # Per phone and purpose, over a rolling hour: codes that may be requested, and wrong guesses (across
+    # all codes) before the phone is locked out. A new code does not reset the guess count.
+    OTP_REQUESTS_PER_HOUR: int = 5
+    OTP_FAILURES_PER_HOUR: int = 10
 
     # Demo mode lets seeded demo users log in with DEMO_OTP. Off by default.
     DEMO_MODE: bool = False

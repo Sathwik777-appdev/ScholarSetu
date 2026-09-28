@@ -70,7 +70,7 @@ class StatePill extends StatelessWidget {
         'CREDITED' => AppColors.teal,
         'DEFICIENCY_RAISED' || 'PAYMENT_FAILED' || 'REJECTED' => AppColors.rose,
         'SANCTIONED' || 'PAYMENT_INITIATED' => const Color(0xFF6366F1),
-        'DRAFT' => AppColors.muted,
+        'DRAFT' || 'SURRENDERED' => AppColors.muted,
         _ => AppColors.saffron,
       };
 
@@ -97,7 +97,7 @@ class StageTracker extends StatelessWidget {
         'SUBMITTED' => 0,
         'INSTITUTE_VERIFICATION' || 'DEFICIENCY_RAISED' || 'RESUBMITTED' => 1,
         'AUTHORITY_VERIFICATION' => 2,
-        'SANCTIONED' => 3,
+        'SANCTIONED' || 'SURRENDERED' => 3,
         'PAYMENT_INITIATED' || 'PAYMENT_FAILED' => 4,
         'CREDITED' || 'RENEWAL_DUE' => 5,
         _ => 0,

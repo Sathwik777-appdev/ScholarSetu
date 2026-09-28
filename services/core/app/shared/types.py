@@ -48,6 +48,7 @@ class CanonicalState(str, Enum):
     CREDITED = "CREDITED"
     PAYMENT_FAILED = "PAYMENT_FAILED"
     RENEWAL_DUE = "RENEWAL_DUE"
+    SURRENDERED = "SURRENDERED"  # given up on taking another scholarship (one scheme at a time)
 
 
 # ── Verification ────────────────────────────────────────────
@@ -126,6 +127,7 @@ class PaymentState(str, Enum):
     CREDITED = "CREDITED"
     FAILED = "FAILED"
     RETRYING = "RETRYING"
+    CANCELLED = "CANCELLED"   # a scheduled instalment that will not be paid (e.g. the scholarship was surrendered)
 
 
 # ── Notifications ───────────────────────────────────────────

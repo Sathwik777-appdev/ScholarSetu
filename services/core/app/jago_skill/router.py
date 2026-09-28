@@ -22,7 +22,8 @@ async def chat_with_jago(
     service: JAGOSkillService = Depends(get_jago_service),
 ):
     """In-app chat. Answers are built only from ledger, eligibility and official-guideline tools."""
-    return await service.process_message(principal.student_id, request.message, request.language)
+    return await service.process_message(principal.student_id, request.message, request.language,
+                                         ai_assist=request.ai_assist and not principal.via_mitra)
 
 
 @router.post("/skill/tools/{tool_name}")

@@ -34,12 +34,15 @@ VALID_TRANSITIONS: dict[CanonicalState, set[CanonicalState]] = {
     CanonicalState.RESUBMITTED: {CanonicalState.INSTITUTE_VERIFICATION},
     CanonicalState.AUTHORITY_VERIFICATION: {CanonicalState.DEFICIENCY_RAISED, CanonicalState.SANCTIONED,
                                             CanonicalState.REJECTED},
-    CanonicalState.SANCTIONED: {CanonicalState.PAYMENT_INITIATED},
+    CanonicalState.SANCTIONED: {CanonicalState.PAYMENT_INITIATED, CanonicalState.SURRENDERED},
     CanonicalState.PAYMENT_INITIATED: {CanonicalState.CREDITED, CanonicalState.PAYMENT_FAILED},
-    CanonicalState.PAYMENT_FAILED: {CanonicalState.PAYMENT_INITIATED},
-    CanonicalState.CREDITED: {CanonicalState.RENEWAL_DUE, CanonicalState.PAYMENT_INITIATED},  # next instalment
+    CanonicalState.PAYMENT_FAILED: {CanonicalState.PAYMENT_INITIATED, CanonicalState.SURRENDERED},
+    # next instalment, a failure in a later instalment, renewal, or surrender
+    CanonicalState.CREDITED: {CanonicalState.RENEWAL_DUE, CanonicalState.PAYMENT_INITIATED,
+                              CanonicalState.PAYMENT_FAILED, CanonicalState.SURRENDERED},
     CanonicalState.RENEWAL_DUE: {CanonicalState.SUBMITTED},
     CanonicalState.REJECTED: set(),
+    CanonicalState.SURRENDERED: set(),
 }
 
 STATE_EVENT = {
@@ -54,9 +57,22 @@ STATE_EVENT = {
     CanonicalState.CREDITED: "PaymentCredited",
     CanonicalState.PAYMENT_FAILED: "PaymentFailed",
     CanonicalState.RENEWAL_DUE: "RenewalDue",
+    CanonicalState.SURRENDERED: "ScholarshipSurrendered",
 }
 
 # States that count as "currently holding" a scholarship for the one-scheme rule.
+def payment_aggregate_state(payments: list[Payment]) -> Optional[CanonicalState]:
+    """Application state implied by its instalments: any failure wins, then anything in transit, then credit."""
+    states = {p.state for p in payments}
+    if PaymentState.FAILED in states:
+        return CanonicalState.PAYMENT_FAILED
+    if states & {PaymentState.INITIATED, PaymentState.RETRYING}:
+        return CanonicalState.PAYMENT_INITIATED
+    if PaymentState.CREDITED in states:
+        return CanonicalState.CREDITED
+    return None
+
+
 HOLDING_STATES = {CanonicalState.SANCTIONED, CanonicalState.PAYMENT_INITIATED, CanonicalState.PAYMENT_FAILED,
                   CanonicalState.CREDITED}
 
@@ -71,6 +87,7 @@ NEXT_ACTION = {
     CanonicalState.CREDITED: None,
     CanonicalState.RENEWAL_DUE: "Renew your scholarship for the next academic year",
     CanonicalState.REJECTED: "Application rejected: contact your institute's scholarship cell",
+    CanonicalState.SURRENDERED: "Surrendered when another scholarship was sanctioned",
 }
 
 
@@ -246,7 +263,8 @@ class LedgerService:
         return event
 
     async def sanction(self, app: Application, instalments: list[tuple[str, Decimal]], actor: str,
-                       occurred_at: Optional[datetime] = None) -> list[Payment]:
+                       occurred_at: Optional[datetime] = None,
+                       record: Optional[dict[str, Any]] = None) -> list[Payment]:
         """Sanction with its instalment plan; amounts are recorded once, here, in the ledger."""
         if not instalments:
             raise LedgerError(422, "A sanction needs at least one instalment")
@@ -260,6 +278,7 @@ class LedgerService:
             "total_amount": money(sum((p.amount for p in payments), Decimal(0))),
             "instalments": [{"payment_id": p.id, "instalment": p.instalment, "description": p.description,
                              "amount": money(p.amount)} for p in payments],
+            **(record or {}),
         }, occurred_at=occurred_at)
         return payments
 
@@ -286,15 +305,36 @@ class LedgerService:
             payment.credited_at = occurred_at
         details = {"payment_id": payment.id, "instalment": payment.instalment, "amount": money(payment.amount),
                    "pfms_ref": payment.pfms_ref, "failure_code": payment.failure_code}
-        target = {PaymentState.INITIATED: CanonicalState.PAYMENT_INITIATED,
-                  PaymentState.RETRYING: CanonicalState.PAYMENT_INITIATED,
-                  PaymentState.CREDITED: CanonicalState.CREDITED,
-                  PaymentState.FAILED: CanonicalState.PAYMENT_FAILED}[new_state]
-        if target in VALID_TRANSITIONS.get(app.canonical_state, set()):
+        event_state = {PaymentState.INITIATED: CanonicalState.PAYMENT_INITIATED,
+                       PaymentState.RETRYING: CanonicalState.PAYMENT_INITIATED,
+                       PaymentState.CREDITED: CanonicalState.CREDITED,
+                       PaymentState.FAILED: CanonicalState.PAYMENT_FAILED}[new_state]
+        # The application's state reflects ALL its instalments, so a failure is never hidden by a later credit.
+        target = payment_aggregate_state(await self.payments_for([app.id]))
+        if target is not None and target != app.canonical_state \
+                and target in VALID_TRANSITIONS.get(app.canonical_state, set()):
             await self.transition(app, target, actor, details, source, occurred_at)
-        else:  # e.g. a second instalment credited while the application is already CREDITED
-            await self.append_event(app, STATE_EVENT[target], details, actor, source, occurred_at)
+        else:  # the application's state does not change (e.g. a credit while another instalment is still failed)
+            await self.append_event(app, STATE_EVENT[event_state], details, actor, source, occurred_at)
         return payment
+
+    async def surrender(self, app: Application, reason: str, actor: str, for_application_id: str,
+                        occurred_at: Optional[datetime] = None) -> LedgerEvent:
+        """Give up a held scholarship because another one is being sanctioned (one scheme at a time).
+        Unpaid scheduled instalments are cancelled; an instalment already on its way blocks the surrender."""
+        payments = await self.payments_for([app.id])
+        in_flight = [p for p in payments if p.state in (PaymentState.INITIATED, PaymentState.RETRYING)]
+        if in_flight:
+            raise LedgerError(409, f"{app.id} has a payment on its way to the bank (instalment "
+                                   f"{in_flight[0].instalment}); surrender it after PFMS settles that payment")
+        cancelled = []
+        for p in payments:
+            if p.state == PaymentState.SCHEDULED:
+                p.state = PaymentState.CANCELLED
+                cancelled.append({"payment_id": p.id, "instalment": p.instalment, "amount": money(p.amount)})
+        return await self.transition(app, CanonicalState.SURRENDERED, actor,
+                                     {"reason": reason, "for_application_id": for_application_id,
+                                      "cancelled_instalments": cancelled}, occurred_at=occurred_at)
 
     # ── integrity ───────────────────────────────────────────
 

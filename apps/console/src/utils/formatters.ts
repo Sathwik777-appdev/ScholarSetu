@@ -26,6 +26,7 @@ export const STATE_LABELS: Record<CanonicalState, string> = {
   CREDITED: 'Credited',
   PAYMENT_FAILED: 'Payment failed',
   RENEWAL_DUE: 'Renewal due',
+  SURRENDERED: 'Surrendered',
 };
 
 export const STATE_COLORS: Record<CanonicalState, string> = {
@@ -41,6 +42,7 @@ export const STATE_COLORS: Record<CanonicalState, string> = {
   CREDITED: 'bg-emerald-50 text-emerald-800',
   PAYMENT_FAILED: 'bg-rose-50 text-rose-800',
   RENEWAL_DUE: 'bg-pink-50 text-pink-800',
+  SURRENDERED: 'bg-slate-100 text-slate-600',
 };
 
 export const SCHEME_LABELS: Record<SchemeType, string> = {

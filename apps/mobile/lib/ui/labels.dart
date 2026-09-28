@@ -13,6 +13,7 @@ const stateLabels = {
   'CREDITED': 'Money credited',
   'PAYMENT_FAILED': 'Payment failed',
   'RENEWAL_DUE': 'Renewal due',
+  'SURRENDERED': 'Surrendered (another scholarship taken)',
 };
 
 const schemeLabels = {

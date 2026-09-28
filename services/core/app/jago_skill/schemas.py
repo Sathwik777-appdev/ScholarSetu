@@ -8,6 +8,9 @@ class JAGOMessageRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=1000)
     language: str = Field("hi", max_length=10)
     channel: str = Field("app", pattern=r"^(app|web|whatsapp|voice|sms)$")
+    # Opt-in, per question: let an AI model re-phrase the verified answer. Sends the question and the
+    # verified answer to Google. Off by default; ignored in Mitra mode.
+    ai_assist: bool = False
 
 
 class Citation(BaseModel):
@@ -30,6 +33,8 @@ class JAGOResponse(BaseModel):
     language_note: Optional[str] = None
     tool_calls_made: list[ToolCallLog] = Field(default_factory=list)
     citations: list[Citation] = Field(default_factory=list)
+    ai_phrased: bool = False             # response_text was re-phrased by an AI model
+    verified_text: Optional[str] = None  # the answer built only from verified records and official text
 
 
 class GuidelineResult(BaseModel):

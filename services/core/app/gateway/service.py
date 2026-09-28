@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -20,6 +20,10 @@ _SCOPE_LABELS = {
     MitraScope.VIEW_STATUS: "view your application status",
     MitraScope.RESPOND_DEFICIENCY: "respond to a deficiency",
 }
+
+
+class OtpRateLimited(Exception):
+    """Too many codes requested for this phone recently."""
 
 
 class OtpRejected(Exception):
@@ -70,8 +74,17 @@ async def send_sms(db: AsyncSession, to_phone: str, body: str, category: str) ->
     logger.info("SMS queued category=%s to=%s******%s", category, to_phone[:2], to_phone[-2:])
 
 
+async def _recent(db: AsyncSession, phone: str, purpose: OtpPurpose, what):
+    return await db.scalar(select(what).select_from(OtpChallenge).where(
+        OtpChallenge.phone == phone, OtpChallenge.purpose == purpose,
+        OtpChallenge.created_at >= _now() - timedelta(hours=1))) or 0
+
+
 async def _issue_challenge(db: AsyncSession, phone: str, purpose: OtpPurpose, subject_ref: Optional[str]) -> str:
-    """Invalidate earlier open challenges for the same target and create a fresh one. Returns the plain OTP."""
+    """Invalidate earlier open challenges for the same target and create a fresh one. Returns the plain OTP.
+    Raises OtpRateLimited after OTP_REQUESTS_PER_HOUR codes for this phone and purpose."""
+    if await _recent(db, phone, purpose, func.count()) >= settings.OTP_REQUESTS_PER_HOUR:
+        raise OtpRateLimited()
     await db.execute(
         update(OtpChallenge)
         .where(OtpChallenge.phone == phone, OtpChallenge.purpose == purpose,
@@ -99,6 +112,11 @@ async def _check_challenge(db: AsyncSession, phone: str, purpose: OtpPurpose,
         .limit(1)
     )
     challenge = result.scalar_one_or_none()
+    # Wrong guesses are counted across every code sent in the last hour, so requesting a new code does not
+    # buy more guesses.
+    if await _recent(db, phone, purpose, func.coalesce(func.sum(OtpChallenge.attempts), 0)) \
+            >= settings.OTP_FAILURES_PER_HOUR:
+        raise OtpRejected(too_many_attempts=True)
     if challenge is None or _as_aware(challenge.expires_at) < _now():
         raise OtpRejected()
     if challenge.attempts >= settings.OTP_MAX_ATTEMPTS:
@@ -226,7 +244,10 @@ class MitraService:
             duration_minutes=duration_minutes, status=AssistSessionStatus.PENDING_STUDENT_OTP,
         )
         self.db.add(session)
-        otp = await _issue_challenge(self.db, student.phone, OtpPurpose.MITRA_CONSENT, session.id)
+        try:
+            otp = await _issue_challenge(self.db, student.phone, OtpPurpose.MITRA_CONSENT, session.id)
+        except OtpRateLimited:
+            raise MitraSessionError(429, "Too many consent codes were sent to this student recently. Try later.")
         await send_sms(
             self.db, student.phone,
             f"ScholarSetu: {mitra.name} wants to {_SCOPE_LABELS[scope]} for you for "
