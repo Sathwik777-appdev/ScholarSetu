@@ -56,7 +56,7 @@ def test_safe_defaults():
     assert fields["OTP_TTL_MINUTES"].default <= 10
 
 
-async def test_empty_wallet_and_passport_stay_empty(client, demo, users):
+async def test_empty_wallet_and_passport_stay_empty(client, demo, users, store):
     rahul = await users.headers("rahul")
     wallet = (await client.get("/v1/me/wallet", headers=rahul)).json()
     passport = (await client.get("/v1/me/attestations", headers=rahul)).json()

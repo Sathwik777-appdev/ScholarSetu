@@ -53,7 +53,15 @@ async def main() -> None:
                 logger.exception("reconcile failed")
             await asyncio.sleep(settings.WORKFLOW_RECONCILE_SECONDS)
 
-    await asyncio.gather(worker.run(), reconcile_forever())
+    tasks = [worker.run(), reconcile_forever()]
+    if settings.WORKER_RUNS_BACKGROUND_JOBS:
+        # The always-on worker also publishes the outbox to NATS, runs the notification consumers and polls
+        # the portals, so the API can be purely request-driven (e.g. Cloud Run scaling to zero).
+        from app.main import _poll_portals, _run_event_bus
+        stop = asyncio.Event()
+        tasks += [_run_event_bus(stop), _poll_portals(stop)]
+        logger.info("worker also runs the outbox publisher, notification consumers and portal polling")
+    await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":

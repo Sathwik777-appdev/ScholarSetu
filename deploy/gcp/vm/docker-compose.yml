@@ -1,0 +1,41 @@
+# Always-on backend for one environment (runs on the scholarsetu-backend-<env> VM):
+# NATS JetStream, the Temporal dev server, the Temporal worker (which also publishes the outbox, runs the
+# notification consumers and polls the portals), the mock government services, and the Cloud SQL proxy.
+# Secrets come from /opt/scholarsetu/.env, written at boot from Secret Manager by startup.sh.
+services:
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-sd", "/data"]
+    volumes: [nats_data:/data]
+    restart: unless-stopped
+  temporal:
+    image: temporalio/temporal:1.9.1
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/home/temporal/temporal.db"]
+    volumes: [temporal_data:/home/temporal]
+    restart: unless-stopped
+  cloudsql:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
+    command: ["--address", "0.0.0.0", "--port", "5432", "${CLOUDSQL_INSTANCE}"]
+    restart: unless-stopped
+  mocks:
+    image: ${REPO}/scholarsetu-mocks:${TAG}
+    env_file: .env
+    ports: ["8100:8100"]   # reachable from Cloud Run over the VPC (firewall: Cloud Run subnet only)
+    restart: unless-stopped
+  worker:
+    image: ${REPO}/scholarsetu-core:${TAG}
+    command: ["python", "-m", "app.workflows.worker"]
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL_VM}
+      TEMPORAL_ADDRESS: temporal:7233
+      NATS_URL: nats://nats:4222
+      MOCK_SERVICE_URL: http://mocks:8100
+      WORKER_RUNS_BACKGROUND_JOBS: "true"
+      OUTBOX_PUBLISHER_ENABLED: "true"
+      ADAPTER_SYNC_INTERVAL_SECONDS: "300"
+    depends_on: [nats, temporal, cloudsql, mocks]
+    restart: unless-stopped
+volumes:
+  nats_data:
+  temporal_data:

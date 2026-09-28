@@ -1,0 +1,15 @@
+# Builds the API/worker image and the mock-services image. Run from the repository root:
+#   gcloud builds submit --config deploy/gcp/cloudbuild.yaml --substitutions=_TAG=$(git rev-parse --short HEAD) .
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-f', 'services/core/Dockerfile', '-t', '${_REPO}/scholarsetu-core:${_TAG}', '.']
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-f', 'mocks/Dockerfile', '-t', '${_REPO}/scholarsetu-mocks:${_TAG}', 'mocks']
+substitutions:
+  _REPO: asia-south1-docker.pkg.dev/trisphere-4b121/cloud-run-source-deploy
+  _TAG: latest
+images:
+  - '${_REPO}/scholarsetu-core:${_TAG}'
+  - '${_REPO}/scholarsetu-mocks:${_TAG}'
+options:
+  machineType: E2_HIGHCPU_8

@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://scholarsetu:scholarsetu_dev@localhost:5432/scholarsetu"
     # NullPool avoids sharing asyncpg connections across event loops (used by the test suite).
     DATABASE_NULL_POOL: bool = False
+    DATABASE_POOL_SIZE: int = 5
+    DATABASE_MAX_OVERFLOW: int = 10
     SQL_ECHO: bool = False
     REDIS_URL: str = "redis://localhost:6379"
     NATS_URL: str = "nats://localhost:4222"
@@ -117,6 +119,12 @@ class Settings(BaseSettings):
 
     # Offline sync holds back ledger events younger than this, so a late-committing transaction is never skipped.
     SYNC_SETTLE_SECONDS: int = 5
+
+    # Run the outbox publisher, notification consumers and portal polling in the Temporal worker process
+    # (set OUTBOX_PUBLISHER_ENABLED=false and ADAPTER_SYNC_INTERVAL_SECONDS=0 on the API then).
+    WORKER_RUNS_BACKGROUND_JOBS: bool = False
+    # Development only: keep wallet files on local disk when no object store is configured. Unset = 503.
+    WALLET_LOCAL_DIR: str | None = None
 
     # Publish the transactional outbox to NATS from the API process.
     OUTBOX_PUBLISHER_ENABLED: bool = True

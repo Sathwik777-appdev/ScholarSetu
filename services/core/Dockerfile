@@ -20,5 +20,6 @@ COPY scripts/seed_demo.py /scripts/seed_demo.py
 
 USER app
 EXPOSE 8000
-# Migrate, then serve. Secrets (JWT_SECRET, signing key) are provided at runtime, never baked in.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"]
+# Migrate (unless RUN_MIGRATIONS=false, e.g. on Cloud Run where a job migrates), then serve on $PORT.
+# Secrets (JWT_SECRET, signing key, database URL) are provided at runtime, never baked in.
+CMD ["sh", "-c", "if [ \"${RUN_MIGRATIONS:-true}\" != false ]; then alembic upgrade head; fi && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
