@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Allow plain HTTP to local development servers and LAN machines -->
+<!-- Release builds: HTTPS only. Debug builds override this file (src/debug) to reach a development server. -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
+    <base-config cleartextTrafficPermitted="false" />
 </network-security-config>

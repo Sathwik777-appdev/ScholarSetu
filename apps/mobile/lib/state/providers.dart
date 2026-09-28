@@ -15,10 +15,19 @@ class Services {
   final SecureStore secure;
   final Repository repo;
 
-  Future<void> updateApiUrl(String newOrigin) async {
+  /// Point the app at another server. Everything saved from the old server (session, cached records,
+  /// sync cursor, unsent outbox) belongs to that server, so it is wiped: the new server's events would
+  /// otherwise be skipped by the old cursor, and queued actions would go to the wrong place.
+  Future<bool> updateApiUrl(String newOrigin) async {
     final cleanOrigin = formatOrigin(newOrigin);
+    if (formatBaseUrl(cleanOrigin) == api.baseUrl) return false;
+    api.token = null;
+    api.mitraSessionId = null;
+    await secure.clearToken();
+    await db.wipe();
     api.baseUrl = formatBaseUrl(cleanOrigin);
     await secure.setApiUrl(cleanOrigin);
+    return true;
   }
 }
 

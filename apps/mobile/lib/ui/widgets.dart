@@ -19,8 +19,10 @@ class OfflineBanner extends ConsumerWidget {
     final outbox = ref.watch(outboxProvider);
     final lines = <String>[];
     Color color = Colors.amber.shade50;
-    // Don't show an intrusive offline banner during demo/offline browsing;
-    // only show when there are pending or refused sync operations.
+    if (conn.reachable == false) {
+      lines.add('No connection to ScholarSetu since ${when(conn.since!)}. '
+          'You are seeing information saved on this phone.');
+    }
     if (outbox.pending > 0) {
       lines.add(conn.reachable == false
           ? '${outbox.pending} change(s) saved on this phone will be sent when the connection returns. '

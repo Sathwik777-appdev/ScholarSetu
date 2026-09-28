@@ -51,7 +51,7 @@ class Api {
   ReachabilityListener? onReachability;
   void Function()? onUnauthorized;
 
-  static const _timeout = Duration(seconds: 12);
+  static const _timeout = Duration(seconds: 30);
 
   Map<String, String> _headers([Map<String, String>? extra]) => {
         'Accept': 'application/json',
@@ -93,6 +93,9 @@ class Api {
       onReachability?.call(false);
       throw OfflineException(baseUrl);
     } on HandshakeException {
+      onReachability?.call(false);
+      throw OfflineException(baseUrl);
+    } on IOException {
       onReachability?.call(false);
       throw OfflineException(baseUrl);
     }

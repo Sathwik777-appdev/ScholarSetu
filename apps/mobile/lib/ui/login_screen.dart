@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config.dart';
-import '../data/api.dart';
 import '../state/providers.dart';
 import 'register_screen.dart';
 import 'server_sheet.dart';
@@ -25,12 +24,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _note;
   String? _error;
 
+  // Seeded demo accounts (scripts/seed_demo.py, is_demo=true). The server accepts the demo code only for
+  // these, and only when it runs in DEMO_MODE. Shown only in demo builds (--dart-define=DEMO_ACCOUNTS=true).
   static const _demoPersonas = [
     ('Sunita (Student)', '9876543210'),
-    ('You (8867494183)', '8867494183'),
-    ('Kavita (Mitra)', '9876543220'),
+    ('Rahul (Student)', '9876543211'),
     ('Babulal (Guardian)', '9876543212'),
+    ('Kavita (Mitra)', '9876543220'),
   ];
+
+  bool get _isDemoPersona => demoAccounts && _demoPersonas.any((p) => p.$2 == _phone.text.trim());
 
   Future<void> _run(Future<void> Function() action) async {
     setState(() {
@@ -49,11 +52,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _sendCode() => _run(() async {
         final api = ref.read(servicesProvider).api;
         final res = await api.post('/auth/otp/request', {'phone': _phone.text.trim()});
-        final msg = res is Map ? (res['message'] as String?) : null;
         setState(() {
           _codeSent = true;
-          _otp.text = '123456';
-          _note = msg != null ? '$msg\nDemo code: 123456 (auto-filled).' : 'Demo code: 123456 (auto-filled).';
+          _note = res is Map ? res['message'] as String? : null;
         });
       });
 
@@ -63,129 +64,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         await ref.read(sessionProvider.notifier).signIn(res as Map<String, dynamic>);
       });
 
-  Future<void> _instantDemoSignIn() => _run(() async {
+  /// Demo builds only: sign a seeded demo account in with the demo code. The server decides.
+  Future<void> _demoSignIn(String phone) => _run(() async {
+        _phone.text = phone;
         final api = ref.read(servicesProvider).api;
-        final phone = _phone.text.trim().isEmpty ? '9876543210' : _phone.text.trim();
-        try {
-          final res = await api.post('/auth/otp/verify', {'phone': phone, 'otp': '123456'});
-          await ref.read(sessionProvider.notifier).signIn(res as Map<String, dynamic>);
-        } on OfflineException {
-          // If server is unreachable, log in with local demo credentials
-          await _enterOfflineDemo();
-        }
+        final res = await api.post('/auth/otp/verify', {'phone': phone, 'otp': demoOtp});
+        await ref.read(sessionProvider.notifier).signIn(res as Map<String, dynamic>);
       });
-
-  Future<void> _enterOfflineDemo() async {
-    final phone = _phone.text.trim();
-    String name = 'Sunita Hansda';
-    String role = 'STUDENT';
-    String? studentId = 'stu-sunita-001';
-    String? householdId = 'hh_hansda_001';
-
-    if (phone == '9876543220') {
-      name = 'Kavita Tudu (Hostel Warden)';
-      role = 'MITRA';
-      studentId = null;
-      householdId = null;
-    } else if (phone == '9876543212') {
-      name = 'Babulal Hansda';
-      role = 'GUARDIAN';
-      studentId = null;
-      householdId = 'hh_hansda_001';
-    }
-
-    final demoSession = {
-      'access_token': 'demo-token-$phone',
-      'token_type': 'bearer',
-      'expires_in': 86400,
-      'user': {
-        'id': '01a0e33d-0307-7c0e-9158-bfffc7bbbf91',
-        'name': name,
-        'role': role,
-        'student_id': studentId,
-        'household_id': householdId,
-        'jurisdiction_state': 'Jharkhand',
-        'jurisdiction_district': 'Dumka',
-      }
-    };
-
-    // Pre-populate offline cache for smooth presentation even when fully disconnected
-    try {
-      final db = ref.read(servicesProvider).db;
-      await db.putCache('dashboard', {
-        'student': {
-          'id': 'stu-sunita-001',
-          'name': 'Sunita Hansda',
-          'dob': '2008-04-12',
-          'household_id': 'hh_hansda_001',
-          'district': 'Dumka'
-        },
-        'applications': [
-          {
-            'id': 'APP-PM-2026-000002',
-            'scheme': 'POST_MATRIC',
-            'academic_year': '2026-27',
-            'current_state': 'AUTHORITY_VERIFICATION',
-            'state_since': '2026-09-18T17:00:00Z',
-            'source_system': 'SCHOLARSETU',
-            'next_action': 'The district/state authority is verifying your application',
-            'money_received': 0.0
-          }
-        ],
-        'total_received': 0.0,
-        'current_academic_year': '2026-27'
-      });
-      await db.putCache('pending', []);
-      await db.putCache('pathway', {
-        'current_scheme': 'POST_MATRIC',
-        'current_state': 'AUTHORITY_VERIFICATION',
-        'current_application_id': 'APP-PM-2026-000002',
-        'ladder': ['PRE_MATRIC', 'POST_MATRIC', 'TOP_CLASS', 'NFST', 'NOS'],
-        'ladder_position': 1,
-        'education_stage': null,
-        'next_eligible': null,
-        'transition_trigger': null,
-        'prefilled_application_id': null
-      });
-      await db.putCache('payments', {
-        'applications': [
-          {
-            'application_id': 'APP-PM-2026-000002',
-            'scheme': 'POST_MATRIC',
-            'academic_year': '2026-27',
-            'state': 'AUTHORITY_VERIFICATION',
-            'sanctioned': 0.0,
-            'credited': 0.0,
-            'pending': 0.0,
-            'instalments': []
-          }
-        ],
-        'total_sanctioned': 0.0,
-        'total_credited': 0.0,
-        'total_pending': 0.0
-      });
-      await db.putCache('passport', {
-        'student_id': 'stu-sunita-001',
-        'attestations': {
-          'IDENTITY': [{'status': 'ACTIVE', 'source': 'UIDAI / Aadhaar', 'expiry_date': null}],
-          'ST_STATUS': [{'status': 'ACTIVE', 'source': 'State Caste Authority (Jharkhand)', 'expiry_date': null}],
-          'INCOME': [{'status': 'ACTIVE', 'source': 'Circle Officer, Dumka', 'expiry_date': '2027-03-31T00:00:00Z'}],
-          'DOMICILE': [{'status': 'ACTIVE', 'source': 'State Portal (JharSewa)', 'expiry_date': null}],
-          'SCHOOL_ENROLMENT': [{'status': 'ACTIVE', 'source': 'UDISE+ / Dumka Govt College', 'expiry_date': null}],
-        }
-      });
-      await db.putCache('wallet', {
-        'student_id': 'stu-sunita-001',
-        'total_documents': 2,
-        'documents': [
-          {'title': 'Aadhaar Verification Token', 'source': 'UIDAI', 'verified': true},
-          {'title': 'Caste Certificate (ST - Santal)', 'source': 'JharSewa', 'verified': true},
-        ]
-      });
-    } catch (_) {}
-
-    await ref.read(sessionProvider.notifier).signIn(demoSession);
-  }
 
   String _currentServer() {
     try {
@@ -241,65 +126,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           Text('Sign in', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 4),
           const Text('Students, parents/guardians and registered helpers (Mitra).', style: TextStyle(color: AppColors.muted)),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.saffron.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.saffron.withValues(alpha: 0.35)),
+          if (demoAccounts) ...[
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.saffron.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.saffron.withValues(alpha: 0.35)),
+              ),
+              child: const Row(children: [
+                Icon(Icons.bolt_rounded, color: AppColors.saffron, size: 22),
+                SizedBox(width: 10),
+                Expanded(child: Text('Demo build: tap a demo account to sign in. Other numbers need their SMS code.',
+                    style: TextStyle(fontSize: 12, color: AppColors.text))),
+              ]),
             ),
-            child: Row(
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
               children: [
-                const Icon(Icons.bolt_rounded, color: AppColors.saffron, size: 22),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text('Demo Mode Active', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text)),
-                      Text('Pick a persona or enter any number. Fixed code is 123456.', style: TextStyle(fontSize: 11, color: AppColors.muted)),
-                    ],
+                for (final p in _demoPersonas)
+                  ActionChip(
+                    label: Text(p.$1, style: const TextStyle(fontSize: 12)),
+                    onPressed: _busy ? null : () => _demoSignIn(p.$2),
                   ),
-                ),
               ],
             ),
-          ),
-          const SizedBox(height: 14),
-          const Text('Choose Demo Persona:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.muted)),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: _demoPersonas.map((p) {
-              final isSelected = _phone.text.trim() == p.$2;
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _phone.text = p.$2;
-                    _codeSent = false;
-                    _error = null;
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isSelected ? AppColors.ink900 : Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: isSelected ? AppColors.ink900 : AppColors.line),
-                  ),
-                  child: Text(
-                    p.$1,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected ? Colors.white : AppColors.text,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
+          ],
           const SizedBox(height: 16),
           TextField(
             controller: _phone,
@@ -332,54 +187,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               keyboardType: TextInputType.number,
               autofillHints: const [AutofillHints.oneTimeCode],
               inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Code from SMS',
-                prefixIcon: Icon(Icons.password_rounded),
-                helperText: 'Demo code is 123456',
+                prefixIcon: const Icon(Icons.password_rounded),
+                helperText: _isDemoPersona ? 'Demo account: the code is $demoOtp' : null,
               ),
             ),
           ],
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton(
-                  onPressed: _busy ? null : (_codeSent ? _verify : _sendCode),
-                  child: Text(_busy ? 'Please wait…' : (_codeSent ? 'Sign in' : 'Send code')),
-                ),
-              ),
-              if (!_codeSent) ...[
-                const SizedBox(width: 10),
-                FilledButton.tonalIcon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.saffron.withValues(alpha: 0.2),
-                    foregroundColor: Colors.brown.shade900,
-                  ),
-                  onPressed: _busy ? null : _instantDemoSignIn,
-                  icon: const Icon(Icons.bolt_rounded, size: 18),
-                  label: const Text('1-Tap Demo'),
-                ),
-              ],
-            ],
+          FilledButton(
+            onPressed: _busy ? null : (_codeSent ? _verify : _sendCode),
+            child: Text(_busy ? 'Please wait…' : (_codeSent ? 'Sign in' : 'Send code')),
           ),
           if (_codeSent)
             TextButton(
               onPressed: _busy ? null : () => setState(() => _codeSent = false),
               child: const Text('Use a different number'),
             ),
-          if (_error != null) ...[
-            ErrorBox(message: _error!),
-            const SizedBox(height: 6),
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                side: BorderSide(color: AppColors.teal.withValues(alpha: 0.5)),
-              ),
-              icon: const Icon(Icons.offline_bolt_rounded, size: 18, color: AppColors.teal),
-              label: const Text('Enter Offline Demo Mode', style: TextStyle(color: AppColors.teal, fontWeight: FontWeight.w600)),
-              onPressed: _enterOfflineDemo,
-            ),
-          ],
+          if (_error != null) ErrorBox(message: _error!),
           const Divider(height: 36),
           OutlinedButton(
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RegisterScreen())),

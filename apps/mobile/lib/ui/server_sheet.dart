@@ -95,7 +95,8 @@ class _ServerConfigSheetState extends State<_ServerConfigSheet> {
     if (raw.isEmpty) return;
     final clean = formatOrigin(raw);
     widget.ref.read(currentApiOriginProvider.notifier).setOrigin(clean);
-    await widget.ref.read(servicesProvider).updateApiUrl(clean);
+    final changed = await widget.ref.read(servicesProvider).updateApiUrl(clean);
+    if (changed) await widget.ref.read(sessionProvider.notifier).signOut();  // the old server's session ends here
     if (!mounted) return;
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(

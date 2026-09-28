@@ -23,6 +23,7 @@ RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-tran
 COPY services/core/ /app/
 COPY rules/ /rules/
 COPY adapters/ /adapters/
+COPY mocks/ /mocks/
 COPY scripts/seed_demo.py /scripts/seed_demo.py
 
 # Initialize database, run migrations, and seed demo dataset at build time
@@ -30,6 +31,8 @@ ENV DATABASE_URL=postgresql+asyncpg://scholarsetu:scholarsetu_dev@localhost:5432
     DEMO_MODE=true \
     DEMO_OTP=123456 \
     JWT_SECRET=supersecret-scholarsetu-jwt-demo-key-32chars-minimum \
+    PPRL_HMAC_KEY=scholarsetu-demo-pprl-hmac-key-minimum-32chars \
+    MOCK_SERVICE_URL=http://localhost:8100 \
     OUTBOX_PUBLISHER_ENABLED=false \
     ADAPTER_SYNC_INTERVAL_SECONDS=0 \
     ATTESTATION_PRIVATE_KEY_PATH=/app/secrets/attestation_ed25519.pem
@@ -44,7 +47,9 @@ RUN mkdir -p /var/lib/postgresql/data /var/run/postgresql /app/secrets \
     && su - postgres -c "psql -c 'GRANT ALL PRIVILEGES ON DATABASE scholarsetu TO scholarsetu;'" \
     && su - postgres -c "psql -d scholarsetu -c 'GRANT ALL ON SCHEMA public TO scholarsetu;'" \
     && alembic upgrade head \
+    && (PYTHONPATH=/mocks python3 -m uvicorn main:app --app-dir /mocks --host 127.0.0.1 --port 8100 & sleep 3) \
     && python /scripts/seed_demo.py \
+    && pkill -f uvicorn || true \
     && su - postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/postgresql/data stop -w"
 
 COPY services/core/entrypoint-cloudrun.sh /app/entrypoint-cloudrun.sh

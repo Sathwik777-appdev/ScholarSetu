@@ -177,13 +177,13 @@ class RegistrationService:
         from app.students.models import Student
         if await self.db.scalar(select(User.id).where(User.phone == phone)) is not None:
             raise RegistrationError(409, "This number is already registered. Log in instead.")
-        if not (settings.DEMO_MODE and otp == settings.DEMO_OTP):
-            try:
-                await _check_challenge(self.db, phone, OtpPurpose.REGISTRATION, None, otp)
-            except OtpRejected as exc:
-                raise RegistrationError(429 if exc.too_many_attempts else 401,
-                                        "Too many attempts. Request a new code." if exc.too_many_attempts
-                                        else "Invalid or expired code")
+        # The phone is always confirmed by the code sent to it, demo mode included.
+        try:
+            await _check_challenge(self.db, phone, OtpPurpose.REGISTRATION, None, otp)
+        except OtpRejected as exc:
+            raise RegistrationError(429 if exc.too_many_attempts else 401,
+                                    "Too many attempts. Request a new code." if exc.too_many_attempts
+                                    else "Invalid or expired code")
         student = Student(id=f"stu-{new_id()}", name_variants=[], **details)
         self.db.add(student)
         await self.db.flush()
