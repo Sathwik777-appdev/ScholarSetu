@@ -36,6 +36,17 @@ async def coverage(level: str = Query("block", pattern="^(district|block)$"), di
         report = await radar.coverage(level, _district_scope(user, district))
     except RadarError as exc:
         raise _http(exc)
+    if user.role == UserRole.STATE_OFFICER:
+        # The UDISE+ roster carries districts only: keep the districts known to be in the officer's state.
+        from sqlalchemy import select
+        from app.shared import places
+        from app.students.models import Student
+        in_state = {places.key(d) for d in (await radar.db.execute(select(Student.district).where(
+            places.sql_key(Student.state) == places.key(user.jurisdiction_state)).distinct())).scalars()}
+        in_state |= {places.key(d) for d in (await radar.db.execute(select(User.jurisdiction_district).where(
+            places.sql_key(User.jurisdiction_state) == places.key(user.jurisdiction_state),
+            User.jurisdiction_district.is_not(None)).distinct())).scalars()}
+        report["rows"] = [r for r in report["rows"] if places.key(r["district"]) in in_state]
     return report
 
 
@@ -48,15 +59,13 @@ async def bottlenecks(user: User = Depends(require_role(*ANALYTICS_ROLES)), rada
 @router.get("/dbt-failures", response_model=list[DBTHotspotRow])
 async def dbt_failures(user: User = Depends(require_role(*ANALYTICS_ROLES)), radar: ReachRadarService = Depends(get_radar)):
     """Districts where DBT Guardian finds payments would not land (e.g. unseeded Aadhaar), for bank camps."""
-    rows = await radar.dbt_hotspots()
-    return [r for r in rows if user.role != UserRole.DISTRICT_OFFICER or r["district"] == user.jurisdiction_district]
+    return [r for r in await radar.dbt_hotspots() if officer_covers(user, r["state_name"], r["district"])]
 
 
 @router.get("/transitions", response_model=list[TransitionRow])
 async def transitions(user: User = Depends(require_role(*ANALYTICS_ROLES)), radar: ReachRadarService = Depends(get_radar)):
     """Pre-Matric holders last year who applied for Post-Matric this year."""
-    rows = await radar.transitions()
-    return [r for r in rows if user.role != UserRole.DISTRICT_OFFICER or r["district"] == user.jurisdiction_district]
+    return [r for r in await radar.transitions() if officer_covers(user, r["state_name"], r["district"])]
 
 
 @router.get("/outreach/{udise_code}", response_model=OutreachList)

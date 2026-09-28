@@ -29,6 +29,24 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _codeSent = false;
   bool _busy = false;
   String? _error;
+  // States and districts that have a ScholarSetu officer (GET /v1/geo/districts). Empty = type them in.
+  Map<String, List<String>> _served = {};
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      try {
+        final res = await ref.read(servicesProvider).api.get('/geo/districts');
+        final served = {
+          for (final s in (res['states'] as List)) s['state'] as String: (s['districts'] as List).cast<String>(),
+        };
+        if (mounted && served.isNotEmpty) setState(() => _served = served);
+      } catch (_) {
+        // Offline or older server: the free-text fields stay.
+      }
+    });
+  }
 
   Future<void> _sendCode() async {
     if (_phone.text.trim().length != 10) {
@@ -152,11 +170,35 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               TextFormField(controller: _father,
                   decoration: const InputDecoration(labelText: "Father's name (optional)", border: OutlineInputBorder())),
               const SizedBox(height: 12),
-              TextFormField(controller: _state, validator: _required,
-                  decoration: const InputDecoration(labelText: 'State', border: OutlineInputBorder())),
-              const SizedBox(height: 12),
-              TextFormField(controller: _district, validator: _required,
-                  decoration: const InputDecoration(labelText: 'District', border: OutlineInputBorder())),
+              if (_served.isEmpty) ...[
+                TextFormField(controller: _state, validator: _required,
+                    decoration: const InputDecoration(labelText: 'State', border: OutlineInputBorder())),
+                const SizedBox(height: 12),
+                TextFormField(controller: _district, validator: _required,
+                    decoration: const InputDecoration(labelText: 'District', border: OutlineInputBorder())),
+              ] else ...[
+                DropdownButtonFormField<String>(
+                  initialValue: _served.containsKey(_state.text) ? _state.text : null,
+                  decoration: const InputDecoration(labelText: 'State', border: OutlineInputBorder()),
+                  items: [for (final s in _served.keys) DropdownMenuItem(value: s, child: Text(s))],
+                  validator: (v) => v == null ? 'Required' : null,
+                  onChanged: (v) => setState(() {
+                    _state.text = v ?? '';
+                    _district.clear();
+                  }),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  key: ValueKey(_state.text),
+                  initialValue: (_served[_state.text] ?? const []).contains(_district.text) ? _district.text : null,
+                  decoration: const InputDecoration(labelText: 'District', border: OutlineInputBorder(),
+                      helperText: 'Only districts with a ScholarSetu officer are listed.'),
+                  items: [for (final d in _served[_state.text] ?? const <String>[])
+                    DropdownMenuItem(value: d, child: Text(d))],
+                  validator: (v) => v == null ? 'Required' : null,
+                  onChanged: (v) => setState(() => _district.text = v ?? ''),
+                ),
+              ],
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 initialValue: _language,

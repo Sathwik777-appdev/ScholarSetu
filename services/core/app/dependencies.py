@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.gateway.models import AssistSession, User
 from app.gateway.service import record_audit
+from app.shared import places
 from app.shared.security import decode_access_token, service_token_matches
 from app.shared.types import AssistSessionStatus, MitraScope, UserRole
 
@@ -127,10 +128,11 @@ def officer_covers(user: User, student_state: Optional[str], student_district: O
     if user.role == UserRole.MINISTRY:
         return True
     if user.role == UserRole.STATE_OFFICER:
-        return bool(user.jurisdiction_state) and user.jurisdiction_state == student_state
+        return bool(user.jurisdiction_state) and places.key(user.jurisdiction_state) == places.key(student_state)
     if user.role in (UserRole.DISTRICT_OFFICER, UserRole.INSTITUTE_OFFICER):
-        return (bool(user.jurisdiction_district) and user.jurisdiction_state == student_state
-                and user.jurisdiction_district == student_district)
+        return (bool(user.jurisdiction_district)
+                and places.key(user.jurisdiction_state) == places.key(student_state)
+                and places.key(user.jurisdiction_district) == places.key(student_district))
     return False
 
 

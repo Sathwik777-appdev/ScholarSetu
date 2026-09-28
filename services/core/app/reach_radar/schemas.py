@@ -32,6 +32,7 @@ class BottleneckRow(BaseModel):
 
 
 class DBTHotspotRow(BaseModel):
+    state_name: str
     district: str
     applications_checked: int
     failing: int
@@ -40,6 +41,7 @@ class DBTHotspotRow(BaseModel):
 
 
 class TransitionRow(BaseModel):
+    state_name: str
     district: str
     from_scheme: str
     to_scheme: str

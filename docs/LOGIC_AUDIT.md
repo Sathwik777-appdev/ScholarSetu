@@ -333,3 +333,35 @@ These were checked and found correct:
 | 12 | Demo-mode tests; probes become regression tests | L29 | S |
 
 Effort: **S** ≈ under half a day · **M** ≈ 1–2 days.
+
+---
+
+## 8. Status after the hardening stages (2026-09-28)
+
+Every finding was fixed in stages 1, 2 and 4 of the hardening (commits "Stage 1", "Stage 2", "Stage 4").
+Stage 3 moved the deployment onto real infrastructure (L7, L17). The probe tests were replaced by regression
+tests that fail if a problem comes back:
+
+| ID | Status | Regression test |
+|---|---|---|
+| L1–L4 | Fixed (never committed; backed up in `stash@{0}`) | `tests/integration/test_demo_mode_safety.py` (runs with demo mode **on**) |
+| L5, L28 | Fixed | `test_demo_mode_safety.py::test_the_demo_code_is_only_for_seeded_demo_users` |
+| L6 | Fixed | `test_demo_mode_safety.py::test_registration_always_confirms_the_phone` |
+| L7 | Fixed in stage 3: secrets in Secret Manager, none in the image or git; the old secret rotated | deployment (see README "Deploying to Google Cloud") |
+| L8 | Fixed: payment row locked before PFMS; idempotent PFMS reference | `test_stage2_money_and_rules.py::test_concurrent_retries_send_one_transfer` |
+| L9 | Fixed (never committed) | `test_demo_mode_safety.py::test_empty_wallet_and_passport_stay_empty`, `::test_coverage_is_unavailable_not_invented_when_udise_is_down` |
+| L10 | Fixed: offline fake session, pre-seeded data and false labels removed | `apps/mobile` (flutter analyze/test); `unit/test_docs_honesty.py` |
+| L11 | Fixed: opt-in per question, key in header, figures checked, verified answer returned | `test_stage2_money_and_rules.py::test_ai_*`, `::test_mitra_cannot_send_a_students_data_to_the_ai` |
+| L12 | Removed from the working tree (kept only in `stash@{0}`; delete the stash to discard it) | — |
+| L13 | Fixed: application state derived from all instalments | `test_stage2_money_and_rules.py::test_failed_instalment_keeps_the_application_failed`, `::test_a_later_failure_after_credit_is_shown` |
+| L14 | Fixed: surrender in the same step (new SURRENDERED state) | `::test_one_scheme_rule_is_enforced_at_sanction`, `::test_surrender_is_refused_while_a_payment_is_on_its_way` |
+| L15 | Fixed: open cases, eligibility and rule amounts checked; overrides recorded | `::test_sanction_waits_for_open_review_cases_then_follows_the_rules`, `::test_amounts_outside_the_rules_need_a_recorded_override`, `::test_instalment_policy` |
+| L16 | Fixed: per-phone request and failure limits | `::test_code_requests_are_limited_per_phone`, `::test_new_codes_do_not_reset_the_guess_count` |
+| L17 | Fixed in stage 3: Cloud SQL, Cloud Storage, NATS, Temporal worker and mocks outside the API container | deployment (README) |
+| L18, L19 | Fixed: per-record savepoints, inferred marks, duplicate and instalment parking | `test_stage4_data_quality.py` (portal tests) |
+| L20 | Fixed by design: registration stays open (no enumeration), the duplicate is flagged and blocks sanction | `test_stage4_data_quality.py::test_a_second_registration_of_the_same_person_blocks_sanction` |
+| L21 | Fixed: names tidied, matching ignores case/spacing, pickers list served districts | `::test_typed_place_names_still_reach_the_right_officers`, `::test_served_districts_come_from_officer_jurisdictions` |
+| L22–L25 | Fixed in the app: server switch wipes, offline banner back, HTTPS-only release, no personal number or pre-filled codes | `apps/mobile` (flutter analyze/test) |
+| L26 | Fixed (never committed) | `main.py` has no origin regex |
+| L27 | Fixed: DBT hotspots, transitions and coverage scoped to the officer's state | `test_stage4_data_quality.py::test_state_officers_see_only_their_state` |
+| L29 | Fixed: demo-mode tests added | `test_demo_mode_safety.py` |

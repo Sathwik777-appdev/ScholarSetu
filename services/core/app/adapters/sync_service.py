@@ -95,7 +95,16 @@ class AdapterSyncService:
                 result.errors.append(f"{adapter.source.value}: {exc}")
                 continue
             for portal_app in portal_apps:
-                await self._sync_application(adapter, student, portal_app, result)
+                # Each application syncs in its own savepoint: one malformed record is parked and the rest
+                # of the student's (and everyone else's) records still sync.
+                try:
+                    async with self.db.begin_nested():
+                        await self._sync_application(adapter, student, portal_app, result)
+                except Exception as exc:  # noqa: BLE001 - anything unexpected is parked, never fatal
+                    logger.exception("portal record %s could not be synced", portal_app.get("app_id"))
+                    await self._park(adapter, {"app_id": str(portal_app.get("app_id", "?")),
+                                               "status": str(portal_app.get("status", ""))},
+                                     f"Could not sync this record: {type(exc).__name__}: {exc}", None, result)
         await self.db.commit()
         return result
 
@@ -111,6 +120,20 @@ class AdapterSyncService:
                              app.id if app else None, result)
             return
         if app is None:
+            scheme = SchemeType(portal_app["scheme"])  # an unknown scheme raises and is parked by the caller
+            existing = (await self.db.execute(select(Application).where(
+                Application.student_id == student.id, Application.scheme == scheme,
+                Application.academic_year == portal_app["academic_year"],
+                Application.canonical_state.notin_([CanonicalState.REJECTED, CanonicalState.SURRENDERED])))
+            ).scalars().first()
+            if existing is not None:
+                await self._park(adapter, portal_app, f"Possible duplicate of {existing.id} (same student, scheme "
+                                                      f"and year); link or reject it before importing", existing.id,
+                                 result)
+                return
+            from app.eligibility.service import EligibilityService
+            held = [h for h in await EligibilityService(self.db).active_holdings(student.id, portal_app["academic_year"])
+                    if h.scheme != scheme]
             app = await self.ledger.create_application(
                 student.id, SchemeType(portal_app["scheme"]), portal_app["academic_year"], actor,
                 {"imported_from": adapter.source.value}, source_system=adapter.source,
@@ -118,6 +141,10 @@ class AdapterSyncService:
                 initial_state=CanonicalState.DRAFT if target == CanonicalState.DRAFT else CanonicalState.SUBMITTED,
                 occurred_at=_ts(portal_app.get("submitted_at")))
             result.imported.append(app.id)
+            if held:  # the portal shows a second scholarship for the same year: flag it for the officer
+                app.provisional_flags = [f"ONE_SCHEME_CONFLICT:{held[0].id}"]
+                await self._park(adapter, portal_app, f"Student also holds {held[0].scheme.value} ({held[0].id}) "
+                                                      f"for {portal_app['academic_year']}", app.id, result)
 
         state_goal = CanonicalState.SANCTIONED if target in PAYMENT_DRIVEN else target
         if app.canonical_state not in PAYMENT_DRIVEN and app.canonical_state != state_goal:
@@ -127,6 +154,8 @@ class AdapterSyncService:
                                                       f"{state_goal.value}", app.id, result)
                 return
             for step in path:
+                # Steps the portal skipped over are inferred from the lifecycle, and marked so in the ledger.
+                inferred = {"inferred": step != path[-1], "reported_status": portal_app["status"]}
                 try:
                     if step == CanonicalState.SANCTIONED:
                         plan = await adapter.get_payments(self.sources, portal_app["app_id"])
@@ -134,12 +163,12 @@ class AdapterSyncService:
                             await self.ledger.sanction(app, [(p["description"], Decimal(str(p["amount"])))
                                                              for p in plan], actor)
                         else:
-                            await self.ledger.transition(app, step, actor, {"source_ref": portal_app["app_id"]},
-                                                         adapter.source)
+                            await self.ledger.transition(app, step, actor, {"source_ref": portal_app["app_id"],
+                                                                            **inferred}, adapter.source)
                     else:
                         await self.ledger.transition(app, step, actor, {"source_ref": portal_app["app_id"],
-                                                                        "source_status": portal_app["status"]},
-                                                     adapter.source)
+                                                                        "source_status": portal_app["status"],
+                                                                        **inferred}, adapter.source)
                     result.transitions += 1
                 except LedgerError as exc:
                     await self._park(adapter, portal_app, exc.detail, app.id, result)
@@ -155,8 +184,13 @@ class AdapterSyncService:
         for remote in await adapter.get_payments(self.sources, portal_app["app_id"]):
             wanted = adapter.map.payment_state(remote.get("status", ""))
             local = payments.get(remote["instalment"])
-            if local is None or wanted is None:
-                if wanted is None and remote.get("status") not in (None, "", "SCHEDULED"):
+            if local is None:
+                await self._park(adapter, {**portal_app, "status": remote.get("status", "")},
+                                 f"The portal reports instalment {remote.get('instalment')} "
+                                 f"(₹{remote.get('amount')}), which is not in the sanctioned plan", app.id, result)
+                continue
+            if wanted is None:
+                if remote.get("status") not in (None, "", "SCHEDULED"):
                     await self._park(adapter, {**portal_app, "status": remote["status"]},
                                      f"Unknown payment status {remote['status']!r}", app.id, result)
                 continue
@@ -174,4 +208,13 @@ class AdapterSyncService:
 
     async def sync_all(self) -> list[SyncResult]:
         students = (await self.db.execute(select(Student).where(Student.aadhaar_ref_token.is_not(None)))).scalars().all()
-        return [await self.sync_student(s) for s in students]
+        results = []
+        for s in students:
+            student_id = s.id
+            try:
+                results.append(await self.sync_student(s))
+            except Exception as exc:  # noqa: BLE001 - one student's failure never stops the others
+                logger.exception("portal sync failed for %s", student_id)
+                await self.db.rollback()
+                results.append(SyncResult(student_id=student_id, errors=[f"{type(exc).__name__}: {exc}"]))
+        return results

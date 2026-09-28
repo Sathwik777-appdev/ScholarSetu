@@ -21,6 +21,7 @@ from app.ledger.schemas import (
     TransitionRequest,
 )
 from app.ledger.service import LedgerError, LedgerService, get_ledger_service
+from app.shared import places
 from app.shared.types import CanonicalState, MitraScope, SchemeType, UserRole
 from app.students.models import Student
 
@@ -112,6 +113,20 @@ async def get_pending_actions(principal: StudentPrincipal = Depends(student_prin
     return await ledger.pending_actions(principal.student_id)
 
 
+async def _possible_duplicate(db: AsyncSession, student_id: str, academic_year: str, exclude: str) -> Optional[str]:
+    """Another student record with the same name, date of birth and district that already applied this
+    year: most likely the same person registered twice (e.g. with a second phone number)."""
+    me = await db.get(Student, student_id)
+    return (await db.execute(
+        select(Application.id).join(Student, Student.id == Application.student_id).where(
+            Student.id != student_id, Student.dob == me.dob,
+            places.sql_key(Student.full_name) == places.key(me.full_name),
+            places.sql_key(Student.district) == places.key(me.district),
+            Application.academic_year == academic_year, Application.id != exclude,
+            Application.canonical_state.notin_([CanonicalState.REJECTED, CanonicalState.SURRENDERED,
+                                                CanonicalState.DRAFT])).limit(1))).scalar_one_or_none()
+
+
 @router.post("/applications", response_model=ApplicationOut, status_code=201)
 async def create_application(body: ApplicationCreate, principal: StudentPrincipal = Depends(student_principal()),
                              ledger: LedgerService = Depends(get_ledger_service)):
@@ -134,8 +149,14 @@ async def create_application(body: ApplicationCreate, principal: StudentPrincipa
                                               actor_of(principal.user), body.details)
     except LedgerError as exc:
         raise _http(exc)
+    flags = []
+    duplicate = await _possible_duplicate(ledger.db, principal.student_id, body.academic_year, app.id)
+    if duplicate:
+        flags.append(f"POSSIBLE_DUPLICATE_OF:{duplicate}")  # blocks sanction until an officer decides
     if check.has_conflict:
-        app.provisional_flags = [f"MUST_SURRENDER:{check.holding_application_id}"]
+        flags.append(f"MUST_SURRENDER:{check.holding_application_id}")
+    app.provisional_flags = flags
+    if check.has_conflict:
         await ledger.append_event(app, "OneSchemeRuleAcknowledged",
                                   {"holding_application_id": check.holding_application_id,
                                    "message": check.message}, actor_of(principal.user))
@@ -206,9 +227,9 @@ async def verify_chain(application_id: str, reader: Reader = Depends(officer_or_
 def _scope(query, officer: User):
     """Restrict a query joined to Student to the officer's jurisdiction."""
     if officer.role != UserRole.MINISTRY:
-        query = query.where(Student.state == officer.jurisdiction_state)
+        query = query.where(places.sql_key(Student.state) == places.key(officer.jurisdiction_state))
         if officer.role in (UserRole.DISTRICT_OFFICER, UserRole.INSTITUTE_OFFICER):
-            query = query.where(Student.district == officer.jurisdiction_district)
+            query = query.where(places.sql_key(Student.district) == places.key(officer.jurisdiction_district))
     return query
 
 
@@ -369,6 +390,8 @@ async def officer_sanction(application_id: str, body: SanctionRequest,
     violations = [] if result.eligible else [f"Not eligible under rules {result.rule_version}: "
                                              + " ".join(result.reasons)]
     violations += check_instalments(version.decision_table.get("amounts", {}), body.instalments)
+    violations += [f"Possible duplicate registration of the same student: {f.split(':', 1)[1]}"
+                   for f in (app.provisional_flags or []) if f.startswith("POSSIBLE_DUPLICATE_OF:")]
     if violations and not body.override_reason:
         raise HTTPException(status_code=422, detail={
             "code": "OUTSIDE_RULES", "message": "This sanction is outside the scheme rules.",

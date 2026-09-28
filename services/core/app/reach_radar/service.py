@@ -115,23 +115,23 @@ class ReachRadarService:
                       key=lambda r: (-r["sla_breaches"], -r["avg_days_in_stage"]))
 
     async def dbt_hotspots(self) -> list[dict]:
-        checks = (await self.db.execute(select(DbtHealthCheck, Student.district)
+        checks = (await self.db.execute(select(DbtHealthCheck, Student.state, Student.district)
                                         .join(Student, Student.id == DbtHealthCheck.student_id)
                                         .order_by(DbtHealthCheck.created_at))).all()
         latest: dict[str, tuple] = {}
-        for check, district in checks:
-            latest[check.application_id] = (check, district)  # later checks overwrite earlier ones
-        groups: dict[str, dict] = defaultdict(lambda: {"checked": 0, "failing": 0, "issues": defaultdict(int)})
-        for check, district in latest.values():
-            g = groups[district]
+        for check, state, district in checks:
+            latest[check.application_id] = (check, (state, district))  # later checks overwrite earlier ones
+        groups: dict[tuple, dict] = defaultdict(lambda: {"checked": 0, "failing": 0, "issues": defaultdict(int)})
+        for check, place in latest.values():
+            g = groups[place]
             g["checked"] += 1
             if check.status == "FAIL":
                 g["failing"] += 1
                 for issue in check.issues:
                     g["issues"][issue["code"]] += 1
-        return sorted(({"district": d, "applications_checked": g["checked"], "failing": g["failing"],
+        return sorted(({"state_name": st, "district": d, "applications_checked": g["checked"], "failing": g["failing"],
                         "failure_rate_pct": _pct(g["failing"], g["checked"]) or 0.0,
-                        "issue_counts": dict(g["issues"])} for d, g in groups.items()),
+                        "issue_counts": dict(g["issues"])} for (st, d), g in groups.items()),
                       key=lambda r: -r["failure_rate_pct"])
 
     async def transitions(self) -> list[dict]:
@@ -139,15 +139,15 @@ class ReachRadarService:
         current = current_academic_year()
         previous = _previous_year(current)
         rows = (await self.db.execute(select(Application.student_id, Application.scheme, Application.academic_year,
-                                             Student.district)
+                                             Student.state, Student.district)
                                       .join(Student, Student.id == Application.student_id))).all()
         cohort: dict[str, set] = defaultdict(set)
         applied: dict[str, set] = defaultdict(set)
-        for student_id, scheme, year, district in rows:
+        for student_id, scheme, year, state, district in rows:
             if scheme == SchemeType.PRE_MATRIC and year == previous:
-                cohort[district].add(student_id)
+                cohort[(state, district)].add(student_id)
             if scheme == SchemeType.POST_MATRIC and year == current:
-                applied[district].add(student_id)
-        return [{"district": d, "from_scheme": "PRE_MATRIC", "to_scheme": "POST_MATRIC", "previous_year": previous,
-                 "current_year": current, "eligible_cohort": len(ids), "applied": len(ids & applied[d]),
-                 "conversion_pct": _pct(len(ids & applied[d]), len(ids))} for d, ids in sorted(cohort.items())]
+                applied[(state, district)].add(student_id)
+        return [{"state_name": p[0], "district": p[1], "from_scheme": "PRE_MATRIC", "to_scheme": "POST_MATRIC", "previous_year": previous,
+                 "current_year": current, "eligible_cohort": len(ids), "applied": len(ids & applied[p]),
+                 "conversion_pct": _pct(len(ids & applied[p]), len(ids))} for p, ids in sorted(cohort.items())]

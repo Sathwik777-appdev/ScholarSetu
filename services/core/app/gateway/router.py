@@ -15,6 +15,7 @@ from app.gateway.service import (
     AuthService, MitraService, MitraSessionError, OtpRateLimited, OtpRejected, RegistrationError,
     RegistrationService,
 )
+from app.shared import places
 from app.shared.types import AssistSessionStatus, Gender, MitraScope, UserRole
 
 router = APIRouter(prefix="/v1", tags=["Auth & Gateway"])
@@ -132,12 +133,28 @@ async def complete_registration(req: RegistrationComplete, db: AsyncSession = De
     if req.dob >= date.today():
         raise HTTPException(status_code=422, detail="Date of birth must be in the past")
     details = req.model_dump(exclude={"phone", "otp"})
-    details["full_name"] = details["full_name"].strip()
+    details["full_name"] = " ".join(details["full_name"].split())
+    details["state"], details["district"] = places.tidy(details["state"]), places.tidy(details["district"])
     try:
         user, token, expires_in = await RegistrationService(db).complete(req.phone, req.otp, details)
     except RegistrationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
     return AuthTokenResponse(access_token=token, expires_in=expires_in, user=_user_out(user))
+
+
+@router.get("/geo/districts")
+async def served_districts(db: AsyncSession = Depends(get_db)):
+    """States and districts that have an officer on ScholarSetu, for registration pickers. Public: it
+    lists place names only. A student elsewhere can still register, but no officer would see them yet."""
+    from sqlalchemy import select
+    rows = (await db.execute(select(User.jurisdiction_state, User.jurisdiction_district).where(
+        User.is_active.is_(True), User.jurisdiction_state.is_not(None)).distinct())).all()
+    served: dict[str, set[str]] = {}
+    for state, district in rows:
+        served.setdefault(places.tidy(state), set())
+        if district:
+            served[places.tidy(state)].add(places.tidy(district))
+    return {"states": [{"state": s, "districts": sorted(d)} for s, d in sorted(served.items())]}
 
 
 @router.get("/auth/me", response_model=AuthUser)

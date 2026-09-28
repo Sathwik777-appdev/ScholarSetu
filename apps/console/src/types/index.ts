@@ -168,6 +168,7 @@ export interface BottleneckRow {
 }
 
 export interface DBTHotspotRow {
+  state_name: string;
   district: string;
   applications_checked: number;
   failing: number;
@@ -176,6 +177,7 @@ export interface DBTHotspotRow {
 }
 
 export interface TransitionRow {
+  state_name: string;
   district: string;
   from_scheme: string;
   to_scheme: string;
