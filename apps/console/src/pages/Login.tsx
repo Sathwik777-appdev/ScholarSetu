@@ -5,6 +5,16 @@ import { errorMessage, useAuth } from '../auth/AuthContext';
 import { Hero3D } from '../components/Lazy3D';
 import { BrandMark } from '../components/Sidebar';
 
+// Seeded demo officer accounts (scripts/seed_demo.py). Shown only in demo builds (VITE_DEMO_ACCOUNTS=true).
+const DEMO_ACCOUNTS = import.meta.env.VITE_DEMO_ACCOUNTS === 'true'
+  ? [
+      { label: 'Ministry (MoTA)', phone: '9876543240' },
+      { label: 'State officer, Jharkhand', phone: '9876543235' },
+      { label: 'District officer, Dumka', phone: '9876543230' },
+      { label: 'Institute officer, Dumka', phone: '9876543225' },
+    ]
+  : [];
+
 export default function Login() {
   const { user, requestOtp, verifyOtp } = useAuth();
   const location = useLocation();
@@ -20,18 +30,28 @@ export default function Login() {
     return <Navigate to={from} replace />;
   }
 
-  const submitPhone = async (e: FormEvent) => {
-    e.preventDefault();
+  const sendCode = async (number: string) => {
     setBusy(true);
     setError(null);
     try {
-      setNotice(await requestOtp(phone));
+      setNotice(await requestOtp(number));
       setStep('otp');
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
+  };
+
+  const submitPhone = (e: FormEvent) => {
+    e.preventDefault();
+    return sendCode(phone);
+  };
+
+  const pickDemoAccount = (number: string) => {
+    setPhone(number);
+    setOtp('');
+    return sendCode(number);
   };
 
   const submitOtp = async (e: FormEvent) => {
@@ -89,10 +109,26 @@ export default function Login() {
                 />
               </label>
               <button disabled={busy} className={button}>{busy ? 'Sending…' : 'Send code'}</button>
+              {DEMO_ACCOUNTS.length > 0 && (
+                <div className="pt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Demo accounts</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {DEMO_ACCOUNTS.map((a) => (
+                      <button key={a.phone} type="button" disabled={busy} onClick={() => pickDemoAccount(a.phone)}
+                        className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:ring-saffron-400 disabled:opacity-60">
+                        {a.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </form>
           ) : (
             <form onSubmit={submitOtp} className="mt-8 space-y-4">
               {notice && <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600 ring-1 ring-slate-200">{notice}</p>}
+              {DEMO_ACCOUNTS.some((a) => a.phone === phone) && (
+                <p className="text-xs text-slate-500">Demo account: the code is <span className="font-semibold">123456</span>.</p>
+              )}
               <label className="block text-sm font-medium text-slate-700">
                 One-time code
                 <input

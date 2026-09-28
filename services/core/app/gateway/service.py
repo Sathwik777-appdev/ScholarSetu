@@ -111,7 +111,8 @@ async def _check_challenge(db: AsyncSession, phone: str, purpose: OtpPurpose,
 
 
 def _demo_otp_allowed(user: User, otp: str) -> bool:
-    return settings.DEMO_MODE and (user.is_demo or otp == settings.DEMO_OTP) and otp == settings.DEMO_OTP
+    # Only seeded demo accounts (is_demo) accept the fixed demo code, and only in demo mode.
+    return settings.DEMO_MODE and user.is_demo and otp == settings.DEMO_OTP
 
 
 class AuthService:
@@ -125,7 +126,7 @@ class AuthService:
     async def request_login_otp(self, phone: str) -> None:
         """Send an OTP if the phone belongs to an active user. Callers get the same answer either way."""
         user = await self._active_user_by_phone(phone)
-        if user is None and not settings.DEMO_MODE:
+        if user is None:
             return
         otp = await _issue_challenge(self.db, phone, OtpPurpose.LOGIN, None)
         await send_sms(self.db, phone, f"ScholarSetu login code: {otp}. Valid for "
@@ -135,12 +136,7 @@ class AuthService:
     async def verify_login_otp(self, phone: str, otp: str) -> tuple[User, str, int]:
         user = await self._active_user_by_phone(phone)
         if user is None:
-            if settings.DEMO_MODE and otp == settings.DEMO_OTP:
-                # In demo mode, fallback any phone number to the primary demo student (Sunita Hansda)
-                result = await self.db.execute(select(User).where(User.phone == "9876543210"))
-                user = result.scalar_one_or_none()
-            if user is None:
-                raise OtpRejected()
+            raise OtpRejected()  # an unregistered number is never signed in as someone else
         if not _demo_otp_allowed(user, otp):
             await _check_challenge(self.db, phone, OtpPurpose.LOGIN, None, otp)
         token, expires_in = create_access_token(user.id, user.role.value)

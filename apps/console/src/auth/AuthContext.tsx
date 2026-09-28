@@ -47,7 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyOtp = async (phone: string, otp: string) => {
     const res = await apiClient.post<AuthTokenResponse>('/auth/otp/verify', { phone, otp });
     if (!CONSOLE_ROLES.includes(res.data.user.role)) {
-      throw new Error('This console is for officers and the ministry. Students use the ScholarSetu mobile app.');
+      const who = res.data.user.name ? `${res.data.user.name} (${res.data.user.role.toLowerCase().replace(/_/g, ' ')})` : 'This number';
+      throw new Error(`${who} is not an officer account. This console is for officers and the ministry; students and families use the ScholarSetu mobile app.`);
     }
     tokenStore.set(res.data.access_token);
     setUser(res.data.user);
