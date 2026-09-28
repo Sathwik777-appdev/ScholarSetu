@@ -2,3 +2,4 @@ fastapi
 uvicorn
 faker
 pydantic
+python-multipart  # form posts on the test DigiLocker sign-in page and token endpoint

@@ -170,6 +170,10 @@ async def main() -> None:
     from app.config import settings
     from app.eligibility.service import current_academic_year
     async with AsyncSessionLocal() as db:
+        if "--if-empty" in sys.argv and await db.get(Household, HOUSEHOLD["id"]) is not None:
+            print("Demo data already present; not reseeded.")
+            await engine.dispose()
+            return
         ids = await seed(db)
     try:
         async with httpx.AsyncClient(timeout=5) as client:

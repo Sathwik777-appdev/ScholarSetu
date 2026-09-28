@@ -162,7 +162,7 @@ run_flags() {  # shared by the API service and the migration job
 
 migrate() {
   local job=scholarsetu-migrate-$ENV cmd="alembic upgrade head"
-  [ "$ENV" = demo ] && cmd="alembic upgrade head && python /scripts/seed_demo.py"
+  [ "$ENV" = demo ] && cmd="alembic upgrade head && python /scripts/seed_demo.py --if-empty"
   # shellcheck disable=SC2046
   g run jobs deploy "$job" $(run_flags) --command sh --args=-c,"$cmd" --max-retries 0 --task-timeout 900
   g run jobs execute "$job" --region "$REGION" --wait
