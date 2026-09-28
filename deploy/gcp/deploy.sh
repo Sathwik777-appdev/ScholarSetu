@@ -73,8 +73,11 @@ bucket() {
   exists gcloud storage buckets describe "gs://$BUCKET" || \
     gcloud storage buckets create "gs://$BUCKET" --project "$PROJECT" --location "$REGION" \
       --uniform-bucket-level-access --public-access-prevention
-  gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member "serviceAccount:$SA_EMAIL" \
-    --role roles/storage.objectAdmin >/dev/null
+  # objectAdmin for the documents; legacyBucketReader because the S3 API checks the bucket first.
+  for role in roles/storage.objectAdmin roles/storage.legacyBucketReader; do
+    gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member "serviceAccount:$SA_EMAIL" \
+      --role "$role" >/dev/null
+  done
   for role in roles/cloudsql.client roles/secretmanager.secretAccessor roles/artifactregistry.reader \
               roles/logging.logWriter roles/monitoring.metricWriter; do
     g projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:$SA_EMAIL" --role "$role" \

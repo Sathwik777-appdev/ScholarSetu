@@ -2,27 +2,35 @@
 # NATS JetStream, the Temporal dev server, the Temporal worker (which also publishes the outbox, runs the
 # notification consumers and polls the portals), the mock government services, and the Cloud SQL proxy.
 # Secrets come from /opt/scholarsetu/.env, written at boot from Secret Manager by startup.sh.
+x-logging: &logging
+  driver: gcplogs   # container logs go to Cloud Logging (log name gcplogs-docker-driver)
+
 services:
   nats:
+    logging: *logging
     image: nats:2.10-alpine
     command: ["-js", "-sd", "/data"]
     volumes: [nats_data:/data]
     restart: unless-stopped
   temporal:
+    logging: *logging
     image: temporalio/temporal:1.9.1
     command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/home/temporal/temporal.db"]
     volumes: [temporal_data:/home/temporal]
     restart: unless-stopped
   cloudsql:
+    logging: *logging
     image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
     command: ["--address", "0.0.0.0", "--port", "5432", "${CLOUDSQL_INSTANCE}"]
     restart: unless-stopped
   mocks:
+    logging: *logging
     image: ${REPO}/scholarsetu-mocks:${TAG}
     env_file: .env
     ports: ["8100:8100"]   # reachable from Cloud Run over the VPC (firewall: Cloud Run subnet only)
     restart: unless-stopped
   worker:
+    logging: *logging
     image: ${REPO}/scholarsetu-core:${TAG}
     command: ["python", "-m", "app.workflows.worker"]
     env_file: .env

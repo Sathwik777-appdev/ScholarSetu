@@ -1,11 +1,14 @@
 """Object storage for wallet documents (MinIO / any S3-compatible store)."""
 
 import asyncio
+import logging
 import io
 from pathlib import Path
 from urllib.parse import urlparse
 
 from app.config import settings
+
+logger = logging.getLogger("scholarsetu.wallet")
 
 
 class StorageUnavailable(Exception):
@@ -34,6 +37,7 @@ class ObjectStore:
         try:
             await asyncio.to_thread(_put)
         except Exception as exc:
+            logger.error("object store put failed: %s: %s", type(exc).__name__, exc)
             raise StorageUnavailable(str(exc)) from exc
 
     async def get(self, key: str) -> bytes:
@@ -47,6 +51,7 @@ class ObjectStore:
         try:
             return await asyncio.to_thread(_get)
         except Exception as exc:
+            logger.error("object store get failed: %s: %s", type(exc).__name__, exc)
             raise StorageUnavailable(str(exc)) from exc
 
 
