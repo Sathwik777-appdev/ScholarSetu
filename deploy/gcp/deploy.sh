@@ -169,12 +169,17 @@ monitor() {
     g monitoring uptime create "$SERVICE ready" --resource-type=uptime-url --resource-labels="host=$host,project_id=$PROJECT" \
       --path=/health/ready --port=443 --protocol=https --period=5 --timeout=30
   fi
-  channel=$(g beta monitoring channels list --filter="labels.email_address=$ALERT_EMAIL" --format='value(name)' | head -1)
-  [ -n "$channel" ] || channel=$(g beta monitoring channels create --display-name "ScholarSetu alerts" --type email \
-    --channel-labels "email_address=$ALERT_EMAIL" --format='value(name)')
-  if ! g alpha monitoring policies list --format='value(displayName)' 2>/dev/null | grep -qx "$SERVICE down"; then
-    local policy; policy=$(mktemp)
-    cat > "$policy" <<JSON
+  # Alerting through the Monitoring REST API (no gcloud alpha/beta components needed).
+  local token api; token=$(gcloud auth print-access-token); api=https://monitoring.googleapis.com/v3/projects/$PROJECT
+  channel=$(curl -sf -H "Authorization: Bearer $token" "$api/notificationChannels" | python3 -c "
+import json,sys
+for c in json.load(sys.stdin).get('notificationChannels', []):
+    if c.get('labels', {}).get('email_address') == '$ALERT_EMAIL': print(c['name']); break")
+  [ -n "$channel" ] || channel=$(curl -sf -X POST -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+    "$api/notificationChannels" -d "{\"type\":\"email\",\"displayName\":\"ScholarSetu alerts\",\"labels\":{\"email_address\":\"$ALERT_EMAIL\"}}" \
+    | python3 -c "import json,sys; print(json.load(sys.stdin)['name'])")
+  if ! curl -sf -H "Authorization: Bearer $token" "$api/alertPolicies" | grep -q "\"$SERVICE down\""; then
+    curl -sf -X POST -H "Authorization: Bearer $token" -H 'Content-Type: application/json' "$api/alertPolicies" -d @- >/dev/null <<JSON
 {"displayName": "$SERVICE down", "combiner": "OR",
  "conditions": [{"displayName": "Uptime check failing",
    "conditionThreshold": {"filter": "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.type=\"uptime_url\" AND resource.label.host=\"$host\"",
@@ -187,7 +192,7 @@ monitor() {
      "aggregations": [{"alignmentPeriod": "300s", "perSeriesAligner": "ALIGN_SUM"}]}}],
  "notificationChannels": ["$channel"]}
 JSON
-    g alpha monitoring policies create --policy-from-file "$policy"; rm -f "$policy"
+    echo "  alert policy '$SERVICE down' created (emails $ALERT_EMAIL)"
   fi
 }
 

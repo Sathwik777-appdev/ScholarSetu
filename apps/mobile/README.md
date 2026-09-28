@@ -33,6 +33,11 @@ flutter run
 # Any other API:
 flutter run --dart-define=API_URL=https://api.example.org
 flutter build apk --debug
+# A demo build: one-tap seeded demo accounts on the login screen (the server still checks them)
+flutter build apk --release --dart-define=DEMO_ACCOUNTS=true
 ```
+
+Release builds use HTTPS only; plain HTTP to a development server works in debug builds. Changing the
+server in the app signs out and clears everything saved from the previous server.
 
 Plain HTTP is allowed only to `10.0.2.2` and `localhost` (`android/app/src/main/res/xml/network_security_config.xml`).
