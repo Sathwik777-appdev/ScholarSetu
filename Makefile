@@ -50,3 +50,12 @@ console-build:
 
 mobile-check:
 	cd apps/mobile && flutter pub get && flutter analyze && flutter test
+
+cloud-status:   ## check status and billing state of ScholarSetu GCP resources
+	./scripts/cloud_power.sh status
+
+cloud-sleep:    ## suspend VM and Cloud SQL to eliminate active GCP compute billing ($0)
+	./scripts/cloud_power.sh off
+
+cloud-wake:     ## wake up VM and Cloud SQL when needed for demos or testing
+	./scripts/cloud_power.sh on
