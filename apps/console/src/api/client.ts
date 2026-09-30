@@ -33,10 +33,29 @@ export const setUnauthorizedHandler = (fn: () => void) => {
   onUnauthorized = fn;
 };
 
+const POWER_URL = 'https://scholarsetu-power-906769842576.asia-south1.run.app';
+let wakeTriggered = false;
+
+export async function triggerAutoWake(): Promise<void> {
+  if (wakeTriggered) return;
+  wakeTriggered = true;
+  try {
+    await fetch(`${POWER_URL}/wake`, { method: 'POST', mode: 'cors' });
+  } catch {
+    // best-effort auto-wake
+  }
+}
+
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    wakeTriggered = false;
+    return response;
+  },
   (error: AxiosError) => {
     if (error.response?.status === 401 && onUnauthorized) onUnauthorized();
+    if (error.response?.status === 503 || !error.response) {
+      triggerAutoWake();
+    }
     return Promise.reject(error);
   },
 );
@@ -44,7 +63,10 @@ apiClient.interceptors.response.use(
 /** A message fit to show an officer: the API's own detail when there is one, never a stack trace. */
 export function errorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    if (!error.response) return 'The ScholarSetu API could not be reached.';
+    if (error.response?.status === 503) {
+      return 'ScholarSetu cloud servers were in zero-cost sleep mode and are now waking up automatically (~30s). Please wait a moment!';
+    }
+    if (!error.response) return 'The ScholarSetu API could not be reached (auto-waking cloud servers).';
     const detail = (error.response.data as { detail?: unknown })?.detail;
     if (typeof detail === 'string') return detail;
     if (error.response.status === 403) return 'Your role does not have access to this.';
