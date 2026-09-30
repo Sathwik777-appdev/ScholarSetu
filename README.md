@@ -5,9 +5,103 @@ Problem Statement 26238, Ministry of Tribal Affairs (MoTA). Team ACE.
 
 > Verify once, reuse everywhere, and never lose a tribal student between schemes, systems or bank accounts.
 
+### 🌐 Live Deployments & Quick Links
+- **Officer & Ministry Web Console**: [https://console-khaki-two.vercel.app](https://console-khaki-two.vercel.app)
+- **Live Backend API & OpenAPI Docs**: [https://scholarsetu-api-906769842576.asia-south1.run.app/docs](https://scholarsetu-api-906769842576.asia-south1.run.app/docs)
+- **Comprehensive Architectural Specification (66KB)**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **Full Project Demo & Voiceover Script**: [docs/FULL_PROJECT_DEMO_SCRIPT.md](docs/FULL_PROJECT_DEMO_SCRIPT.md)
+
 This is a working prototype. Government systems (NSP, SFMP, NOS portal, DigiLocker, UIDAI, e-District,
 AISHE, UDISE+, APAAR, UGC-NTA, PFMS/NPCI) are **mock services** with synthetic data. Every place where the
 prototype differs from the design is listed in [ARCHITECTURE.md §19 "Prototype Deviations"](docs/ARCHITECTURE.md#19-prototype-deviations).
+
+## Architecture & System Design
+
+```mermaid
+flowchart TB
+    subgraph CH["Access Channels"]
+        APP["Flutter Mobile App<br/>Offline-First / Family & Mitra Mode"]
+        CON["Officer & Ministry Console<br/>React 18 / Three.js / Vite"]
+        SMS["SMS & IVR Gateway<br/>Feature Phone Fallback"]
+    end
+
+    GW["API Gateway & Security<br/>FastAPI / OIDC / Consent Manager"]
+
+    subgraph CORE["ScholarSetu Core Services"]
+        LED["Scholarship Ledger<br/>SHA-256 Hash-Chained Event Store"]
+        VM["Verification Mesh<br/>Indic Phonetic Identity Resolver"]
+        ATT["Attestation Engine<br/>Ed25519-Signed Compact JWS"]
+        ELIG["Eligibility Engine<br/>JSON-Logic Rules-as-Code"]
+        DBTG["DBT Guardian<br/>PFMS / NPCI Mapper Validation"]
+        JAGO["JAGO Assistant<br/>Deterministic Multilingual Bot"]
+        RR["Reach Radar<br/>Privacy-Preserving Record Linkage"]
+    end
+
+    subgraph BUS["Event & Workflow Backbone"]
+        NATS["NATS JetStream<br/>Distributed Event Bus"]
+        TEMP["Temporal<br/>Durable Workflow Orchestrator"]
+    end
+
+    subgraph ADAPT["Scheme Adapters"]
+        NSPA["NSP Adapter"]
+        SFA["SFMP Adapter"]
+        NOSA["NOS Adapter"]
+    end
+
+    subgraph EXT["Government Registries (Mocks & Live)"]
+        UID["UIDAI e-KYC"]
+        DL["DigiLocker"]
+        EDU["AISHE / UDISE+ / APAAR"]
+        EDS["State e-District"]
+        NTA["UGC-NTA"]
+        PFMS["PFMS / NPCI"]
+    end
+
+    APP --> GW
+    CON --> GW
+    SMS --> GW
+    GW --> LED
+    GW --> VM
+    GW --> ATT
+    GW --> ELIG
+    GW --> DBTG
+    GW --> JAGO
+    GW --> RR
+
+    LED <--> NATS
+    VM <--> NATS
+    DBTG <--> NATS
+    TEMP --> VM
+    TEMP --> DBTG
+
+    LED <--> ADAPT
+    VM --> EXT
+    DBTG --> PFMS
+    RR --> EDU
+```
+
+### Monorepo Structure
+
+```
+scholarsetu/
+├── adapters/          # Anti-corruption adapters for external portals (NSP, SFMP, NOS)
+├── apps/
+│   ├── console/       # Web Management Console (React, Vite, Three.js, Tailwind)
+│   └── mobile/        # Student & Mitra Mobile App (Flutter, SQLCipher offline store)
+├── contracts/         # Canonical data schemas & event contracts (JSON Schema)
+├── deploy/            # Cloud deployment configurations (Google Cloud Run, Cloud SQL, VM)
+├── docs/              # Comprehensive architectural specs, audits, and demo scripts
+│   ├── ARCHITECTURE.md            # Complete 66KB system architectural specification
+│   ├── FULL_PROJECT_DEMO_SCRIPT.md # End-to-end demo and voiceover walkthrough
+│   └── LOGIC_AUDIT.md             # Formal logic audit and edge-case verification
+├── infra/             # Infrastructure definitions (Docker Compose, Nginx, PostgreSQL)
+├── mocks/             # High-fidelity mock microservices for 8+ government registries
+├── rules/             # Machine-readable scheme eligibility rules (JSON-Logic)
+├── scripts/           # Environment generation, database seeding, and smoke tests
+├── services/
+│   └── core/          # Core backend service (FastAPI, SQLAlchemy, pgvector, Temporal worker)
+└── tests/             # Comprehensive test suite (Unit, Contract, Integration, E2E)
+```
 
 ## What it does
 
