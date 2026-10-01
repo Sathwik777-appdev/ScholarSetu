@@ -41,14 +41,32 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: services/core/requirements*.txt
+          cache-dependency-path: services/core/requirements*
       - name: Cache the embedding model
         uses: actions/cache@v4
         with:
           path: .cache/fastembed
           key: fastembed-paraphrase-multilingual-MiniLM-L12-v2
+      # NATS with JetStream for the outbox test (a service container cannot be given the -js flag).
+      - run: docker run -d --name nats -p 4223:4222 nats:2.10-alpine -js
       - run: pip install -r services/core/requirements-dev.txt
       - run: pytest -q
+
+  dependency-audit:
+    # Known vulnerabilities in what the images install (the lock files) and in the console's runtime packages.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pip-audit
+      - run: pip-audit --no-deps --disable-pip -r services/core/requirements.lock -r mocks/requirements.lock -r deploy/gcp/power-manager/requirements.lock
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm audit --omit=dev --audit-level=moderate
+        working-directory: apps/console
 
   console:
     runs-on: ubuntu-latest

@@ -8,6 +8,7 @@ import '../data/repository.dart';
 import '../state/providers.dart';
 import 'components.dart';
 import 'digilocker_screen.dart';
+import 'rights_screens.dart';
 import 'labels.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -353,6 +354,15 @@ class ApplicationScreen extends ConsumerWidget {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => ErrorBox(message: errorText(e)),
           data: (list) => ListView(padding: const EdgeInsets.all(16), children: [
+            if (ref.watch(sessionProvider).user?.role == 'STUDENT') ...[
+              FilledButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => VerifyScreen(applicationId: applicationId))),
+                icon: const Icon(Icons.verified_user_outlined),
+                label: const Text('Verify my details'),
+              ),
+              const SizedBox(height: 12),
+            ],
             Text(lastSync == null ? 'Not synced yet. Pull down to sync.' : 'Events synced up to ${when(lastSync)}.',
                 style: const TextStyle(fontSize: 12)),
             if (list.isEmpty) const Padding(padding: EdgeInsets.only(top: 16), child: Text('No events on this phone yet.')),
@@ -399,7 +409,7 @@ class MoneyTab extends StatelessWidget {
             for (final a in apps) ...[
               Section('${schemeLabel(a['scheme'] as String)} ${a['academic_year']}'),
               for (final i in (a['instalments'] as List).cast<Map<String, dynamic>>())
-                _InstalmentTile(i),
+                _InstalmentTile(i, applicationId: a['application_id'] as String),
             ],
           ]);
         },
@@ -455,7 +465,11 @@ class PassportTab extends ConsumerWidget {
                         color: a['status'] == 'ACTIVE' ? Colors.green.shade700 : Colors.orange.shade700),
                     title: Text(humanize(entry.key)),
                     subtitle: Text('${humanize(a['status'] as String)} · from ${a['source']}'
-                        '${a['expiry_date'] == null ? '' : ' · valid until ${whenIso(a['expiry_date'] as String)}'}'),
+                        '${a['expiry_date'] == null ? '' : ' · valid until ${whenIso(a['expiry_date'] as String)}'}'
+                        '${a['status'] == 'ACTIVE' && a['signature'] != null ? '\nTap to show its QR code' : ''}'),
+                    onTap: a['status'] == 'ACTIVE' && a['signature'] != null
+                        ? () => showPassportQr(context, humanize(entry.key), a['signature'] as String)
+                        : null,
                   ),
                 ),
           ]);
@@ -526,9 +540,10 @@ class AlertsTab extends ConsumerWidget {
 }
 
 class _InstalmentTile extends StatelessWidget {
-  const _InstalmentTile(this.i);
+  const _InstalmentTile(this.i, {required this.applicationId});
 
   final Map<String, dynamic> i;
+  final String applicationId;
 
   @override
   Widget build(BuildContext context) {
@@ -540,10 +555,14 @@ class _InstalmentTile extends StatelessWidget {
         leading: CircleAvatar(backgroundColor: color.withValues(alpha: 0.12), child: Icon(icon, color: color)),
         title: Text(i['description'] as String, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(humanize(state) +
-            (i['failure_code'] == null ? '' : ' (${i['failure_code']})') +
+            (i['failure_code'] == null ? '' : ' (${i['failure_code']}) · tap to fix') +
             (i['credited_at'] == null ? '' : ' on ${whenIso(i['credited_at'] as String)}')),
         trailing: Text(rupees(i['amount'] as num),
             style: const TextStyle(fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+        onTap: state != 'FAILED'
+            ? null
+            : () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => BankFixScreen(applicationId: applicationId, paymentId: i['payment_id'] as String))),
       ),
     );
   }

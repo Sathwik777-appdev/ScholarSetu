@@ -1,181 +1,139 @@
+"""ScholarSetu power manager (hosted demo only): puts the database and backend VM to sleep when nobody uses the
+demo, and wakes them when someone does.
+
+Private: Cloud Run IAM admits only Cloud Scheduler (idle check, nightly sleep) and the API (wake on a request
+that found the database asleep). It runs as its own service account, allowed to start/stop one VM, change the
+Cloud SQL activation policy, read request logs and switch the downtime alert; nothing else.
+
+    POST /wake        database ALWAYS, VM started, downtime alert re-enabled
+    POST /sleep       VM stopped, database NEVER, downtime alert paused (so a sleeping demo emails no one)
+    POST /check-idle  sleep when the API served no real requests (uptime probes excluded) in IDLE_MINUTES
+    GET  /status      current state
+"""
+
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Any
 
 import google.auth
-from google.auth.transport.requests import Request
-from google.cloud import monitoring_v3
-from fastapi import FastAPI, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
 import requests
+from fastapi import FastAPI
+from google.auth.transport.requests import Request
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("power-manager")
 
-app = FastAPI(title="ScholarSetu Cloud Power Manager")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = FastAPI(title="ScholarSetu power manager", docs_url=None, redoc_url=None)
 
 PROJECT = os.environ.get("PROJECT", "trisphere-4b121")
-REGION = os.environ.get("REGION", "asia-south1")
 ZONE = os.environ.get("ZONE", "asia-south1-a")
 VM = os.environ.get("VM", "scholarsetu-backend-demo")
 SQL_INSTANCE = os.environ.get("SQL_INSTANCE", "scholarsetu-db")
-API_SERVICE_NAME = os.environ.get("API_SERVICE_NAME", "scholarsetu-api")
+API_SERVICE = os.environ.get("API_SERVICE_NAME", "scholarsetu-api")
+IDLE_MINUTES = int(os.environ.get("IDLE_MINUTES", "30"))
+TIMEOUT = 15
+
+SQL_URL = f"https://sqladmin.googleapis.com/sql/v1beta4/projects/{PROJECT}/instances/{SQL_INSTANCE}"
+VM_URL = f"https://compute.googleapis.com/compute/v1/projects/{PROJECT}/zones/{ZONE}/instances/{VM}"
+MONITORING = f"https://monitoring.googleapis.com/v3/projects/{PROJECT}"
+LOGGING = "https://logging.googleapis.com/v2/entries:list"
+ALERT_NAME = f"{API_SERVICE} down"  # created by deploy.sh `monitor`
+# Uptime probes keep hitting /health/ready; they are not people using the demo.
+UPTIME_AGENT = "GoogleStackdriverMonitoring-UptimeChecks"
 
 
-def get_headers() -> Dict[str, str]:
-    credentials, _ = google.auth.default(
-        scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
+def _headers() -> dict[str, str]:
+    credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
     credentials.refresh(Request())
-    return {
-        "Authorization": f"Bearer {credentials.token}",
-        "Content-Type": "application/json",
-    }
+    return {"Authorization": f"Bearer {credentials.token}", "Content-Type": "application/json"}
 
 
-def do_wake() -> Dict[str, Any]:
-    logger.info("Waking up Cloud SQL and VM...")
-    headers = get_headers()
-    
-    # 1. Cloud SQL ALWAYS
-    sql_url = f"https://sqladmin.googleapis.com/sql/v1beta4/projects/{PROJECT}/instances/{SQL_INSTANCE}"
-    sql_resp = requests.patch(sql_url, headers=headers, json={"settings": {"activationPolicy": "ALWAYS"}}, timeout=15)
-    
-    # 2. Compute VM Start
-    vm_url = f"https://compute.googleapis.com/compute/v1/projects/{PROJECT}/zones/{ZONE}/instances/{VM}/start"
-    vm_resp = requests.post(vm_url, headers=headers, timeout=15)
-    
-    logger.info("Wake calls issued: SQL status=%s, VM status=%s", sql_resp.status_code, vm_resp.status_code)
-    return {
-        "sql_status": sql_resp.status_code,
-        "vm_status": vm_resp.status_code,
-        "state": "waking",
-    }
+def _set_alert(headers: dict, enabled: bool) -> str:
+    """Pause the downtime alert while asleep; re-enable it on wake. Returns what happened."""
+    res = requests.get(f"{MONITORING}/alertPolicies", headers=headers, params={"filter": f'display_name="{ALERT_NAME}"'},
+                       timeout=TIMEOUT)
+    policies = res.json().get("alertPolicies", []) if res.status_code == 200 else []
+    if not policies:
+        return "no alert policy"
+    for policy in policies:
+        requests.patch(f"https://monitoring.googleapis.com/v3/{policy['name']}", headers=headers,
+                       params={"updateMask": "enabled"}, json={"enabled": enabled}, timeout=TIMEOUT)
+    return "enabled" if enabled else "paused"
 
 
-def do_sleep() -> Dict[str, Any]:
-    logger.info("Suspending Cloud SQL and stopping VM...")
-    headers = get_headers()
-    
-    # 1. Compute VM Stop
-    vm_url = f"https://compute.googleapis.com/compute/v1/projects/{PROJECT}/zones/{ZONE}/instances/{VM}/stop"
-    vm_resp = requests.post(vm_url, headers=headers, timeout=15)
-    
-    # 2. Cloud SQL NEVER
-    sql_url = f"https://sqladmin.googleapis.com/sql/v1beta4/projects/{PROJECT}/instances/{SQL_INSTANCE}"
-    sql_resp = requests.patch(sql_url, headers=headers, json={"settings": {"activationPolicy": "NEVER"}}, timeout=15)
-    
-    logger.info("Sleep calls issued: VM status=%s, SQL status=%s", vm_resp.status_code, sql_resp.status_code)
-    return {
-        "vm_status": vm_resp.status_code,
-        "sql_status": sql_resp.status_code,
-        "state": "sleeping",
-    }
+def _state(headers: dict) -> dict[str, Any]:
+    sql = requests.get(SQL_URL, headers=headers, timeout=TIMEOUT)
+    vm = requests.get(VM_URL, headers=headers, timeout=TIMEOUT)
+    policy = sql.json().get("settings", {}).get("activationPolicy", "UNKNOWN") if sql.ok else "UNKNOWN"
+    vm_status = vm.json().get("status", "UNKNOWN") if vm.ok else "UNKNOWN"
+    return {"sleeping": policy == "NEVER" and vm_status in ("TERMINATED", "STOPPED", "STOPPING"),
+            "cloud_sql": {"policy": policy, "state": sql.json().get("state", "UNKNOWN") if sql.ok else "UNKNOWN"},
+            "vm": {"status": vm_status}}
+
+
+def do_wake() -> dict[str, Any]:
+    headers = _headers()
+    sql = requests.patch(SQL_URL, headers=headers, json={"settings": {"activationPolicy": "ALWAYS"}}, timeout=TIMEOUT)
+    vm = requests.post(f"{VM_URL}/start", headers=headers, timeout=TIMEOUT)
+    alert = _set_alert(headers, True)
+    logger.info("wake: SQL HTTP %s, VM HTTP %s, alert %s", sql.status_code, vm.status_code, alert)
+    return {"state": "waking", "sql_status": sql.status_code, "vm_status": vm.status_code, "alert": alert}
+
+
+def do_sleep() -> dict[str, Any]:
+    headers = _headers()
+    alert = _set_alert(headers, False)
+    vm = requests.post(f"{VM_URL}/stop", headers=headers, timeout=TIMEOUT)
+    sql = requests.patch(SQL_URL, headers=headers, json={"settings": {"activationPolicy": "NEVER"}}, timeout=TIMEOUT)
+    logger.info("sleep: VM HTTP %s, SQL HTTP %s, alert %s", vm.status_code, sql.status_code, alert)
+    return {"state": "sleeping", "vm_status": vm.status_code, "sql_status": sql.status_code, "alert": alert}
+
+
+def real_requests(headers: dict, minutes: int) -> int:
+    """API requests in the last `minutes` that did not come from uptime probes (counted up to 50)."""
+    since = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    log_filter = (f'resource.type="cloud_run_revision" AND resource.labels.service_name="{API_SERVICE}" '
+                  f'AND log_id("run.googleapis.com/requests") AND timestamp>="{since}" '
+                  f'AND NOT httpRequest.userAgent:"{UPTIME_AGENT}"')
+    res = requests.post(LOGGING, headers=headers, timeout=TIMEOUT,
+                        json={"resourceNames": [f"projects/{PROJECT}"], "filter": log_filter, "pageSize": 50})
+    res.raise_for_status()
+    return len(res.json().get("entries", []))
 
 
 @app.get("/health")
-def health() -> Dict[str, str]:
+def health() -> dict[str, str]:
     return {"status": "ok", "service": "scholarsetu-power-manager"}
 
 
 @app.get("/status")
-def status() -> Dict[str, Any]:
-    headers = get_headers()
-    
-    # Cloud SQL
-    sql_url = f"https://sqladmin.googleapis.com/sql/v1beta4/projects/{PROJECT}/instances/{SQL_INSTANCE}"
-    sql_resp = requests.get(sql_url, headers=headers, timeout=10)
-    sql_policy = "UNKNOWN"
-    sql_state = "UNKNOWN"
-    if sql_resp.status_code == 200:
-        data = sql_resp.json()
-        sql_policy = data.get("settings", {}).get("activationPolicy", "UNKNOWN")
-        sql_state = data.get("state", "UNKNOWN")
-        
-    # VM
-    vm_url = f"https://compute.googleapis.com/compute/v1/projects/{PROJECT}/zones/{ZONE}/instances/{VM}"
-    vm_resp = requests.get(vm_url, headers=headers, timeout=10)
-    vm_status_val = "UNKNOWN"
-    if vm_resp.status_code == 200:
-        vm_status_val = vm_resp.json().get("status", "UNKNOWN")
-        
-    is_sleeping = (sql_policy == "NEVER" and vm_status_val in ("TERMINATED", "STOPPED"))
-    return {
-        "sleeping": is_sleeping,
-        "cloud_sql": {"policy": sql_policy, "state": sql_state},
-        "vm": {"status": vm_status_val},
-    }
+def status() -> dict[str, Any]:
+    return _state(_headers())
 
 
-@app.api_route("/wake", methods=["GET", "POST"])
-def wake(background_tasks: BackgroundTasks) -> Dict[str, Any]:
-    background_tasks.add_task(do_wake)
-    return {"message": "Wake sequence initiated. Cloud SQL and VM are starting up.", "status": "waking"}
+@app.post("/wake")
+def wake() -> dict[str, Any]:
+    return do_wake()
 
 
-@app.api_route("/sleep", methods=["GET", "POST"])
-def sleep(background_tasks: BackgroundTasks) -> Dict[str, Any]:
-    background_tasks.add_task(do_sleep)
-    return {"message": "Sleep sequence initiated. Cloud SQL and VM are being suspended to $0.", "status": "sleeping"}
+@app.post("/sleep")
+def sleep() -> dict[str, Any]:
+    return do_sleep()
 
 
-@app.api_route("/check-idle", methods=["GET", "POST"])
-def check_idle(background_tasks: BackgroundTasks) -> Dict[str, Any]:
-    """Checks if there was any traffic on scholarsetu-api in the past 30 minutes. If 0, puts to sleep."""
+@app.post("/check-idle")
+def check_idle() -> dict[str, Any]:
+    """Sleep when nobody has used the API for IDLE_MINUTES. Any error keeps everything awake."""
     try:
-        credentials, _ = google.auth.default()
-        client = monitoring_v3.MetricServiceClient(credentials=credentials)
-        now = datetime.now(timezone.utc)
-        interval = monitoring_v3.TimeInterval(
-            end_time={"seconds": int(now.timestamp())},
-            start_time={"seconds": int((now - timedelta(minutes=30)).timestamp())},
-        )
-        
-        project_name = f"projects/{PROJECT}"
-        filter_str = (
-            f'metric.type = "run.googleapis.com/request_count" AND '
-            f'resource.labels.service_name = "{API_SERVICE_NAME}"'
-        )
-        
-        results = client.list_time_series(
-            request={
-                "name": project_name,
-                "filter": filter_str,
-                "interval": interval,
-                "view": monitoring_v3.ListTimeSeriesRequest.TimeSeriesView.FULL,
-            }
-        )
-        
-        total_requests = 0
-        for series in results:
-            for point in series.points:
-                total_requests += point.value.int64_value
-                
-        logger.info("Idle check: detected %d requests to %s in last 30 minutes", total_requests, API_SERVICE_NAME)
-        
-        if total_requests == 0:
-            logger.info("Zero requests in last 30 minutes. Triggering automatic sleep...")
-            background_tasks.add_task(do_sleep)
-            return {
-                "action": "sleeping",
-                "reason": "zero_traffic_30m",
-                "requests_last_30m": 0,
-            }
-        else:
-            return {
-                "action": "stay_awake",
-                "reason": "active_traffic",
-                "requests_last_30m": total_requests,
-            }
-    except Exception as e:
-        logger.exception("Failed to query monitoring metrics: %s", e)
-        return {"error": str(e), "action": "stay_awake"}
+        headers = _headers()
+        if _state(headers)["sleeping"]:
+            return {"action": "none", "reason": "already asleep"}
+        used = real_requests(headers, IDLE_MINUTES)
+    except Exception as exc:  # noqa: BLE001 - never sleep on uncertainty
+        logger.exception("idle check failed; staying awake")
+        return {"action": "stay_awake", "reason": f"check failed: {type(exc).__name__}"}
+    logger.info("idle check: %d real API request(s) in the last %d minutes", used, IDLE_MINUTES)
+    if used:
+        return {"action": "stay_awake", "real_requests": used, "minutes": IDLE_MINUTES}
+    return {"action": "sleeping", "real_requests": 0, "minutes": IDLE_MINUTES, **do_sleep()}

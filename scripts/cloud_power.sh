@@ -143,11 +143,23 @@ cmd_remove_nat() {
 
   if [ -z "$has_ext_ip" ]; then
     log_info "Assigning an ephemeral external IP to VM ${VM} so it has direct outbound internet without NAT..."
-    gcloud compute instances add-access-config "$VM" --zone "$ZONE" --project "$PROJECT" --quiet || true
+    if ! gcloud compute instances add-access-config "$VM" --zone "$ZONE" --project "$PROJECT" --quiet; then
+      log_error "Could not give the VM a public IP; Cloud NAT is kept (without either the VM has no internet)."
+      exit 1
+    fi
     log_success "VM now has direct outbound internet access."
   else
     log_info "VM already has an external IP access config."
   fi
+
+  # Inbound stays closed: SSH only through IAP, RDP and public SSH denied (same rules as deploy.sh vm).
+  gcloud compute firewall-rules describe scholarsetu-ssh-iap-only --project "$PROJECT" >/dev/null 2>&1 || \
+    gcloud compute firewall-rules create scholarsetu-ssh-iap-only --project "$PROJECT" --network default \
+      --direction INGRESS --priority 900 --allow tcp:22 --source-ranges 35.235.240.0/20 --target-tags scholarsetu-backend
+  gcloud compute firewall-rules describe scholarsetu-deny-public-admin --project "$PROJECT" >/dev/null 2>&1 || \
+    gcloud compute firewall-rules create scholarsetu-deny-public-admin --project "$PROJECT" --network default \
+      --direction INGRESS --priority 950 --action DENY --rules tcp:22,tcp:3389 --source-ranges 0.0.0.0/0 \
+      --target-tags scholarsetu-backend
 
   # Delete Cloud NAT
   log_info "Deleting Cloud NAT gateway (${NAT}) to stop the \$32.40/month charge..."

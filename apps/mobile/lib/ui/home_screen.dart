@@ -10,6 +10,7 @@ import 'family_screen.dart';
 import 'jago_screen.dart';
 import 'labels.dart';
 import 'mitra_screen.dart';
+import 'rights_screens.dart';
 import 'student_screens.dart';
 import 'widgets.dart';
 
@@ -121,6 +122,10 @@ class AccountMenu extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return PopupMenuButton<String>(
       onSelected: (v) async {
+        if (v == 'privacy') {
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrivacyScreen()));
+          return;
+        }
         if (v == 'out') {
           final pending = ref.read(outboxProvider).pending;
           final ok = pending == 0 ||
@@ -139,7 +144,11 @@ class AccountMenu extends ConsumerWidget {
           if (ok) await ref.read(sessionProvider.notifier).signOut();
         }
       },
-      itemBuilder: (_) => const [PopupMenuItem(value: 'out', child: Text('Sign out'))],
+      itemBuilder: (_) => [
+        if (ref.read(sessionProvider).user?.role == 'STUDENT')
+          const PopupMenuItem(value: 'privacy', child: Text('Privacy & consent')),
+        const PopupMenuItem(value: 'out', child: Text('Sign out')),
+      ],
     );
   }
 }

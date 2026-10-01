@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
-import { ANALYTICS_ROLES, AuthProvider, useAuth } from './auth/AuthContext';
+import { AuthProvider } from './auth/AuthContext';
+import { ANALYTICS_ROLES, useAuth } from './auth/auth';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import ReviewQueue from './pages/ReviewQueue';
@@ -9,6 +10,8 @@ import ApplicationDetail from './pages/ApplicationDetail';
 import CoverageMap from './pages/CoverageMap';
 import Analytics from './pages/Analytics';
 import DBTMonitor from './pages/DBTMonitor';
+import DataRequests from './pages/DataRequests';
+import DemoSms from './pages/DemoSms';
 
 function Home() {
   const { user } = useAuth();
@@ -30,6 +33,8 @@ export default function App() {
             <Route path="coverage-map" element={<CoverageMap />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="dbt-monitor" element={<DBTMonitor />} />
+            <Route path="data-requests" element={<DataRequests />} />
+            <Route path="demo-sms" element={<DemoSms />} />
             <Route path="*" element={<Home />} />
           </Route>
         </Routes>

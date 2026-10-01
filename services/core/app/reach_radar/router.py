@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import ANALYTICS_ROLES, officer_covers, require_role
+from app.dependencies import ANALYTICS_ROLES, officer_covers, require_role, scope_to_officer
 from app.gateway.models import User
 from app.shared.types import UserRole
 from app.verification.sources import SourceClient, get_source_client
@@ -53,7 +53,8 @@ async def coverage(level: str = Query("block", pattern="^(district|block)$"), di
 @router.get("/bottlenecks", response_model=list[BottleneckRow])
 async def bottlenecks(user: User = Depends(require_role(*ANALYTICS_ROLES)), radar: ReachRadarService = Depends(get_radar)):
     """Where open applications wait longest, from the ledger."""
-    return [r for r in await radar.bottlenecks() if officer_covers(user, r["state_name"], r["district"])]
+    rows = await radar.bottlenecks(lambda q: scope_to_officer(q, user))
+    return [r for r in rows if officer_covers(user, r["state_name"], r["district"])]
 
 
 @router.get("/dbt-failures", response_model=list[DBTHotspotRow])

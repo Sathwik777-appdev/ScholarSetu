@@ -25,6 +25,10 @@ os.environ["DEMO_MODE"] = "false"
 os.environ["OUTBOX_PUBLISHER_ENABLED"] = "false"
 os.environ["ADAPTER_SYNC_INTERVAL_SECONDS"] = "0"
 os.environ["CORS_ALLOWED_ORIGINS"] = "http://localhost:5173"
+# Per-client limits on the login endpoints: every test request comes from one address, so they are lifted here
+# and tested on their own (tests/integration/test_audit_fixes.py).
+os.environ["IP_CODE_REQUESTS_PER_10_MIN"] = "100000"
+os.environ["IP_CODE_CHECKS_PER_10_MIN"] = "100000"
 os.environ["ATTESTATION_PRIVATE_KEY_PATH"] = str(_TMP / "attestation_ed25519.pem")
 
 from cryptography.hazmat.primitives import serialization  # noqa: E402
@@ -273,3 +277,23 @@ def store():
     app.dependency_overrides[get_object_store] = lambda: memory
     yield memory
     app.dependency_overrides.pop(get_object_store, None)
+
+
+# ── Process exit ──────────────────────────────────────────────────────────────
+# ONNX Runtime (the embedding model) can abort while its native thread pool is torn down at interpreter exit
+# ("recursive_mutex lock failed"), turning a fully passing run into exit code 134. Once pytest has finished
+# everything, leave with pytest's own status instead of running that native teardown.
+
+_exit_status: dict = {}
+
+
+def pytest_sessionfinish(session, exitstatus):
+    _exit_status["code"] = int(exitstatus)
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_unconfigure(config):
+    if "code" in _exit_status:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(_exit_status["code"])

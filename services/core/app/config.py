@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # all codes) before the phone is locked out. A new code does not reset the guess count.
     OTP_REQUESTS_PER_HOUR: int = 5
     OTP_FAILURES_PER_HOUR: int = 10
+    # Per client address over 10 minutes, across all phone numbers (app/shared/ratelimit.py).
+    IP_CODE_REQUESTS_PER_10_MIN: int = 30
+    IP_CODE_CHECKS_PER_10_MIN: int = 60
 
     # Demo mode lets seeded demo users log in with DEMO_OTP. Off by default.
     DEMO_MODE: bool = False
@@ -139,6 +142,10 @@ class Settings(BaseSettings):
     WORKER_RUNS_BACKGROUND_JOBS: bool = False
     # Development only: keep wallet files on local disk when no object store is configured. Unset = 503.
     WALLET_LOCAL_DIR: str | None = None
+
+    # Hosted demo only: the private power manager that wakes the sleeping database and VM (deploy/gcp/power-manager).
+    # When set, a request that cannot reach the database asks it to wake everything (app/shared/wake.py).
+    POWER_MANAGER_URL: str | None = None
 
     # Publish the transactional outbox to NATS from the API process.
     OUTBOX_PUBLISHER_ENABLED: bool = True

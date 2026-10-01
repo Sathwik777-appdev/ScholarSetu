@@ -8,6 +8,7 @@ from typing import Any, Optional
 from sqlalchemy import (
     JSON, BigInteger, DateTime, Enum as SAEnum, ForeignKey, Identity, Index, Integer, Numeric, Sequence, String, Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,6 +29,9 @@ class Household(Base):
     guardian_name: Mapped[str] = mapped_column(String, nullable=False)
     guardian_phone: Mapped[Optional[str]] = mapped_column(String(15), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
+
+
+OPEN_APPLICATION_SQL = "canonical_state NOT IN ('REJECTED', 'SURRENDERED')"
 
 
 class Application(Base):
@@ -52,6 +56,10 @@ class Application(Base):
     __table_args__ = (
         UniqueConstraint("source_system", "source_ref", name="uq_application_source_ref"),
         Index("idx_app_scheme_year", "scheme", "academic_year"),
+        # One open application per student, scheme and year, enforced by the database: application-level
+        # checks alone let two simultaneous submissions both through. Closed applications do not count.
+        Index("uq_application_open_per_scheme_year", "student_id", "scheme", "academic_year", unique=True,
+              postgresql_where=text(OPEN_APPLICATION_SQL)),
     )
 
 

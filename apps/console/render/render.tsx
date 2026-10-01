@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- build-time screenshot entry, never hot-reloaded */
 // Build-time only: renders one 3D scene full-window so scripts/render-assets.mjs can screenshot it.
 import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';

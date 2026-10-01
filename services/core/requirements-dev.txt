@@ -1,5 +1,6 @@
 # Test and lint tools (not installed in the API image).
 -r requirements.txt
+-c requirements.lock  # the same versions as the image
 pytest>=9.1
 pytest-asyncio>=1.4
 jsonschema>=4.26

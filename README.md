@@ -173,6 +173,20 @@ flutter build apk --debug
 
 See [apps/mobile/README.md](apps/mobile/README.md).
 
+**Release signing (Play Store).** Release builds use `apps/mobile/android/key.properties` when it exists (it is
+git-ignored); without it they are signed with the debug key and Gradle prints a warning. Create an upload key once
+and keep the keystore and passwords safe (losing them means a new app listing):
+
+```bash
+keytool -genkey -v -keystore ~/scholarsetu-upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+cat > apps/mobile/android/key.properties <<'PROPS'
+storeFile=/Users/<you>/scholarsetu-upload.jks
+storePassword=<password>
+keyAlias=upload
+keyPassword=<password>
+PROPS
+```
+
 ## Design
 
 One visual language across the web console and the mobile app: deep ink surfaces, a saffron accent,

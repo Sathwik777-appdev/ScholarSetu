@@ -105,9 +105,9 @@ class ReachRadarService:
                 "students": [{"record_ref": r["record_ref"], "class_": r["class"], "pvtg": r["pvtg"]}
                              for r in unreached] if include_students else None}
 
-    async def bottlenecks(self) -> list[dict]:
+    async def bottlenecks(self, scope=None) -> list[dict]:
         groups: dict[tuple, list] = defaultdict(list)
-        for row in await LedgerService(self.db).sla_monitor():
+        for row in await LedgerService(self.db).sla_monitor(scope):
             groups[(row["district"], row["state_name"], row["state"].value)].append(row)
         return sorted(({"district": d, "state_name": s, "stage": stage, "open_applications": len(rows),
                         "avg_days_in_stage": round(sum(r["days_in_state"] for r in rows) / len(rows), 1),

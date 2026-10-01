@@ -136,6 +136,16 @@ def officer_covers(user: User, student_state: Optional[str], student_district: O
     return False
 
 
+def scope_to_officer(query, officer: User):
+    """Restrict a query joined to Student to the officer's jurisdiction, in SQL (uses the place-key indexes)."""
+    from app.students.models import Student
+    if officer.role != UserRole.MINISTRY:
+        query = query.where(places.sql_key(Student.state) == places.key(officer.jurisdiction_state))
+        if officer.role in (UserRole.DISTRICT_OFFICER, UserRole.INSTITUTE_OFFICER):
+            query = query.where(places.sql_key(Student.district) == places.key(officer.jurisdiction_district))
+    return query
+
+
 @dataclass
 class Reader:
     """An officer (any student's records) or a student principal (own records only)."""

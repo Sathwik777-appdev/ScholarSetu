@@ -3,10 +3,11 @@
 from datetime import date, datetime, timezone
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, String
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.shared import places
 from app.shared.types import Gender
 
 
@@ -36,3 +37,8 @@ class Student(Base):
     apaar_id: Mapped[Optional[str]] = mapped_column(String, unique=True, nullable=True)
     nta_roll_number: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
+
+
+# Officer jurisdiction filters compare normalised place keys (app/shared/places.sql_key); index those expressions.
+Index("ix_students_state_key", places.sql_key(Student.state))
+Index("ix_students_state_district_key", places.sql_key(Student.state), places.sql_key(Student.district))

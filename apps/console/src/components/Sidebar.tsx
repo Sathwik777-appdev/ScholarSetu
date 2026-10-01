@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
-import { BarChart3, ClipboardCheck, CreditCard, LayoutDashboard, List, LogOut, Map } from 'lucide-react';
+import { BarChart3, ClipboardCheck, CreditCard, LayoutDashboard, List, LogOut, Map, MessageSquare, ShieldCheck } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { ANALYTICS_ROLES, useAuth } from '../auth/AuthContext';
+import { ANALYTICS_ROLES, useAuth } from '../auth/auth';
 import { ROLE_LABELS } from '../utils/formatters';
 
 interface NavItem {
@@ -9,15 +9,18 @@ interface NavItem {
   href: string;
   icon: LucideIcon;
   analyticsOnly?: boolean;
+  ministryOnly?: boolean;
 }
 
-export const NAV: NavItem[] = [
+const NAV: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, analyticsOnly: true },
   { name: 'Review queue', href: '/review-queue', icon: ClipboardCheck },
   { name: 'Applications', href: '/applications', icon: List },
   { name: 'Coverage', href: '/coverage-map', icon: Map, analyticsOnly: true },
   { name: 'Bottlenecks & SLA', href: '/analytics', icon: BarChart3, analyticsOnly: true },
   { name: 'DBT failures', href: '/dbt-monitor', icon: CreditCard, analyticsOnly: true },
+  { name: 'Data requests', href: '/data-requests', icon: ShieldCheck, analyticsOnly: true },
+  { name: 'Demo SMS', href: '/demo-sms', icon: MessageSquare, ministryOnly: true },
 ];
 
 export function BrandMark({ className = 'h-9 w-9' }: { className?: string }) {
@@ -49,7 +52,8 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
       <nav className="flex-1">
         <ul className="space-y-1">
-          {NAV.filter((item) => canAnalyse || !item.analyticsOnly).map((item) => (
+          {NAV.filter((item) => (canAnalyse || !item.analyticsOnly) && (!item.ministryOnly || user?.role === 'MINISTRY'))
+            .map((item) => (
             <li key={item.href}>
               <NavLink
                 to={item.href}

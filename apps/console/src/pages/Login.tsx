@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { ShieldCheck } from 'lucide-react';
-import { errorMessage, useAuth } from '../auth/AuthContext';
+import { errorMessage } from '../api/client';
+import { useAuth } from '../auth/auth';
 import { Hero3D } from '../components/Lazy3D';
 import { BrandMark } from '../components/Sidebar';
 

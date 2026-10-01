@@ -16,6 +16,7 @@ from app.gateway.service import (
     RegistrationService,
 )
 from app.shared import places
+from app.shared.ratelimit import limit_code_checks, limit_code_requests
 from app.shared.types import AssistSessionStatus, Gender, MitraScope, UserRole
 
 router = APIRouter(prefix="/v1", tags=["Auth & Gateway"])
@@ -95,7 +96,7 @@ def _user_out(user: User) -> AuthUser:
                     jurisdiction_district=user.jurisdiction_district)
 
 
-@router.post("/auth/otp/request", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/auth/otp/request", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(limit_code_requests)])
 async def request_otp(req: OTPRequest, db: AsyncSession = Depends(get_db)):
     """Send a login OTP by SMS. The response is identical whether or not the phone is registered."""
     try:
@@ -106,7 +107,7 @@ async def request_otp(req: OTPRequest, db: AsyncSession = Depends(get_db)):
             "message": f"If {req.phone[:2]}******{req.phone[-2:]} is registered, an OTP has been sent."}
 
 
-@router.post("/auth/otp/verify", response_model=AuthTokenResponse)
+@router.post("/auth/otp/verify", response_model=AuthTokenResponse, dependencies=[Depends(limit_code_checks)])
 async def verify_otp(req: OTPVerifyRequest, db: AsyncSession = Depends(get_db)):
     try:
         user, token, expires_in = await AuthService(db).verify_login_otp(req.phone, req.otp)
@@ -117,7 +118,7 @@ async def verify_otp(req: OTPVerifyRequest, db: AsyncSession = Depends(get_db)):
     return AuthTokenResponse(access_token=token, expires_in=expires_in, user=_user_out(user))
 
 
-@router.post("/auth/register/start", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/auth/register/start", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(limit_code_requests)])
 async def start_registration(req: OTPRequest, db: AsyncSession = Depends(get_db)):
     """Step 1: send a code to the phone. The response never reveals whether the number is registered."""
     try:
@@ -127,7 +128,7 @@ async def start_registration(req: OTPRequest, db: AsyncSession = Depends(get_db)
     return {"status": "accepted", "message": f"A message has been sent to {req.phone[:2]}******{req.phone[-2:]}."}
 
 
-@router.post("/auth/register/complete", response_model=AuthTokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/auth/register/complete", response_model=AuthTokenResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(limit_code_checks)])
 async def complete_registration(req: RegistrationComplete, db: AsyncSession = Depends(get_db)):
     """Step 2: the code confirms the phone; the student account is created. No application is submitted."""
     if req.dob >= date.today():

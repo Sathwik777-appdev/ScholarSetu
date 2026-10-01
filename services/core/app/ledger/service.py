@@ -8,7 +8,7 @@ those rows. Methods flush but never commit: the caller owns the unit of work.
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from fastapi import Depends
 from sqlalchemy import func, select
@@ -162,6 +162,14 @@ class LedgerService:
 
     # ── writes ──────────────────────────────────────────────
 
+    async def lock(self, app: Application) -> Application:
+        """Lock the application row and reload it, so checks see the state as committed by whoever held the
+        lock before us. Every state check must come after this: an application loaded earlier in the request
+        may already have been moved by someone else (e.g. rejected while another officer sanctions)."""
+        await self.db.execute(select(Application).where(Application.id == app.id).with_for_update()
+                              .execution_options(populate_existing=True))
+        return app
+
     async def append_event(self, app: Application, event_type: str, payload: dict[str, Any], actor: str,
                            source: SourceSystem = SourceSystem.SCHOLARSETU,
                            occurred_at: Optional[datetime] = None) -> LedgerEvent:
@@ -219,6 +227,7 @@ class LedgerService:
     async def transition(self, app: Application, new_state: CanonicalState, actor: str,
                          payload: Optional[dict[str, Any]] = None, source: SourceSystem = SourceSystem.SCHOLARSETU,
                          occurred_at: Optional[datetime] = None) -> LedgerEvent:
+        await self.lock(app)
         current = app.canonical_state
         if new_state not in VALID_TRANSITIONS.get(current, set()):
             raise LedgerError(409, f"Invalid transition from {current.value} to {new_state.value}")
@@ -247,7 +256,8 @@ class LedgerService:
 
     async def respond_deficiency(self, app: Application, deficiency_id: str, response: dict[str, Any],
                                  actor: str) -> LedgerEvent:
-        deficiency = await self.db.get(Deficiency, deficiency_id)
+        await self.lock(app)
+        deficiency = await self.db.get(Deficiency, deficiency_id, with_for_update=True, populate_existing=True)
         if deficiency is None or deficiency.application_id != app.id:
             raise LedgerError(404, "Deficiency not found")
         if deficiency.resolved_at is not None:
@@ -268,6 +278,9 @@ class LedgerService:
         """Sanction with its instalment plan; amounts are recorded once, here, in the ledger."""
         if not instalments:
             raise LedgerError(422, "A sanction needs at least one instalment")
+        await self.lock(app)
+        if CanonicalState.SANCTIONED not in VALID_TRANSITIONS.get(app.canonical_state, set()):
+            raise LedgerError(409, f"Invalid transition from {app.canonical_state.value} to SANCTIONED")
         occurred_at = _aware(occurred_at) if occurred_at else datetime.now(timezone.utc)
         payments = [Payment(id=new_id(), application_id=app.id, instalment=i, description=desc,
                             amount=Decimal(str(amount)), state=PaymentState.SCHEDULED)
@@ -286,7 +299,8 @@ class LedgerService:
                              pfms_ref: Optional[str] = None, failure_code: Optional[str] = None,
                              source: SourceSystem = SourceSystem.SCHOLARSETU,
                              occurred_at: Optional[datetime] = None) -> Payment:
-        payment = await self.db.get(Payment, payment_id)
+        await self.lock(app)
+        payment = await self.db.get(Payment, payment_id, with_for_update=True, populate_existing=True)
         if payment is None or payment.application_id != app.id:
             raise LedgerError(404, "Payment not found")
         allowed = {PaymentState.SCHEDULED: {PaymentState.INITIATED},
@@ -322,7 +336,10 @@ class LedgerService:
                         occurred_at: Optional[datetime] = None) -> LedgerEvent:
         """Give up a held scholarship because another one is being sanctioned (one scheme at a time).
         Unpaid scheduled instalments are cancelled; an instalment already on its way blocks the surrender."""
-        payments = await self.payments_for([app.id])
+        await self.lock(app)
+        payments = list((await self.db.execute(
+            select(Payment).where(Payment.application_id == app.id).order_by(Payment.instalment)
+            .with_for_update().execution_options(populate_existing=True))).scalars())
         in_flight = [p for p in payments if p.state in (PaymentState.INITIATED, PaymentState.RETRYING)]
         if in_flight:
             raise LedgerError(409, f"{app.id} has a payment on its way to the bank (instalment "
@@ -474,14 +491,16 @@ class LedgerService:
                                 "deadline": valid_until, "action_url": "/v1/verify/claims"})
         return actions
 
-    async def sla_monitor(self) -> list[dict[str, Any]]:
-        """Open applications with time in their current state against the configured SLA."""
+    async def sla_monitor(self, scope: Optional[Callable] = None) -> list[dict[str, Any]]:
+        """Open applications with time in their current state against the configured SLA.
+
+        `scope` restricts the query (joined to Student) to an officer's jurisdiction in SQL, so a district
+        officer's request reads only that district's applications, not every open application in India."""
         now = datetime.now(timezone.utc)
         limits = settings.sla_days
-        apps = (await self.db.execute(
-            select(Application, Student.district, Student.state).join(Student, Student.id == Application.student_id)
-            .where(Application.canonical_state.in_(list(limits)))
-        )).all()
+        query = (select(Application, Student.district, Student.state).join(Student, Student.id == Application.student_id)
+                 .where(Application.canonical_state.in_(list(limits))))
+        apps = (await self.db.execute(scope(query) if scope else query)).all()
         rows = []
         for app, district, state in apps:
             limit = (settings.sla_seconds(app.canonical_state) or 0) / 86400  # same clock as the SLA workflow

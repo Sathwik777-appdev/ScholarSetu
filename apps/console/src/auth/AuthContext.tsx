@@ -1,20 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { apiClient, errorMessage, setUnauthorizedHandler, tokenStore } from '../api/client';
-import type { AuthTokenResponse, AuthUser, UserRole } from '../types';
-
-// The console is for officers and the ministry. Students and guardians use the mobile app.
-export const CONSOLE_ROLES: UserRole[] = ['INSTITUTE_OFFICER', 'DISTRICT_OFFICER', 'STATE_OFFICER', 'MINISTRY'];
-export const ANALYTICS_ROLES: UserRole[] = ['DISTRICT_OFFICER', 'STATE_OFFICER', 'MINISTRY'];
-
-interface AuthState {
-  user: AuthUser | null;
-  checking: boolean;
-  requestOtp: (phone: string) => Promise<string>;
-  verifyOtp: (phone: string, otp: string) => Promise<void>;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthState | null>(null);
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { apiClient, setUnauthorizedHandler, tokenStore } from '../api/client';
+import type { AuthTokenResponse, AuthUser } from '../types';
+import { AuthContext, CONSOLE_ROLES } from './auth';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -59,10 +46,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useAuth(): AuthState {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
-  return ctx;
-}
-
-export { errorMessage };

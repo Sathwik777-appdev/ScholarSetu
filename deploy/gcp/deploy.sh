@@ -111,13 +111,16 @@ images() {
 }
 
 vm() {
-  # The VM has no public IP: it reaches Google APIs, Docker Hub and GitHub through Cloud NAT, which must
-  # exist before it boots.
-  g compute routers describe scholarsetu-router --region "$REGION" >/dev/null 2>&1 || \
-    g compute routers create scholarsetu-router --network default --region "$REGION"
-  g compute routers nats describe scholarsetu-nat --router scholarsetu-router --region "$REGION" >/dev/null 2>&1 || \
-    g compute routers nats create scholarsetu-nat --router scholarsetu-router --region "$REGION" \
-      --auto-allocate-nat-external-ips --nat-all-subnet-ip-ranges
+  # Outbound only: the VM has an ephemeral public IP (no Cloud NAT, which costs more than the VM) so it can pull
+  # images, but nothing on it is reachable from the internet: SSH only through IAP, every other inbound port
+  # closed except the mocks from Cloud Run's subnet. Private Google Access lets it reach Google APIs either way.
+  g compute networks subnets update default --region "$REGION" --enable-private-ip-google-access >/dev/null
+  g compute firewall-rules describe scholarsetu-ssh-iap-only >/dev/null 2>&1 || \
+    g compute firewall-rules create scholarsetu-ssh-iap-only --network default --direction INGRESS --priority 900 \
+      --allow tcp:22 --source-ranges 35.235.240.0/20 --target-tags scholarsetu-backend
+  g compute firewall-rules describe scholarsetu-deny-public-admin >/dev/null 2>&1 || \
+    g compute firewall-rules create scholarsetu-deny-public-admin --network default --direction INGRESS \
+      --priority 950 --action DENY --rules tcp:22,tcp:3389 --source-ranges 0.0.0.0/0 --target-tags scholarsetu-backend
   g compute firewall-rules describe scholarsetu-mocks-from-run >/dev/null 2>&1 || \
     g compute firewall-rules create scholarsetu-mocks-from-run --network default --direction INGRESS \
       --allow tcp:8100 --source-ranges "$(g compute networks subnets describe default --region "$REGION" --format='value(ipCidrRange)')" \
@@ -130,7 +133,7 @@ vm() {
   else
     g compute instances create "$VM" --zone "$ZONE" --machine-type e2-small \
       --image-family debian-12 --image-project debian-cloud --boot-disk-size 20GB \
-      --service-account "$SA_EMAIL" --scopes cloud-platform --tags scholarsetu-backend --no-address \
+      --service-account "$SA_EMAIL" --scopes cloud-platform --tags scholarsetu-backend \
       --shielded-secure-boot --metadata "$meta" --metadata-from-file "$files"
   fi
 }
@@ -153,6 +156,8 @@ run_flags() {  # shared by the API service and the migration job
   dl="DIGILOCKER_MODE=${DIGILOCKER_MODE:-mock},DIGILOCKER_CLIENT_ID=${DIGILOCKER_CLIENT_ID:-scholarsetu-$ENV},PUBLIC_BASE_URL=$public"
   [ -n "${DIGILOCKER_API_URL:-}" ] && dl+=",DIGILOCKER_API_URL=$DIGILOCKER_API_URL"
   [ -n "${DIGILOCKER_AUTHORIZE_URL:-}" ] && dl+=",DIGILOCKER_AUTHORIZE_URL=$DIGILOCKER_AUTHORIZE_URL"
+  # Demo: a request that finds the database asleep asks the (private) power manager to wake everything.
+  [ "$ENV" = demo ] && dl+=",POWER_MANAGER_URL=https://scholarsetu-power-$number.$REGION.run.app"
   echo --image "$REPO/scholarsetu-core:$TAG" --region "$REGION" --service-account "$SA_EMAIL" \
     --set-cloudsql-instances "$CONNECTION" --network default --subnet default --vpc-egress private-ranges-only \
     --set-secrets "$secrets" \

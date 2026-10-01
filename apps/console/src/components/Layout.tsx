@@ -3,7 +3,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import Sidebar, { BrandMark } from './Sidebar';
 import { Loading } from './States';
-import { useAuth } from '../auth/AuthContext';
+import { useAuth } from '../auth/auth';
 
 export default function Layout() {
   const { user, checking } = useAuth();

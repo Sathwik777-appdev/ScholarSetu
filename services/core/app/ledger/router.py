@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import (
     ANALYTICS_ROLES, OFFICER_ROLES, Reader, StudentPrincipal, officer_covers, officer_or_student, require_role,
-    student_principal,
+    scope_to_officer, student_principal,
 )
 from app.gateway.models import User
 from app.gateway.service import record_audit
@@ -184,7 +184,14 @@ async def respond_to_deficiency(
     ledger: LedgerService = Depends(get_ledger_service),
 ):
     app = await ensure_application_access(ledger, application_id, Reader(principal.user, principal.student_id))
-    response = {"response_text": body.response_text, "document_ids": body.document_ids}
+    if body.document_ids:  # only documents from this student's own wallet may be attached
+        from app.wallet.models import WalletDocument
+        owned = set((await ledger.db.execute(select(WalletDocument.id).where(
+            WalletDocument.id.in_(body.document_ids), WalletDocument.student_id == app.student_id))).scalars())
+        unknown = [d for d in body.document_ids if d not in owned]
+        if unknown:
+            raise HTTPException(status_code=422, detail=f"Not documents in your wallet: {', '.join(unknown)}")
+    response = {"response_text": body.response_text, "document_ids": list(dict.fromkeys(body.document_ids))}
     if principal.via_mitra:
         response["assisted_by_session"] = principal.assist_session.id
     try:
@@ -226,11 +233,7 @@ async def verify_chain(application_id: str, reader: Reader = Depends(officer_or_
 
 def _scope(query, officer: User):
     """Restrict a query joined to Student to the officer's jurisdiction."""
-    if officer.role != UserRole.MINISTRY:
-        query = query.where(places.sql_key(Student.state) == places.key(officer.jurisdiction_state))
-        if officer.role in (UserRole.DISTRICT_OFFICER, UserRole.INSTITUTE_OFFICER):
-            query = query.where(places.sql_key(Student.district) == places.key(officer.jurisdiction_district))
-    return query
+    return scope_to_officer(query, officer)
 
 
 @router.get("/applications", response_model=list[OfficerApplicationOut])
@@ -287,8 +290,7 @@ async def analytics_overview(officer: User = Depends(require_role(*ANALYTICS_ROL
     open_cases = await db.scalar(_scope(select(func.count()).select_from(ReviewCase)
                                         .join(Student, Student.id == ReviewCase.student_id), officer)
                                  .where(ReviewCase.status.in_(list(OPEN_CASE_STATUSES))))
-    breaches = sum(1 for row in await ledger.sla_monitor()
-                   if row["breached"] and officer_covers(officer, row["state_name"], row["district"]))
+    breaches = sum(1 for row in await ledger.sla_monitor(lambda q: _scope(q, officer)) if row["breached"])
     scope = ("All India" if officer.role == UserRole.MINISTRY else
              officer.jurisdiction_state if officer.role == UserRole.STATE_OFFICER else
              f"{officer.jurisdiction_district}, {officer.jurisdiction_state}")
@@ -310,9 +312,13 @@ async def officer_transition(application_id: str, body: TransitionRequest,
                              officer: User = Depends(require_role(*OFFICER_ROLES)),
                              ledger: LedgerService = Depends(get_ledger_service)):
     app = await ensure_application_access(ledger, application_id, Reader(officer, None))
+    await ledger.lock(app)  # role and stage checks below must see the committed state
     if (app.canonical_state, body.to_state) not in ROLE_TRANSITIONS.get(officer.role, set()):
         raise HTTPException(status_code=403, detail=f"{officer.role.value} cannot move an application from "
                                                     f"{app.canonical_state.value} to {body.to_state.value}")
+    if body.to_state == CanonicalState.REJECTED and len(body.note.strip()) < 10:
+        raise HTTPException(status_code=422, detail="Say why the application is rejected (a note of at least "
+                                                    "10 characters); the student sees it")
     try:
         await ledger.transition(app, body.to_state, actor_of(officer), {"note": body.note} if body.note else {})
     except LedgerError as exc:
@@ -326,6 +332,7 @@ async def officer_raise_deficiency(application_id: str, body: RaiseDeficiencyReq
                                    officer: User = Depends(require_role(*OFFICER_ROLES)),
                                    ledger: LedgerService = Depends(get_ledger_service)):
     app = await ensure_application_access(ledger, application_id, Reader(officer, None))
+    await ledger.lock(app)  # role and stage checks below must see the committed state
     if DEFICIENCY_STAGE.get(officer.role) != app.canonical_state:
         raise HTTPException(status_code=403, detail=f"{officer.role.value} cannot raise a deficiency while the "
                                                     f"application is {app.canonical_state.value}")
@@ -353,6 +360,7 @@ async def officer_sanction(application_id: str, body: SanctionRequest,
     from app.verification.service import OPEN_CASE_STATUSES
 
     app = await ensure_application_access(ledger, application_id, Reader(officer, None))
+    await ledger.lock(app)  # role and stage checks below must see the committed state
     if app.canonical_state != CanonicalState.AUTHORITY_VERIFICATION:
         raise HTTPException(status_code=409, detail=f"Only applications in authority verification can be "
                                                     f"sanctioned (this one is {app.canonical_state.value})")
@@ -422,5 +430,58 @@ async def officer_sanction(application_id: str, body: SanctionRequest,
 async def sla_monitor(officer: User = Depends(require_role(*ANALYTICS_ROLES)),
                       ledger: LedgerService = Depends(get_ledger_service)):
     """Open applications by time in their current state against the configured SLA."""
-    return [row for row in await ledger.sla_monitor()
-            if officer_covers(officer, row["state_name"], row["district"])]
+    return await ledger.sla_monitor(lambda q: _scope(q, officer))
+
+
+# ── officer workbench helpers ────────────────────────────────────────────────
+
+
+@router.get("/officer/applications/{application_id}/sanction-options")
+async def sanction_options(application_id: str,
+                           officer: User = Depends(require_role(UserRole.DISTRICT_OFFICER, UserRole.STATE_OFFICER)),
+                           ledger: LedgerService = Depends(get_ledger_service)):
+    """What a sanction can pay under the scheme's current rules, and any scholarship the student must give up.
+
+    Each component is one `component` value for an instalment: fixed (a cap), monthly (rate x months) or
+    actual cost (needs an evidence note). The same rules check the sanction itself."""
+    from app.eligibility.service import EligibilityError, EligibilityService
+    app = await ensure_application_access(ledger, application_id, Reader(officer, None))
+    eligibility = EligibilityService(ledger.db)
+    try:
+        version = await eligibility.rule_version(app.scheme)
+    except EligibilityError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+    components = []
+    for key, item in version.decision_table.get("amounts", {}).items():
+        value, unit = item.get("value"), str(item.get("unit", ""))
+        for path, v in ([(f"{key}.{k}", v) for k, v in value.items()] if isinstance(value, dict) else [(key, value)]):
+            kind = ("monthly" if "month" in unit.lower() else "fixed") if isinstance(v, (int, float)) else "actual"
+            components.append({"component": path, "label": item.get("label") or humanize_key(path), "kind": kind,
+                               "amount": v if isinstance(v, (int, float)) else None, "unit": unit,
+                               "note": None if kind != "actual" else str(v),
+                               "verified_by_team": bool(item.get("verified_by_team")), "source": item.get("source")})
+    held = [h for h in await eligibility.active_holdings(app.student_id, app.academic_year) if h.id != app.id]
+    return {"application_id": app.id, "scheme": app.scheme.value, "rule_version": version.version,
+            "state": app.canonical_state.value, "components": components,
+            "must_surrender": [{"application_id": h.id, "scheme": h.scheme.value} for h in held],
+            "flags": app.provisional_flags or []}
+
+
+def humanize_key(path: str) -> str:
+    return path.replace(".", " · ").replace("_", " ").capitalize()
+
+
+@router.get("/officer/applications/{application_id}/documents")
+async def application_documents(application_id: str, officer: User = Depends(require_role(*OFFICER_ROLES)),
+                                ledger: LedgerService = Depends(get_ledger_service)):
+    """The documents in the student's wallet (metadata only; open one with /v1/wallet/documents/{id}/content).
+    Every listing is audited."""
+    from app.wallet.models import WalletDocument
+    from app.wallet.service import to_response
+    app = await ensure_application_access(ledger, application_id, Reader(officer, None))
+    docs = (await ledger.db.execute(select(WalletDocument).where(WalletDocument.student_id == app.student_id)
+                                    .order_by(WalletDocument.created_at))).scalars().all()
+    await record_audit(ledger.db, "OFFICER_LISTED_WALLET", actor=officer, student_id=app.student_id,
+                       details={"application_id": app.id, "documents": len(docs)})
+    await ledger.db.commit()
+    return [to_response(d).model_dump(mode="json") for d in docs]

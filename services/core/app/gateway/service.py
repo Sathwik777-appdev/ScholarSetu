@@ -103,13 +103,18 @@ async def _issue_challenge(db: AsyncSession, phone: str, purpose: OtpPurpose, su
 
 async def _check_challenge(db: AsyncSession, phone: str, purpose: OtpPurpose,
                            subject_ref: Optional[str], otp: str) -> None:
-    """Verify the latest open challenge. Consumes it on success; counts the attempt on failure."""
+    """Verify the latest open challenge. Consumes it on success; counts the attempt on failure.
+
+    The challenge row is locked first, so parallel guesses are checked and counted one at a time: without the
+    lock, simultaneous guesses all read the same attempt count and slip past the limits."""
     result = await db.execute(
         select(OtpChallenge)
         .where(OtpChallenge.phone == phone, OtpChallenge.purpose == purpose,
                OtpChallenge.subject_ref == subject_ref, OtpChallenge.consumed_at.is_(None))
         .order_by(OtpChallenge.created_at.desc())
         .limit(1)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     challenge = result.scalar_one_or_none()
     # Wrong guesses are counted across every code sent in the last hour, so requesting a new code does not
@@ -117,7 +122,7 @@ async def _check_challenge(db: AsyncSession, phone: str, purpose: OtpPurpose,
     if await _recent(db, phone, purpose, func.coalesce(func.sum(OtpChallenge.attempts), 0)) \
             >= settings.OTP_FAILURES_PER_HOUR:
         raise OtpRejected(too_many_attempts=True)
-    if challenge is None or _as_aware(challenge.expires_at) < _now():
+    if challenge is None or challenge.consumed_at is not None or _as_aware(challenge.expires_at) < _now():
         raise OtpRejected()
     if challenge.attempts >= settings.OTP_MAX_ATTEMPTS:
         raise OtpRejected(too_many_attempts=True)
@@ -183,8 +188,13 @@ class RegistrationService:
         existing = await AuthService(self.db)._active_user_by_phone(phone)
         if existing is not None:
             # Same response to the caller either way; the phone's owner learns they can simply log in.
-            await send_sms(self.db, phone, "This number is already registered with ScholarSetu. "
-                                           "Log in with it instead.", "REGISTRATION_EXISTS")
+            # Rate-limited like a code request, so registration cannot be used to flood a user's phone.
+            sent = await self.db.scalar(select(func.count()).select_from(OutboundSms).where(
+                OutboundSms.to_phone == phone, OutboundSms.category == "REGISTRATION_EXISTS",
+                OutboundSms.created_at >= _now() - timedelta(hours=1)))
+            if sent < settings.OTP_REQUESTS_PER_HOUR:
+                await send_sms(self.db, phone, "This number is already registered with ScholarSetu. "
+                                               "Log in with it instead.", "REGISTRATION_EXISTS")
         else:
             otp = await _issue_challenge(self.db, phone, OtpPurpose.REGISTRATION, None)
             await send_sms(self.db, phone, f"ScholarSetu registration code: {otp}. Valid for "

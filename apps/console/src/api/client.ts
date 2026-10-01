@@ -33,42 +33,37 @@ export const setUnauthorizedHandler = (fn: () => void) => {
   onUnauthorized = fn;
 };
 
-const POWER_URL = 'https://scholarsetu-power-906769842576.asia-south1.run.app';
-let wakeTriggered = false;
-
-export async function triggerAutoWake(): Promise<void> {
-  if (wakeTriggered) return;
-  wakeTriggered = true;
-  try {
-    await fetch(`${POWER_URL}/wake`, { method: 'POST', mode: 'cors' });
-  } catch {
-    // best-effort auto-wake
-  }
-}
-
 apiClient.interceptors.response.use(
-  (response) => {
-    wakeTriggered = false;
-    return response;
-  },
+  (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401 && onUnauthorized) onUnauthorized();
-    if (error.response?.status === 503 || !error.response) {
-      triggerAutoWake();
-    }
     return Promise.reject(error);
   },
 );
 
+/** The API answers 503 with code WAKING when its database is asleep; it has already asked for everything to
+ * start (the power manager is private, so the console never calls it). */
+export function isWaking(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 503
+    && (error.response.data as { code?: unknown })?.code === 'WAKING';
+}
+
 /** A message fit to show an officer: the API's own detail when there is one, never a stack trace. */
 export function errorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    if (error.response?.status === 503) {
-      return 'ScholarSetu cloud servers were in zero-cost sleep mode and are now waking up automatically (~30s). Please wait a moment!';
-    }
-    if (!error.response) return 'The ScholarSetu API could not be reached (auto-waking cloud servers).';
+    if (isWaking(error)) return 'ScholarSetu is starting up after being idle. Try again in about a minute.';
+    if (!error.response) return 'The ScholarSetu API could not be reached.';
     const detail = (error.response.data as { detail?: unknown })?.detail;
     if (typeof detail === 'string') return detail;
+    // Structured refusals (rule violations, open review cases, one scheme at a time) carry a message.
+    if (detail && typeof detail === 'object' && typeof (detail as { message?: unknown }).message === 'string') {
+      const d = detail as { message: string; violations?: unknown };
+      const violations = Array.isArray(d.violations) ? d.violations.filter((v) => typeof v === 'string') : [];
+      return violations.length ? `${d.message} ${violations.join(' ')}` : d.message;
+    }
+    if (Array.isArray(detail) && detail.length && typeof detail[0]?.msg === 'string') {
+      return detail.map((e: { loc?: unknown[]; msg: string }) => `${(e.loc ?? []).slice(1).join('.')}: ${e.msg}`).join('; ');
+    }
     if (error.response.status === 403) return 'Your role does not have access to this.';
     return `The API returned an error (HTTP ${error.response.status}).`;
   }

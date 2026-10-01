@@ -356,6 +356,10 @@ class VerificationMeshService:
             else:
                 if not claim_value:
                     raise ReviewCaseError(422, "claim_value is required to approve a case with no source evidence")
+                from app.verification.claim_values import problems
+                wrong = problems(case.claim_type, claim_value)
+                if wrong:
+                    raise ReviewCaseError(422, f"The {case.claim_type.value} value is incomplete: " + "; ".join(wrong))
                 attestation = await self.attestations.issue_attestation(
                     case.student_id, case.claim_type, claim_value, source=f"OFFICER:{officer.id}",
                     method=VerificationMethod.MANUAL, confidence=1.0, evidence_hash=None)

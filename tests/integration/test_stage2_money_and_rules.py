@@ -262,11 +262,24 @@ async def test_faithful_ai_text_is_used_and_the_verified_answer_kept(client, dem
     verified = (await _ask(client, rahul, ai_assist=False))["verified_text"]
     import re
     amount = re.search(r"₹\s?([\d,]+)", verified).group(1)
+    # A faithful re-wording keeps every figure and ID of the verified answer, in the same order.
+    figures = list(dict.fromkeys(re.findall(r"APP-[A-Z]+-\d{4}-\d{6}|\d[\d,]*(?:\.\d+)?", verified)))
     seen: list = []
-    _fake_gemini(monkeypatch, f"Rahul, aapke khate mein ₹{amount} aa chuke hain.", seen)
+    _fake_gemini(monkeypatch, "Rahul, aapki jaankari: " + ", ".join(figures) + ".", seen)
     answer = await _ask(client, rahul, ai_assist=True)
     assert answer["ai_phrased"] is True and amount in answer["response_text"]
     assert answer["verified_text"] == verified
+
+
+def test_ai_text_that_drops_swaps_or_negates_a_fact_is_refused():
+    from app.jago_skill.service import _figures_preserved
+    verified = "APP-PM-2026-000002: ₹12,000 credited on 05-07-2026; ₹1,500 failed."
+    assert _figures_preserved("APP-PM-2026-000002 ke ₹12,000 05-07-2026 ko aaye; ₹1,500 atke.", verified)
+    assert not _figures_preserved("APP-PM-2026-000002: ₹12,000 credited on 05-07-2026.", verified)  # dropped
+    assert not _figures_preserved("APP-PM-2026-000002: ₹1,500 credited on 05-07-2026; ₹12,000 failed.",
+                                  verified)  # swapped
+    assert not _figures_preserved("APP-PM-2026-000002: ₹12,000 not credited on 05-07-2026; ₹1,500 failed.",
+                                  verified)  # negated
 
 
 async def test_mitra_cannot_send_a_students_data_to_the_ai(client, db, demo, users, monkeypatch):

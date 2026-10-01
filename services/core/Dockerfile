@@ -5,8 +5,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 RUN useradd --create-home --uid 10001 app
 
 WORKDIR /app
-COPY services/core/requirements.txt .
-RUN pip install -r requirements.txt
+# Exact versions from the lock file (regenerate with the command at its top), so every build is the same.
+COPY services/core/requirements.lock .
+RUN pip install -r requirements.lock
 
 # Bake the multilingual embedding model (ONNX) into the image so the API never downloads at runtime.
 ENV EMBEDDING_CACHE_DIR=/opt/models

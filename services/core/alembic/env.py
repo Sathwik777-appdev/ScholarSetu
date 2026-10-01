@@ -15,9 +15,21 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+# Expression indexes (migration 0008): autogenerate cannot compare their expressions, so it would report them as
+# changed on every check. They are created by the migration and declared on the model for create_all.
+EXPRESSION_INDEXES = {"ix_students_state_key", "ix_students_state_district_key"}
+
+
+def _include(obj, name, type_, reflected, compare_to):
+    return not (type_ == "index" and name in EXPRESSION_INDEXES)
+
 
 def _configure(**kwargs):
-    context.configure(target_metadata=target_metadata, compare_type=True, compare_server_default=True, **kwargs)
+    context.configure(target_metadata=target_metadata, compare_type=True, compare_server_default=True,
+                      include_object=_include,
+                      # Each migration commits on its own: an enum value added by one migration (ALTER TYPE ... ADD
+                      # VALUE) can only be used by a later one after that commit.
+                      transaction_per_migration=True, **kwargs)
 
 
 def run_migrations_offline() -> None:

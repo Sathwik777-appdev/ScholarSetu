@@ -36,13 +36,23 @@ _DEVANAGARI_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789
 _FIGURE = re.compile(r"APP-[A-Z]+-\d{4}-\d{6}|\d[\d,]*(?:\.\d+)?")
 
 
-def _figures(text: str) -> set[str]:
-    """Every number (commas dropped, Devanagari digits normalised) and application ID in a text."""
-    return {m.replace(",", "") for m in _FIGURE.findall(text.translate(_DEVANAGARI_DIGITS))}
+_NEGATION = re.compile(r"\b(?:not|no|never|none|nothing|cannot|nahi|nahin|na)\b|n't|नहीं|नही|मत",
+                       re.I)
+
+
+def _figures(text: str) -> list[str]:
+    """Every number (commas dropped, Devanagari digits normalised) and application ID, in order of appearance,
+    each kept once."""
+    found = [m.replace(",", "") for m in _FIGURE.findall(text.translate(_DEVANAGARI_DIGITS))]
+    return list(dict.fromkeys(found))
 
 
 def _figures_preserved(generated: str, verified: str) -> bool:
-    return _figures(generated) <= _figures(verified)
+    """The AI text may only re-word: every figure and ID of the verified answer must survive, in the same order
+    (so two amounts cannot be swapped or one dropped), none may be added, and it may not add a negation
+    ("credited" must not become "not credited")."""
+    return (_figures(generated) == _figures(verified)
+            and len(_NEGATION.findall(generated)) <= len(_NEGATION.findall(verified)))
 
 
 SUPPORTED_LANGUAGES = ("hi", "en")
