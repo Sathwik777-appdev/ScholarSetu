@@ -13,6 +13,7 @@ Cloud SQL activation policy, read request logs and switch the downtime alert; no
 
 import logging
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -72,13 +73,29 @@ def _state(headers: dict) -> dict[str, Any]:
             "vm": {"status": vm_status}}
 
 
+WAKE_PATIENCE_SECONDS = 90  # within Cloud Run's 120 s request timeout
+
+
 def do_wake() -> dict[str, Any]:
+    """Start the database and the VM. A wake that arrives while a sleep is still in progress must not be lost:
+    Cloud SQL answers 409 while its previous operation runs, and a VM that is still stopping ignores a start,
+    so both are retried until they take or WAKE_PATIENCE_SECONDS pass."""
     headers = _headers()
+    deadline = time.monotonic() + WAKE_PATIENCE_SECONDS
     sql = requests.patch(SQL_URL, headers=headers, json={"settings": {"activationPolicy": "ALWAYS"}}, timeout=TIMEOUT)
+    while sql.status_code == 409 and time.monotonic() < deadline:
+        time.sleep(10)
+        sql = requests.patch(SQL_URL, headers=headers, json={"settings": {"activationPolicy": "ALWAYS"}},
+                             timeout=TIMEOUT)
+    status = requests.get(VM_URL, headers=headers, timeout=TIMEOUT).json().get("status")
+    while status in ("STOPPING", "SUSPENDING") and time.monotonic() < deadline:
+        time.sleep(10)
+        status = requests.get(VM_URL, headers=headers, timeout=TIMEOUT).json().get("status")
     vm = requests.post(f"{VM_URL}/start", headers=headers, timeout=TIMEOUT)
     alert = _set_alert(headers, True)
-    logger.info("wake: SQL HTTP %s, VM HTTP %s, alert %s", sql.status_code, vm.status_code, alert)
-    return {"state": "waking", "sql_status": sql.status_code, "vm_status": vm.status_code, "alert": alert}
+    logger.info("wake: SQL HTTP %s, VM was %s, start HTTP %s, alert %s", sql.status_code, status, vm.status_code, alert)
+    return {"state": "waking", "sql_status": sql.status_code, "vm_status": vm.status_code, "alert": alert,
+            "complete": sql.ok and vm.ok}
 
 
 def do_sleep() -> dict[str, Any]:

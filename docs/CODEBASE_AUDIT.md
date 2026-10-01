@@ -376,14 +376,14 @@ Code fixes are tested: `tests/integration/test_audit_fixes.py` turns each audit 
 
 | # | Status | What changed |
 |---|---|---|
-| A1 | **Pending: live IAM** | The power manager is rewritten: POST-only actions, no CORS, uptime probes ignored by the idle check, and the downtime alert paused while asleep. Making it private, giving it its own service account and authenticating the scheduler are live IAM changes, not yet applied. |
+| A1 | Fixed (live) | Power manager is private (IAM invoker check on; public requests get 403), runs as its own `scholarsetu-power` account, POST-only, no CORS; scheduler jobs call it with OIDC. A wake that races a sleep is retried. |
 | A2 | Fixed | The OTP challenge row is locked before checking. With 40 parallel guesses, exactly 5 are counted and the rest are refused. |
 | A3 | Fixed | The public outbox shows demo accounts only. The full outbox needs a Ministry login, and every read is audited. |
-| A4 | **Pending: live IAM** | Remove `cloudsql.admin`, `compute.instanceAdmin.v1` and `monitoring.viewer` from `scholarsetu-demo`. |
+| A4 | Fixed (live) | `cloudsql.admin`, `compute.instanceAdmin.v1` and `monitoring.viewer` removed from `scholarsetu-demo`; the power manager has a custom role plus instance admin on its one VM. Scripted as `deploy.sh power`. |
 | A5 | Fixed | Every state check runs after `LedgerService.lock()` (row lock and reload). Payment and deficiency rows are locked too. |
 | A6 | Fixed | A partial unique index (migration 0007), and a constraint conflict now returns 409. |
-| A7 | Partly fixed | **In code:** the API returns 503 `WAKING` with `Retry-After` and asks the power manager to wake; the console shows the waking message only for that 503. **Pending (live):** moving the night sleep to 01:30 IST. |
-| A8 | **Pending: live firewall** | `deploy.sh vm` and `cloud_power.sh remove-nat` now create the IAP-only SSH rule and the public-SSH/RDP deny rule, and enable Private Google Access. `remove-nat` stops if adding the IP fails. The live project still needs those rules applied. |
+| A7 | Fixed (live) | API: 503 `WAKING` with `Retry-After` and a server-side wake. Night sleep moved to 01:30 IST; the idle check ignores uptime probes; the downtime alert is paused while asleep. |
+| A8 | Fixed (live) | IAP-only SSH and a public SSH/RDP deny rule on the backend VM, Private Google Access on; `deploy.sh vm` and `cloud_power.sh remove-nat` create the same. |
 | A9 | Fixed | Console workbench (stage moves, deficiency, sanction with rule check, documents, bank check). App "Verify my details" with consent. |
 | A10 | Fixed | The "already registered" SMS follows the per-phone hourly limit. |
 | A11 | Fixed | Attachments must be the student's own wallet documents, and officers can open them from the timeline. |
@@ -400,5 +400,4 @@ Code fixes are tested: `tests/integration/test_audit_fixes.py` turns each audit 
 | A22 | Fixed | Manually approved values are checked against the fields each claim type needs. |
 | A23 | Fixed | No console lint warnings remain. |
 
-Features: F1, F2, F3, F4, F6, F7 (except release signing) and F9 are built. F5 is done in code, and its live half depends
-on A1 and A4. F8 (FCM push) still needs a Firebase project and credentials; F10 is covered by A18.
+Features: F1, F2, F3, F4, F5, F6, F7 and F9 are built (F7's release signing needs your own key). F8 (FCM push) still needs a Firebase project and credentials; F10 is covered by A18.

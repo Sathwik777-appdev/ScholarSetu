@@ -2,7 +2,7 @@
 # ScholarSetu on Google Cloud, one environment at a time (demo or prod).
 #
 #   ENV=demo deploy/gcp/deploy.sh all        # everything, in order
-#   ENV=demo deploy/gcp/deploy.sh <step>     # one step: apis sql bucket secrets images vm migrate api monitor
+#   ENV=demo deploy/gcp/deploy.sh <step>     # one step: apis sql bucket secrets images vm migrate api monitor power
 #
 # Layout per environment:
 #   Cloud Run  scholarsetu-api (demo) / scholarsetu-api-prod   request-driven API, scales to zero
@@ -44,7 +44,8 @@ put_secret() {  # put_secret NAME VALUE  (creates once; never overwrites)
 
 apis() {
   g services enable sqladmin.googleapis.com secretmanager.googleapis.com compute.googleapis.com \
-    run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com monitoring.googleapis.com
+    run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com monitoring.googleapis.com \
+    cloudscheduler.googleapis.com
 }
 
 sql() {
@@ -213,9 +214,51 @@ JSON
   fi
 }
 
+power() {
+  # Demo only: sleep the VM and database when idle, wake them on use (deploy/gcp/power-manager).
+  # Its own account may only start/stop this VM, change the Cloud SQL activation policy, read request logs and
+  # switch the downtime alert. Only Cloud Scheduler (OIDC) and the API may call it; it is never public.
+  [ "$ENV" = demo ] || { echo "power management is for the demo environment only"; return; }
+  local psa=scholarsetu-power psa_email number url role=scholarsetuPowerManager job sched path verb
+  psa_email=$psa@$PROJECT.iam.gserviceaccount.com
+  number=$(g projects describe "$PROJECT" --format='value(projectNumber)')
+  url=https://scholarsetu-power-$number.$REGION.run.app
+  exists g iam service-accounts describe "$psa_email" || \
+    g iam service-accounts create "$psa" --display-name "ScholarSetu power manager"
+  local perms=cloudsql.instances.get,cloudsql.instances.update,logging.logEntries.list
+  perms+=,monitoring.alertPolicies.get,monitoring.alertPolicies.list,monitoring.alertPolicies.update
+  if exists g iam roles describe "$role"; then g iam roles update "$role" --permissions "$perms" --quiet >/dev/null
+  else g iam roles create "$role" --title "ScholarSetu power manager" --permissions "$perms" >/dev/null; fi
+  g projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:$psa_email" \
+    --role "projects/$PROJECT/roles/$role" --condition=None >/dev/null
+  g compute instances add-iam-policy-binding "$VM" --zone "$ZONE" --member "serviceAccount:$psa_email" \
+    --role roles/compute.instanceAdmin.v1 >/dev/null
+  # --invoker-iam-check: without it Cloud Run serves the URL to anyone, whatever the IAM policy says.
+  g run deploy scholarsetu-power --image "$REPO/scholarsetu-power:$TAG" --region "$REGION" \
+    --service-account "$psa_email" --no-allow-unauthenticated --invoker-iam-check \
+    --min-instances 0 --max-instances 1 --memory 256Mi --timeout 120 \
+    --set-env-vars "PROJECT=$PROJECT,ZONE=$ZONE,VM=$VM,SQL_INSTANCE=$SQL_INSTANCE,API_SERVICE_NAME=$SERVICE"
+  for member in "serviceAccount:$psa_email" "serviceAccount:$SA_EMAIL"; do  # the scheduler, and the API
+    g run services add-iam-policy-binding scholarsetu-power --region "$REGION" --member "$member" \
+      --role roles/run.invoker >/dev/null
+  done
+  for spec in "scholarsetu-auto-sleep-idle|*/15 * * * *|check-idle" "scholarsetu-night-safety-sleep|30 1 * * *|sleep"; do
+    IFS='|' read -r job sched path <<<"$spec"
+    verb=create; exists g scheduler jobs describe "$job" --location "$REGION" && verb=update
+    g scheduler jobs "$verb" http "$job" --location "$REGION" --schedule "$sched" --time-zone Asia/Kolkata \
+      --uri "$url/$path" --http-method POST --oidc-service-account-email "$psa_email" --oidc-token-audience "$url" >/dev/null
+  done
+  # The API's own account must not hold admin rights over the database or VMs.
+  for role_name in roles/cloudsql.admin roles/compute.instanceAdmin.v1 roles/monitoring.viewer; do
+    g projects remove-iam-policy-binding "$PROJECT" --member "serviceAccount:$SA_EMAIL" --role "$role_name" \
+      --condition=None >/dev/null 2>&1 || true
+  done
+  echo "  power manager: $url (private)"
+}
+
 step=${1:-all}
 if [ "$step" = all ]; then
-  for s in apis sql bucket secrets images vm migrate api monitor; do echo "== $s"; "$s"; done
+  for s in apis sql bucket secrets images vm migrate api monitor power; do echo "== $s"; "$s"; done
 else
   "$step"
 fi
