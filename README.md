@@ -1,7 +1,6 @@
 # ScholarSetu
 
-**Unified scholarship platform for Scheduled Tribe students** — Smart India Hackathon 2026,
-Problem Statement 26238, Ministry of Tribal Affairs (MoTA). Team ACE.
+**Unified scholarship platform for Scheduled Tribe students** —  Team ACE.
 
 > Verify once, reuse everywhere, and never lose a tribal student between schemes, systems or bank accounts.
 
