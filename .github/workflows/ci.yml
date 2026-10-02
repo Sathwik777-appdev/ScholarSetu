@@ -43,7 +43,7 @@ jobs:
           cache: pip
           cache-dependency-path: services/core/requirements*
       - name: Cache the embedding model
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache/fastembed
           key: fastembed-paraphrase-multilingual-MiniLM-L12-v2
