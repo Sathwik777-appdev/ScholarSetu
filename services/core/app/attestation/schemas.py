@@ -32,3 +32,5 @@ class AttestationVerification(BaseModel):
     is_valid: bool
     reason: Optional[str] = None
     payload: Optional[dict[str, Any]] = None
+    student_name: Optional[str] = None
+    guardian_name: Optional[str] = None

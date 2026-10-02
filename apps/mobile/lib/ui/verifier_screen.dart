@@ -42,7 +42,11 @@ class _VerifierScreenState extends ConsumerState<VerifierScreen> {
       final reason = res['reason'];
       
       Map<String, dynamic>? payload;
+      String? studentName;
+      String? guardianName;
       if (isValid) {
+        studentName = res['student_name'];
+        guardianName = res['guardian_name'];
         try {
           final parts = jws.split('.');
           if (parts.length == 3) {
@@ -74,6 +78,9 @@ class _VerifierScreenState extends ConsumerState<VerifierScreen> {
               if (isValid && payload != null) ...[
                 if (payload['claim'] != null) ...[
                   Text('Claim: ${payload['claim']['type']}'),
+                  const SizedBox(height: 8),
+                  if (studentName != null) Text('Student: $studentName', style: const TextStyle(fontSize: 14)),
+                  if (guardianName != null) Text('Guardian: $guardianName', style: const TextStyle(fontSize: 14)),
                   const SizedBox(height: 8),
                   if (payload['claim']['value'] is Map)
                     ...((payload['claim']['value'] as Map).entries.map((e) => Padding(

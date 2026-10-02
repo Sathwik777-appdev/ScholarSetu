@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import get_db
 
 from app.attestation.schemas import AttestationVerification, ScholarshipPassport
 from app.attestation.keys import get_signer
@@ -31,9 +33,22 @@ async def get_public_key():
 
 
 @router.post("/attestations/verify-jws", response_model=AttestationVerification)
-async def verify_presented_jws(req: JwsVerifyRequest):
+async def verify_presented_jws(
+    req: JwsVerifyRequest,
+    db: AsyncSession = Depends(get_db)
+):
     """Verify an attestation JWS a student presents (signature, status and expiry)."""
-    return AttestationService(db=None, signer=get_signer()).verify_jws(req.jws)
+    service = AttestationService(db=db, signer=get_signer())
+    ver = service.verify_jws(req.jws)
+    if ver.is_valid and ver.payload:
+        sub = ver.payload.get("subject")
+        if sub:
+            from app.students.models import Student
+            student = await db.get(Student, sub)
+            if student:
+                ver.student_name = student.full_name
+                ver.guardian_name = student.father_name
+    return ver
 
 
 @router.get("/attestations/{attestation_id}/verify", response_model=AttestationVerification)
