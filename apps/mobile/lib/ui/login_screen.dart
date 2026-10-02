@@ -80,15 +80,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (mounted) setState(() => _busy = false);
   }
 
-  Future<void> _demoSignIn(String phone) async {
+  Future<void> _demoSignIn(Map<String, dynamic> account) async {
     setState(() {
       _busy = true;
       _error = null;
     });
     final api = ref.read(servicesProvider).api;
     try {
-      await api.post('/auth/otp/request', {'phone': phone, 'demo': true});
-      final res = await api.post('/auth/otp/verify', {'phone': phone, 'otp': _demoInfo?['demo_code'] ?? '123456', 'demo': true});
+      final isEmail = account.containsKey('email') && account['email'] != null;
+      final payload = isEmail ? {'email': account['email'], 'demo': true} : {'phone': account['phone'], 'demo': true};
+      
+      await api.post('/auth/otp/request', payload);
+      
+      final verifyPayload = isEmail 
+          ? {'email': account['email'], 'otp': _demoInfo?['demo_code'] ?? '123456', 'demo': true}
+          : {'phone': account['phone'], 'otp': _demoInfo?['demo_code'] ?? '123456', 'demo': true};
+          
+      final res = await api.post('/auth/otp/verify', verifyPayload);
       await ref.read(sessionProvider.notifier).signIn(res as Map<String, dynamic>);
     } catch (e) {
       if (mounted) setState(() => _error = errorText(e));
@@ -98,7 +106,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final accounts = ((_demoInfo?['app_accounts'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    final accounts = ((_demoInfo?['app_accounts'] as List?) ?? const []).cast<Map<String, dynamic>>().toList();
+    if (_demoInfo != null) {
+      // Inject Super Admin demo account for Verifier UI
+      accounts.add({
+        'name': 'Super Admin',
+        'role': 'MINISTRY',
+        'email': 'kotianchethan4@gmail.com'
+      });
+    }
     final demoAvailable = _demoInfo?['available'] == true;
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -138,7 +154,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               for (final a in accounts)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: _DemoAccountCard(account: a, busy: _busy, onTap: () => _demoSignIn(a['phone'] as String)),
+                  child: _DemoAccountCard(account: a, busy: _busy, onTap: () => _demoSignIn(a)),
                 ),
             if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: ErrorBox(message: _error!)),
             const SizedBox(height: 28),
@@ -309,6 +325,7 @@ class _DemoAccountCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final guardian = account['role'] == 'GUARDIAN';
+    final ministry = account['role'] == 'MINISTRY';
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(18),
@@ -321,16 +338,17 @@ class _DemoAccountCard extends StatelessWidget {
           child: Row(children: [
             CircleAvatar(
               radius: 24,
-              backgroundColor: guardian ? AppColors.teal.withValues(alpha: 0.14) : AppColors.saffron.withValues(alpha: 0.16),
-              child: Icon(guardian ? Icons.family_restroom_rounded : Icons.school_rounded,
-                  color: guardian ? AppColors.teal : AppColors.saffron),
+              backgroundColor: ministry ? AppColors.ink900.withValues(alpha: 0.1) : (guardian ? AppColors.teal.withValues(alpha: 0.14) : AppColors.saffron.withValues(alpha: 0.16)),
+              child: Icon(ministry ? Icons.admin_panel_settings_rounded : (guardian ? Icons.family_restroom_rounded : Icons.school_rounded),
+                  color: ministry ? AppColors.ink900 : (guardian ? AppColors.teal : AppColors.saffron)),
             ),
             const SizedBox(width: 14),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(account['name'] as String, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               const SizedBox(height: 2),
-              Text(guardian ? t('Parent · sees the whole family', 'अभिभावक · पूरा परिवार देखें')
-                            : t('Student · Post-Matric application', 'विद्यार्थी · पोस्ट-मैट्रिक आवेदन'),
+              Text(ministry ? t('Super Admin · Verify Student Documents', 'सुपर एडमिन · छात्र दस्तावेजों को सत्यापित करें')
+                            : (guardian ? t('Parent · sees the whole family', 'अभिभावक · पूरा परिवार देखें')
+                            : t('Student · Post-Matric application', 'विद्यार्थी · पोस्ट-मैट्रिक आवेदन')),
                   style: const TextStyle(fontSize: 13.5, color: AppColors.muted)),
             ])),
             const Icon(Icons.arrow_forward_rounded, color: AppColors.muted),

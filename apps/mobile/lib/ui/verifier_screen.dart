@@ -3,7 +3,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:convert';
 import '../state/providers.dart';
-import '../theme.dart';
+import 'theme.dart';
 import 'widgets.dart';
 
 class VerifierScreen extends ConsumerStatefulWidget {
@@ -40,7 +40,21 @@ class _VerifierScreenState extends ConsumerState<VerifierScreen> {
       final res = await api.post('/attestations/verify-jws', {'jws': jws});
       final isValid = res['is_valid'] == true;
       final reason = res['reason'];
-      final payload = res['payload'];
+      
+      Map<String, dynamic>? payload;
+      if (isValid) {
+        try {
+          final parts = jws.split('.');
+          if (parts.length == 3) {
+            String payloadBase64 = parts[1];
+            while (payloadBase64.length % 4 != 0) {
+              payloadBase64 += '=';
+            }
+            final payloadString = utf8.decode(base64Url.decode(payloadBase64));
+            payload = jsonDecode(payloadString);
+          }
+        } catch (_) {}
+      }
 
       if (!mounted) return;
       showDialog(
@@ -60,7 +74,7 @@ class _VerifierScreenState extends ConsumerState<VerifierScreen> {
               if (isValid && payload != null) ...[
                 Text('Claim: ${payload['claim_type']}'),
                 const SizedBox(height: 8),
-                Text('Data: ${jsonEncode(payload['claim_value'])}', style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                Text('Data: ${jsonEncode(payload['claim_value'])}', style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 const SizedBox(height: 8),
                 Text('Source: ${payload['source']}'),
               ]
@@ -87,29 +101,62 @@ class _VerifierScreenState extends ConsumerState<VerifierScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('ScholarSetu Offline Verifier')),
-      body: Stack(
+      appBar: AppBar(
+        title: const Text('Offline Verifier'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () => ref.read(sessionProvider.notifier).signOut(),
+            tooltip: 'Sign Out',
+          )
+        ],
+      ),
+      body: Column(
         children: [
-          MobileScanner(
-            controller: _scannerController,
-            onDetect: _onDetect,
-          ),
-          Positioned(
-            bottom: 40,
-            left: 20,
-            right: 20,
-            child: Card(
-              color: Colors.white.withOpacity(0.9),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  _isScanning ? 'Point camera at student QR code' : 'Verifying...',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+          Expanded(
+            flex: 3,
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: AppColors.ink900.withValues(alpha: 0.1), width: 8),
+              ),
+              clipBehavior: Clip.hardEdge,
+              child: MobileScanner(
+                controller: _scannerController,
+                onDetect: _onDetect,
               ),
             ),
-          )
+          ),
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    _isScanning ? Icons.qr_code_scanner_rounded : Icons.hourglass_top_rounded,
+                    size: 48,
+                    color: _isScanning ? AppColors.ink900 : AppColors.saffron,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _isScanning
+                        ? 'Point camera at a ScholarSetu student QR code to instantly verify document authenticity.'
+                        : 'Verifying signature...',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      height: 1.4,
+                      color: _isScanning ? AppColors.ink900 : AppColors.saffron,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

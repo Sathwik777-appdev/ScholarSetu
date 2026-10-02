@@ -59,7 +59,7 @@ class SessionUser {
   final String? householdId;
 }
 
-const appRoles = {'STUDENT', 'GUARDIAN', 'MITRA'};
+const appRoles = {'STUDENT', 'GUARDIAN', 'MITRA', 'MINISTRY'};
 
 class SessionState {
   const SessionState({this.user, this.checking = false});
@@ -101,7 +101,7 @@ class SessionNotifier extends Notifier<SessionState> {
   /// Accept a token from login or registration. Staff roles are refused: they use the web console.
   Future<void> signIn(Map<String, dynamic> tokenResponse) async {
     final user = SessionUser.fromJson(tokenResponse['user'] as Map<String, dynamic>);
-    if (!appRoles.contains(user.role)) {
+    if (!appRoles.contains(user.role) || (user.role == 'MINISTRY' && user.name != 'MoTA Scholarship Division')) {
       throw ApiException(403, 'Officers use the ScholarSetu web console, not this app.');
     }
     final previous = await _s.db.getCache('me');
