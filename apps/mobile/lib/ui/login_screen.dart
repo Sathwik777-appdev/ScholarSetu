@@ -182,11 +182,9 @@ class _Hero extends StatelessWidget {
           left: 24, right: 24, bottom: 22,
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(gradient: const LinearGradient(colors: [AppColors.saffronLight, AppColors.saffron]),
-                    borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.account_balance_rounded, color: AppColors.ink900, size: 22),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.asset('assets/images/app_icon.png', width: 44, height: 44, fit: BoxFit.cover),
               ),
               const SizedBox(width: 10),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

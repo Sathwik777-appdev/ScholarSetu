@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Building2, Landmark, Mail, MapPin, School, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowLeft, Building2, ChevronRight, Landmark, Mail, MapPin, School, ShieldCheck } from 'lucide-react';
 import { errorMessage } from '../api/client';
 import { useAuth } from '../auth/auth';
 import { useDemoMode, type DemoAccount } from '../auth/demo';
@@ -14,7 +14,7 @@ const ROLE_ICON = { MINISTRY: Landmark, STATE_OFFICER: Building2, DISTRICT_OFFIC
 export function DemoToggle({ enabled, onChange }: { enabled: boolean; onChange: (on: boolean) => void }) {
   return (
     <button type="button" role="switch" aria-checked={enabled} onClick={() => onChange(!enabled)}
-      className={`group inline-flex items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-3.5 text-sm font-medium ring-1 transition ${
+      className={`group inline-flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-full py-1.5 pl-1.5 pr-3.5 text-sm font-medium ring-1 transition ${
         enabled ? 'bg-saffron-500/10 text-ink-900 ring-saffron-500/40' : 'bg-white text-slate-600 ring-slate-200 hover:ring-slate-300'}`}>
       <span className={`relative h-6 w-11 rounded-full transition ${enabled ? 'bg-saffron-500' : 'bg-slate-300'}`}>
         <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${enabled ? 'left-[22px]' : 'left-0.5'}`} />
@@ -107,8 +107,8 @@ export default function Login() {
   const primary = 'btn btn-primary w-full !py-3';
 
   return (
-    <div className="grid min-h-dvh bg-white lg:grid-cols-[1.15fr_1fr]">
-      <div className="relative min-h-[34vh] min-w-0 overflow-hidden bg-ink-900 lg:min-h-dvh">
+    <div className="grid min-h-dvh grid-cols-[minmax(0,1fr)] bg-white lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+      <div className="relative min-h-[44vh] min-w-0 overflow-hidden bg-ink-900 lg:min-h-dvh">
         <Hero3D className="absolute inset-0" />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink-950/95 via-ink-950/30 to-transparent" />
         <div className="absolute left-6 right-6 bottom-6 lg:left-12 lg:bottom-12 text-white">
@@ -133,9 +133,9 @@ export default function Login() {
         <div className="flex flex-1 items-center justify-center px-6 py-10 sm:px-12">
         <div className="rise w-full max-w-md">
           <div className="flex items-center justify-between gap-3">
-            <span className="inline-flex items-center gap-2 text-saffron-500">
+            <span className="inline-flex min-w-0 items-center gap-2 text-saffron-500">
               <ShieldCheck className="h-5 w-5" />
-              <span className="text-xs font-semibold uppercase tracking-wider">Officers &amp; Ministry</span>
+              <span className="text-xs font-semibold uppercase tracking-wider"><span className="sm:hidden">Officers</span><span className="hidden sm:inline">Officers &amp; Ministry</span></span>
             </span>
             <DemoToggle enabled={demoOn} onChange={(on) => { demo.setEnabled(on); setStep('email'); setError(null); }} />
           </div>
@@ -163,7 +163,7 @@ export default function Login() {
                               <span className="block text-sm font-semibold text-slate-900">{ROLE_LABELS[a.role] ?? a.role}</span>
                               <span className="block truncate text-[13px] text-slate-500">{a.name}</span>
                             </span>
-                            <Sparkles className="h-4 w-4 text-slate-300 group-hover:text-saffron-500" />
+                            <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-saffron-500" />
                           </button>
                         </li>
                       );

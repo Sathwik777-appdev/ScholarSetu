@@ -26,7 +26,7 @@ const STAGE_TASK: Partial<Record<CanonicalState, string>> = {
 function Queue({ stage }: { stage: CanonicalState }) {
   const apps = useApi<OfficerApplication[]>('/applications', { state: stage, limit: 6 });
   return (
-    <Card>
+    <Card className="min-w-0">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
           <h2 className="text-[15px] font-semibold text-slate-900">{STAGE_TASK[stage]}</h2>
@@ -41,13 +41,13 @@ function Queue({ stage }: { stage: CanonicalState }) {
           <ul className="divide-y divide-slate-100">
             {rows.map((a) => (
               <li key={a.id}>
-                <Link to={`/application/${a.id}`} className="flex items-center gap-3 py-2.5 hover:bg-slate-50 -mx-2 px-2 rounded-lg">
-                  <span className="min-w-0 flex-1">
+                <Link to={`/application/${a.id}`} className="-mx-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-2 py-2.5 hover:bg-slate-50">
+                  <span className="min-w-[10rem] flex-1">
                     <span className="block truncate text-sm font-medium text-slate-900">{a.student_name}</span>
                     <span className="block text-[13px] text-slate-500">{schemeLabel(a.scheme)} · {a.district}</span>
                   </span>
                   <StatusBadge status={a.canonical_state} />
-                  <span className="w-20 text-right text-[13px] tabular-nums text-slate-600">{formatDays(a.days_in_state)}</span>
+                  <span className="ml-auto text-right text-[13px] tabular-nums text-slate-600 sm:w-20">{formatDays(a.days_in_state)}</span>
                 </Link>
               </li>
             ))}
@@ -93,7 +93,7 @@ export default function MyWork() {
           ? <Tile to="/data-requests" icon={ShieldCheck} label="Open data requests" count={requests.data?.length ?? null} />
           : <Tile to="/applications?state=RESUBMITTED" icon={CreditCard} label="Replies to check" count={null} />}
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         {(MY_STAGES[role] ?? []).map((s) => <Queue key={s} stage={s} />)}
       </div>
     </div>
