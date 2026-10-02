@@ -62,7 +62,7 @@ jobs:
           python-version: "3.12"
       - run: pip install pip-audit
       - run: pip-audit --no-deps --disable-pip -r services/core/requirements.lock -r mocks/requirements.lock -r deploy/gcp/power-manager/requirements.lock
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
       - run: npm audit --omit=dev --audit-level=moderate
@@ -75,7 +75,7 @@ jobs:
         working-directory: apps/console
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: npm
