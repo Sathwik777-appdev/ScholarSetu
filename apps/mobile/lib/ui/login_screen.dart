@@ -107,6 +107,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final accounts = ((_demoInfo?['app_accounts'] as List?) ?? const []).cast<Map<String, dynamic>>().toList();
+    accounts.removeWhere((a) => a['name'] == 'MoTA Scholarship Division');
     if (_demoInfo != null) {
       // Inject Super Admin demo account for Verifier UI
       accounts.add({
