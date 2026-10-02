@@ -108,7 +108,7 @@ export default function Login() {
 
   return (
     <div className="grid min-h-dvh bg-white lg:grid-cols-[1.15fr_1fr]">
-      <div className="relative min-h-[34vh] lg:min-h-dvh overflow-hidden bg-ink-900">
+      <div className="relative min-h-[34vh] min-w-0 overflow-hidden bg-ink-900 lg:min-h-dvh">
         <Hero3D className="absolute inset-0" />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink-950/95 via-ink-950/30 to-transparent" />
         <div className="absolute left-6 right-6 bottom-6 lg:left-12 lg:bottom-12 text-white">

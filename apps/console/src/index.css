@@ -34,7 +34,7 @@
   --shadow-glow: 0 0 0 1px rgb(245 158 11 / 0.35), 0 8px 24px -8px rgb(245 158 11 / 0.45);
 }
 
-html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; overflow-x: clip; }
 body {
   margin: 0;
   font-family: var(--font-sans);
@@ -47,6 +47,7 @@ body {
     radial-gradient(900px 480px at -10% 110%, rgb(30 64 175 / 0.06), transparent 60%),
     var(--color-surface);
   background-attachment: fixed;
+  overflow-x: clip; /* never scroll sideways; clip (unlike hidden) keeps sticky headers working */
 }
 
 ::selection { background: rgb(245 158 11 / 0.28); }
