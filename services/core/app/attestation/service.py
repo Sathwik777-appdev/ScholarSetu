@@ -131,8 +131,8 @@ class AttestationService:
             return AttestationVerification(is_valid=False, reason=f"Attestation status is {payload.get('status')}")
         valid_until = payload.get("valid_until")
         if valid_until and datetime.fromisoformat(valid_until) < datetime.now(timezone.utc):
-            return AttestationVerification(is_valid=False, reason="Attestation expired")
-        return AttestationVerification(is_valid=True)
+            return AttestationVerification(is_valid=False, reason="Attestation expired", payload=payload)
+        return AttestationVerification(is_valid=True, payload=payload)
 
     async def verify_attestation(self, attestation_id: str) -> AttestationVerification:
         """A stored attestation is valid only if its JWS verifies AND matches every stored field."""

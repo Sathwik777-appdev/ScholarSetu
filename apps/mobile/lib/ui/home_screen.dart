@@ -13,6 +13,7 @@ import 'labels.dart';
 import 'mitra_screen.dart';
 import 'rights_screens.dart';
 import 'student_screens.dart';
+import 'verifier_screen.dart';
 import 'widgets.dart';
 
 /// Chooses the home for the signed-in role and keeps data fresh by polling (no push notifications).
@@ -65,6 +66,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     return switch (user.role) {
       'GUARDIAN' => const FamilyScreen(),
       'MITRA' => const MitraScreen(),
+      'MINISTRY' => const VerifierScreen(),
       _ => const StudentShell(),
     };
   }

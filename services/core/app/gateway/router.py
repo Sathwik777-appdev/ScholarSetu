@@ -266,7 +266,7 @@ async def demo_info(db: AsyncSession = Depends(get_db)):
         console_accounts=[DemoAccount(name=u.name, role=u.role, email=u.email) for u in users
                           if u.role in officer and u.email],
         app_accounts=[DemoAccount(name=u.name, role=u.role, phone=u.phone) for u in users
-                      if u.role not in officer and u.phone])
+                      if u.role not in officer or u.role == UserRole.MINISTRY])
 
 
 def _mitra_error(exc: MitraSessionError) -> HTTPException:

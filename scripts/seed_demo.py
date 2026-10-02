@@ -61,7 +61,7 @@ USERS = [
      ("Jharkhand", "Dumka"), None, True, None),
     ("Tribal Welfare Department, Jharkhand", UserRole.STATE_OFFICER, None, "chethankotian006@gmail.com", None, None,
      ("Jharkhand", None), None, True, None),
-    ("MoTA Scholarship Division", UserRole.MINISTRY, None, "kotianchethan4@gmail.com", None, None, (None, None), None,
+    ("MoTA Scholarship Division", UserRole.MINISTRY, "9876543213", "kotianchethan4@gmail.com", None, None, (None, None), None,
      True, None),
     ("Super Admin", UserRole.MINISTRY, None, "sathwikj777@gmail.com", None, None, (None, None), None, False, None),
 ]

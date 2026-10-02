@@ -31,3 +31,4 @@ class ScholarshipPassport(BaseModel):
 class AttestationVerification(BaseModel):
     is_valid: bool
     reason: Optional[str] = None
+    payload: Optional[dict[str, Any]] = None
