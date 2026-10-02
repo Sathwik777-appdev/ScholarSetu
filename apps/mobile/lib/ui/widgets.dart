@@ -110,16 +110,13 @@ class CachedView extends ConsumerWidget {
 }
 
 class ErrorBox extends ConsumerWidget {
-  const ErrorBox({super.key, required this.message, this.onRetry, this.onConfigureServer});
+  const ErrorBox({super.key, required this.message, this.onRetry});
 
   final String message;
   final VoidCallback? onRetry;
-  final VoidCallback? onConfigureServer;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isConnectionError = message.toLowerCase().contains('connection') ||
-        message.toLowerCase().contains('scholarsetu');
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(16),
@@ -136,38 +133,16 @@ class ErrorBox extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(message, style: TextStyle(color: Colors.red.shade900, height: 1.35)),
-              if (onRetry != null || onConfigureServer != null || isConnectionError)
+              if (onRetry != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      if (onRetry != null)
-                        TextButton(
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          onPressed: onRetry,
-                          child: Text(t('Try again', 'फिर से कोशिश करें')),
-                        ),
-                      if (onConfigureServer != null || isConnectionError)
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            visualDensity: VisualDensity.compact,
-                            backgroundColor: Colors.white,
-                            side: BorderSide(color: Colors.red.shade200),
-                          ),
-                          icon: const Icon(Icons.settings_ethernet_rounded, size: 14, color: AppColors.ink900),
-                          label: Text(
-                            t('Server settings', 'सर्वर सेटिंग'),
-                            style: const TextStyle(fontSize: 12, color: AppColors.ink900, fontWeight: FontWeight.w600),
-                          ),
-                          onPressed: onConfigureServer ?? () => showServerConfigSheet(context, ref),
-                        ),
-                    ],
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: onRetry,
+                    child: Text(t('Try again', 'फिर से कोशिश करें')),
                   ),
                 ),
             ],

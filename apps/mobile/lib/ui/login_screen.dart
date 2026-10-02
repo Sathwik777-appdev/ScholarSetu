@@ -157,18 +157,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: _DemoAccountCard(account: a, busy: _busy, onTap: () => _demoSignIn(a)),
                 ),
             if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: ErrorBox(message: _error!)),
-            const SizedBox(height: 28),
-            Center(
-              child: TextButton.icon(
-                style: TextButton.styleFrom(foregroundColor: AppColors.muted),
-                icon: const Icon(Icons.dns_outlined, size: 16),
-                label: Text('${t('Server', 'सर्वर')}: ${_server()}', style: const TextStyle(fontSize: 12)),
-                onPressed: () async {
-                  await showServerConfigSheet(context, ref);
-                  if (mounted) setState(() {});
-                },
-              ),
-            ),
           ]),
         ),
       ]),
