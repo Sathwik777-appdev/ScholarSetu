@@ -99,10 +99,17 @@ def do_wake() -> dict[str, Any]:
 
 
 def do_sleep() -> dict[str, Any]:
+    """Stop the VM and the database. Like a wake, a sleep that meets a database operation still running (409)
+    waits and retries, so the two are never left half asleep."""
     headers = _headers()
+    deadline = time.monotonic() + WAKE_PATIENCE_SECONDS
     alert = _set_alert(headers, False)
     vm = requests.post(f"{VM_URL}/stop", headers=headers, timeout=TIMEOUT)
     sql = requests.patch(SQL_URL, headers=headers, json={"settings": {"activationPolicy": "NEVER"}}, timeout=TIMEOUT)
+    while sql.status_code == 409 and time.monotonic() < deadline:
+        time.sleep(10)
+        sql = requests.patch(SQL_URL, headers=headers, json={"settings": {"activationPolicy": "NEVER"}},
+                             timeout=TIMEOUT)
     logger.info("sleep: VM HTTP %s, SQL HTTP %s, alert %s", vm.status_code, sql.status_code, alert)
     return {"state": "sleeping", "vm_status": vm.status_code, "sql_status": sql.status_code, "alert": alert}
 
@@ -146,6 +153,13 @@ def check_idle() -> dict[str, Any]:
         headers = _headers()
         if _state(headers)["sleeping"]:
             return {"action": "none", "reason": "already asleep"}
+        # Never sleep a system that was just woken: someone is about to use it (the first request may still be
+        # minutes away while the database starts).
+        started = requests.get(VM_URL, headers=headers, timeout=TIMEOUT).json().get("lastStartTimestamp")
+        if started:
+            since = datetime.now(timezone.utc) - datetime.fromisoformat(started)
+            if since < timedelta(minutes=IDLE_MINUTES):
+                return {"action": "stay_awake", "reason": f"woken {int(since.total_seconds() // 60)} min ago"}
         used = real_requests(headers, IDLE_MINUTES)
     except Exception as exc:  # noqa: BLE001 - never sleep on uncertainty
         logger.exception("idle check failed; staying awake")

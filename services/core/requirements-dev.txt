@@ -5,3 +5,5 @@ pytest>=9.1
 pytest-asyncio>=1.4
 jsonschema>=4.26
 ruff>=0.16
+google-auth>=2.35  # tests/unit/test_power_manager.py
+requests>=2.33
