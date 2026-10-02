@@ -72,11 +72,13 @@ class _VerifierScreenState extends ConsumerState<VerifierScreen> {
             children: [
               if (!isValid) Text(reason ?? 'Invalid signature', style: const TextStyle(color: Colors.red)),
               if (isValid && payload != null) ...[
-                Text('Claim: ${payload['claim_type']}'),
+                if (payload['data'] != null && payload['data'] is Map)
+                  ...((payload['data'] as Map).entries.map((e) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text('${e.key}: ${e.value}', style: const TextStyle(fontSize: 14)),
+                      ))),
                 const SizedBox(height: 8),
-                Text('Data: ${jsonEncode(payload['claim_value'])}', style: TextStyle(fontSize: 12, color: AppColors.muted)),
-                const SizedBox(height: 8),
-                Text('Source: ${payload['source']}'),
+                Text('Issuer: ${payload['iss'] ?? 'Unknown'}', style: TextStyle(fontSize: 12, color: AppColors.muted)),
               ]
             ],
           ),
