@@ -104,10 +104,10 @@ export default function Login() {
 
   const demoOn = demo.enabled;
   const accounts: DemoAccount[] = demo.info?.available ? demo.info.console_accounts : [];
-  const primary = 'w-full rounded-xl bg-ink-900 py-3 text-sm font-semibold text-white shadow-lift transition hover:bg-ink-800 disabled:opacity-60';
+  const primary = 'btn btn-primary w-full !py-3';
 
   return (
-    <div className="min-h-dvh grid lg:grid-cols-[1.15fr_1fr] bg-white">
+    <div className="grid min-h-dvh bg-white lg:grid-cols-[1.15fr_1fr]">
       <div className="relative min-h-[34vh] lg:min-h-dvh overflow-hidden bg-ink-900">
         <Hero3D className="absolute inset-0" />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink-950/95 via-ink-950/30 to-transparent" />
@@ -128,7 +128,9 @@ export default function Login() {
         </div>
       </div>
 
-      <div className="flex items-center justify-center px-6 py-10 sm:px-12">
+      <div className="relative flex flex-col bg-[radial-gradient(900px_420px_at_100%_0%,rgb(245_158_11/0.08),transparent_60%)]">
+        <div className="tricolour" />
+        <div className="flex flex-1 items-center justify-center px-6 py-10 sm:px-12">
         <div className="rise w-full max-w-md">
           <div className="flex items-center justify-between gap-3">
             <span className="inline-flex items-center gap-2 text-saffron-500">
@@ -177,7 +179,7 @@ export default function Login() {
                       <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                       <input type="email" autoComplete="username" required value={email}
                         onChange={(e) => setEmail(e.target.value)} placeholder="name@tribal.gov.in"
-                        className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-10 pr-3.5 text-[15px] shadow-sm outline-none transition focus:border-saffron-500 focus:ring-4 focus:ring-saffron-400/20" />
+                        className="input !pl-10" />
                     </span>
                   </label>
                   <button disabled={busy} className={`${primary} mt-4`}>{busy ? 'Sending…' : 'Email me a code'}</button>
@@ -209,6 +211,9 @@ export default function Login() {
           {error && <p role="alert" className="rise mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200">{error}</p>}
           <p className="mt-10 text-[13px] text-slate-400">Students and families use the ScholarSetu app and sign in with DigiLocker.</p>
         </div>
+        </div>
+        <p className="px-6 pb-6 text-center text-[12px] text-slate-400">
+          ScholarSetu · Ministry of Tribal Affairs, Government of India · Access is logged and audited</p>
       </div>
     </div>
   );

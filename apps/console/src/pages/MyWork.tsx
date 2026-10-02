@@ -60,7 +60,7 @@ function Queue({ stage }: { stage: CanonicalState }) {
 
 function Tile({ to, icon: Icon, label, count }: { to: string; icon: LucideIcon; label: string; count: number | null }) {
   return (
-    <Link to={to} className="rise flex items-center gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-soft transition hover:-translate-y-0.5">
+    <Link to={to} className="rise card card-interactive flex items-center gap-3 p-4">
       <span className="grid h-10 w-10 place-items-center rounded-xl bg-ink-900 text-saffron-400"><Icon className="h-5 w-5" /></span>
       <span className="min-w-0 flex-1">
         <span className="block text-2xl font-semibold tabular-nums text-slate-900">{count ?? '–'}</span>

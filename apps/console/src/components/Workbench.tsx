@@ -27,8 +27,8 @@ const DEFICIENCY_STAGE: Partial<Record<UserRole, CanonicalState>> = {
 };
 const DEFICIENCY_CODES = ['DOCUMENT_MISSING', 'DOCUMENT_UNCLEAR', 'NAME_MISMATCH', 'INCOME_PROOF', 'BANK_DETAILS', 'OTHER'];
 
-const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200';
-const btnCls = 'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50';
+const inputCls = 'input !text-sm';
+const btnCls = 'btn';
 
 function Result({ error, done }: { error: string | null; done: string | null }) {
   if (error) return <p className="text-sm text-rose-800 bg-rose-50 border border-rose-200 rounded-lg p-2 mt-2" role="alert">{error}</p>;
@@ -75,7 +75,7 @@ export function StageActions({ app, onChanged }: { app: Application; onChanged: 
           <div className="flex flex-wrap gap-2">
             {moves.map((m) => (
               <button key={m.to} disabled={busy || (m.needsNote && note.trim().length < 10)}
-                className={`${btnCls} ${m.to === 'REJECTED' ? 'bg-rose-600 text-white hover:bg-rose-700' : 'bg-blue-700 text-white hover:bg-blue-800'}`}
+                className={`${btnCls} ${m.to === 'REJECTED' ? 'btn-danger' : 'btn-primary'}`}
                 onClick={() => run(() => apiClient.post(`/officer/applications/${app.id}/transition`,
                   { to_state: m.to, ...(note.trim() ? { note: note.trim() } : {}) }), `Moved to ${stateLabel(m.to)}.`)}>
                 {m.label}
@@ -105,7 +105,7 @@ export function StageActions({ app, onChanged }: { app: Application; onChanged: 
           </div>
           <textarea className={inputCls} rows={2} required minLength={10} maxLength={1000} value={description}
             onChange={(e) => setDescription(e.target.value)} placeholder="What the student must do, in plain words" />
-          <button disabled={busy || description.trim().length < 10} className={`${btnCls} bg-amber-600 text-white hover:bg-amber-700`}>
+          <button disabled={busy || description.trim().length < 10} className={`${btnCls} btn-warn`}>
             Raise deficiency
           </button>
         </form>
@@ -221,7 +221,7 @@ export function SanctionPanel({ app, onChanged }: { app: Application; onChanged:
                 </div>
               );
             })}
-            <button type="button" className={`${btnCls} border border-slate-300 text-slate-700 hover:bg-slate-50`}
+            <button type="button" className={`${btnCls} btn-outline`}
               onClick={() => setRows((rs) => [...rs, emptyRow()])}><Plus className="w-4 h-4" />Add instalment</button>
             {o.must_surrender.length > 0 && (
               <label className="flex items-start gap-2 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-2">
@@ -240,7 +240,7 @@ export function SanctionPanel({ app, onChanged }: { app: Application; onChanged:
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-slate-700">Total: <strong>{formatCurrency(total)}</strong></p>
               <button disabled={busy || (surrender === false && o.must_surrender.length > 0) || (needsOverride && override.trim().length > 0 && override.trim().length < 15)}
-                className={`${btnCls} bg-emerald-700 text-white hover:bg-emerald-800`}>Sanction</button>
+                className={`${btnCls} btn-success`}>Sanction</button>
             </div>
             <Result error={error} done={done} />
           </form>
@@ -280,7 +280,7 @@ export function DocumentsPanel({ app }: { app: Application }) {
                       : <span> · not verified</span>}
                 </p>
               </div>
-              <button className={`${btnCls} border border-slate-300 text-slate-700 hover:bg-slate-50 shrink-0`}
+              <button className={`${btnCls} btn-outline shrink-0`}
                 onClick={() => openDocument(doc.id)}><FileText className="w-4 h-4" />Open</button>
             </li>
           ))}
@@ -296,7 +296,7 @@ export function BankCheckButton({ appId, onDone }: { appId: string; onDone: () =
   const [error, setError] = useState<string | null>(null);
   return (
     <div>
-      <button disabled={busy} className={`${btnCls} border border-slate-300 text-slate-700 hover:bg-slate-50`}
+      <button disabled={busy} className={`${btnCls} btn-outline`}
         onClick={async () => {
           setBusy(true); setError(null);
           try {

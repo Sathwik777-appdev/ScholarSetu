@@ -27,7 +27,7 @@ const ROLES: { role: UserRole; hint: string }[] = [
   { role: 'MINISTRY', hint: 'All India, and can enrol officers' },
 ];
 
-const field = 'mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] shadow-sm outline-none transition focus:border-saffron-500 focus:ring-4 focus:ring-saffron-400/20';
+const field = 'input mt-1.5';
 const label = 'block text-sm font-medium text-slate-700';
 
 function EnrolForm({ onDone }: { onDone: () => void }) {
@@ -108,7 +108,7 @@ function EnrolForm({ onDone }: { onDone: () => void }) {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
         <p className="text-[13px] text-slate-500">Enrolled officers sign in with an emailed code. They never accept the demo code.</p>
-        <button disabled={busy || role === ''} className="inline-flex items-center gap-2 rounded-xl bg-ink-900 px-4 py-2.5 text-sm font-semibold text-white shadow-lift hover:bg-ink-800 disabled:opacity-50">
+        <button disabled={busy || role === ''} className="btn btn-primary">
           <UserPlus className="h-4 w-4" /> {busy ? 'Enrolling…' : 'Enrol officer'}
         </button>
       </div>
@@ -143,7 +143,7 @@ export default function ManageOfficers() {
         <ApiView state={officers} isEmpty={(d) => d.length === 0} empty={<EmptyState title="No officers yet" />}>
           {(rows) => (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="table">
                 <thead>
                   <tr className="text-left text-[12px] uppercase tracking-wide text-slate-500">
                     <th className="py-2 pr-3 font-semibold">Officer</th>

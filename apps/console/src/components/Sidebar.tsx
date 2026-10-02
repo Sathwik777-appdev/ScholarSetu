@@ -12,22 +12,28 @@ interface NavItem {
   ministryOnly?: boolean;
 }
 
-const NAV: NavItem[] = [
-  { name: 'My work', href: '/my-work', icon: Inbox },
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, analyticsOnly: true },
-  { name: 'Review queue', href: '/review-queue', icon: ClipboardCheck },
-  { name: 'Applications', href: '/applications', icon: List },
-  { name: 'Coverage', href: '/coverage-map', icon: Map, analyticsOnly: true },
-  { name: 'Bottlenecks & SLA', href: '/analytics', icon: BarChart3, analyticsOnly: true },
-  { name: 'DBT failures', href: '/dbt-monitor', icon: CreditCard, analyticsOnly: true },
-  { name: 'Data requests', href: '/data-requests', icon: ShieldCheck, analyticsOnly: true },
-  { name: 'Officers', href: '/manage-officers', icon: UserPlus, ministryOnly: true },
-  { name: 'Demo SMS', href: '/demo-sms', icon: MessageSquare, ministryOnly: true },
+const GROUPS: { title: string; items: NavItem[] }[] = [
+  { title: 'Work', items: [
+    { name: 'My work', href: '/my-work', icon: Inbox },
+    { name: 'Review queue', href: '/review-queue', icon: ClipboardCheck },
+    { name: 'Applications', href: '/applications', icon: List },
+  ] },
+  { title: 'Insights', items: [
+    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, analyticsOnly: true },
+    { name: 'Coverage', href: '/coverage-map', icon: Map, analyticsOnly: true },
+    { name: 'Bottlenecks & SLA', href: '/analytics', icon: BarChart3, analyticsOnly: true },
+    { name: 'DBT failures', href: '/dbt-monitor', icon: CreditCard, analyticsOnly: true },
+  ] },
+  { title: 'Administration', items: [
+    { name: 'Data requests', href: '/data-requests', icon: ShieldCheck, analyticsOnly: true },
+    { name: 'Officers', href: '/manage-officers', icon: UserPlus, ministryOnly: true },
+    { name: 'Demo SMS', href: '/demo-sms', icon: MessageSquare, ministryOnly: true },
+  ] },
 ];
 
 export function BrandMark({ className = 'h-9 w-9' }: { className?: string }) {
   return (
-    <div className={`${className} grid place-items-center rounded-xl bg-gradient-to-br from-saffron-400 to-saffron-500 shadow-lift`}>
+    <div className={`${className} grid shrink-0 place-items-center rounded-xl bg-gradient-to-br from-saffron-300 via-saffron-400 to-saffron-500 shadow-glow`}>
       <svg viewBox="0 0 32 32" className="h-5 w-5" aria-hidden="true">
         <path d="M3 21h26M6 21c0-6 4.5-10 10-10s10 4 10 10" fill="none" stroke="#0c1326" strokeWidth="2.6" strokeLinecap="round" />
         <circle cx="16" cy="11" r="2.4" fill="#0c1326" />
@@ -42,56 +48,70 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const jurisdiction = user?.role === 'MINISTRY' ? 'All India'
     : [user?.jurisdiction_district, user?.jurisdiction_state].filter(Boolean).join(', ');
   const initials = (user?.name ?? '?').split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const visible = (item: NavItem) => (canAnalyse || !item.analyticsOnly) && (!item.ministryOnly || user?.role === 'MINISTRY');
 
   return (
-    <div className="flex h-full flex-col bg-ink-950 text-slate-300 px-3 py-5">
-      <div className="flex items-center gap-3 px-2 pb-6">
-        <BrandMark />
-        <div>
-          <p className="text-[15px] font-semibold text-white tracking-tight">ScholarSetu</p>
-          <p className="text-[12px] text-slate-400">Officer &amp; ministry console</p>
-        </div>
-      </div>
-      <nav className="flex-1">
-        <ul className="space-y-1">
-          {NAV.filter((item) => (canAnalyse || !item.analyticsOnly) && (!item.ministryOnly || user?.role === 'MINISTRY'))
-            .map((item) => (
-            <li key={item.href}>
-              <NavLink
-                to={item.href}
-                onClick={onNavigate}
-                className={({ isActive }) =>
-                  `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
-                    isActive ? 'bg-white/10 text-white font-medium' : 'hover:bg-white/5 hover:text-white'
-                  }`
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    {isActive && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r bg-saffron-400" />}
-                    <item.icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-saffron-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
-                    {item.name}
-                  </>
-                )}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-      </nav>
-      {user && (
-        <div className="mt-4 rounded-2xl bg-white/5 p-3 ring-1 ring-white/10">
-          <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-teal-400 to-teal-500 text-[13px] font-semibold text-ink-950">{initials}</div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-white">{user.name}</p>
-              <p className="truncate text-[12px] text-slate-400">{ROLE_LABELS[user.role] ?? user.role}{jurisdiction && ` · ${jurisdiction}`}</p>
-            </div>
+    <div className="relative flex h-full flex-col overflow-hidden bg-ink-950 text-slate-300">
+      <div className="tricolour" />
+      <div className="pointer-events-none absolute -left-24 -top-24 h-64 w-64 rounded-full bg-saffron-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-chakra/20 blur-3xl" />
+      <div className="relative flex flex-1 flex-col overflow-y-auto px-3 py-5">
+        <div className="flex items-center gap-3 px-2 pb-5">
+          <BrandMark />
+          <div>
+            <p className="text-[16px] font-semibold leading-none tracking-tight text-white">ScholarSetu</p>
+            <p className="mt-1 text-[12px] text-slate-400">Ministry of Tribal Affairs</p>
           </div>
-          <button onClick={logout} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-white/5 py-1.5 text-xs text-slate-300 hover:bg-white/10 hover:text-white">
-            <LogOut className="w-3.5 h-3.5" /> Sign out
-          </button>
         </div>
-      )}
+        <nav className="flex-1" aria-label="Main">
+          {GROUPS.map((g) => {
+            const items = g.items.filter(visible);
+            if (!items.length) return null;
+            return (
+              <div key={g.title} className="mb-4">
+                <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{g.title}</p>
+                <ul className="space-y-0.5">
+                  {items.map((item) => (
+                    <li key={item.href}>
+                      <NavLink
+                        to={item.href}
+                        onClick={onNavigate}
+                        className={({ isActive }) =>
+                          `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] transition ${
+                            isActive ? 'bg-gradient-to-r from-white/15 to-white/5 font-medium text-white shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]'
+                              : 'hover:bg-white/5 hover:text-white'}`
+                        }
+                      >
+                        {({ isActive }) => (
+                          <>
+                            {isActive && <span className="absolute -left-3 top-2 bottom-2 w-1 rounded-r bg-saffron-400 shadow-[0_0_12px_rgb(255_180_84/0.8)]" />}
+                            <item.icon className={`h-[18px] w-[18px] shrink-0 ${isActive ? 'text-saffron-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                            {item.name}
+                          </>
+                        )}
+                      </NavLink>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </nav>
+        {user && (
+          <div className="mt-2 rounded-2xl bg-white/5 p-3 ring-1 ring-white/10 backdrop-blur">
+            <div className="flex items-center gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-saffron-300 to-saffron-500 text-[13px] font-bold text-ink-950">{initials}</div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-white">{user.name}</p>
+                <p className="truncate text-[12px] text-slate-400">{ROLE_LABELS[user.role] ?? user.role}{jurisdiction && ` · ${jurisdiction}`}</p>
+              </div>
+            </div>
+            <button onClick={logout} className="btn btn-ghost btn-sm mt-3 w-full !text-slate-300 hover:!bg-white/10 hover:!text-white">
+              <LogOut className="h-3.5 w-3.5" /> Sign out
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -31,17 +31,17 @@ export const STATE_LABELS: Record<CanonicalState, string> = {
 
 export const STATE_COLORS: Record<CanonicalState, string> = {
   DRAFT: 'bg-slate-100 text-slate-700',
-  SUBMITTED: 'bg-blue-50 text-blue-800',
-  INSTITUTE_VERIFICATION: 'bg-amber-50 text-amber-800',
-  DEFICIENCY_RAISED: 'bg-rose-50 text-rose-800',
-  RESUBMITTED: 'bg-orange-50 text-orange-800',
-  AUTHORITY_VERIFICATION: 'bg-violet-50 text-violet-800',
-  SANCTIONED: 'bg-indigo-50 text-indigo-800',
-  REJECTED: 'bg-rose-100 text-rose-900',
-  PAYMENT_INITIATED: 'bg-teal-50 text-teal-800',
-  CREDITED: 'bg-emerald-50 text-emerald-800',
-  PAYMENT_FAILED: 'bg-rose-50 text-rose-800',
-  RENEWAL_DUE: 'bg-pink-50 text-pink-800',
+  SUBMITTED: 'bg-blue-50 text-blue-800 ring-1 ring-blue-100',
+  INSTITUTE_VERIFICATION: 'bg-amber-50 text-amber-800 ring-1 ring-amber-100',
+  DEFICIENCY_RAISED: 'bg-rose-50 text-rose-800 ring-1 ring-rose-100',
+  RESUBMITTED: 'bg-orange-50 text-orange-800 ring-1 ring-orange-100',
+  AUTHORITY_VERIFICATION: 'bg-violet-50 text-violet-800 ring-1 ring-violet-100',
+  SANCTIONED: 'bg-indigo-50 text-indigo-800 ring-1 ring-indigo-100',
+  REJECTED: 'bg-rose-100 text-rose-900 ring-1 ring-rose-200',
+  PAYMENT_INITIATED: 'bg-teal-50 text-teal-800 ring-1 ring-teal-100',
+  CREDITED: 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100',
+  PAYMENT_FAILED: 'bg-rose-50 text-rose-800 ring-1 ring-rose-100',
+  RENEWAL_DUE: 'bg-pink-50 text-pink-800 ring-1 ring-pink-100',
   SURRENDERED: 'bg-slate-100 text-slate-600',
 };
 

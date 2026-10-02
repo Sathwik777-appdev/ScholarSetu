@@ -32,8 +32,8 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="rise border border-dashed border-slate-300 rounded-2xl p-10 text-center text-sm text-slate-500 bg-white/60">
-      <Inbox className="w-6 h-6 mx-auto mb-2 text-slate-400" />
+    <div className="rise rounded-2xl border border-dashed border-slate-300 bg-white/70 p-10 text-center text-sm text-slate-500">
+      <span className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-slate-100"><Inbox className="h-6 w-6 text-slate-400" /></span>
       <p className="font-semibold text-slate-700">{title}</p>
       {hint && <p className="mt-1">{hint}</p>}
     </div>
@@ -58,8 +58,8 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   return (
     <div className="rise flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-6">
       <div>
-        <h1 className="text-2xl sm:text-[28px] font-semibold text-slate-900 tracking-tight">{title}</h1>
-        {subtitle && <p className="text-sm text-slate-500 mt-1 max-w-2xl">{subtitle}</p>}
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-[30px] sm:leading-9">{title}</h1>
+        {subtitle && <p className="mt-1.5 max-w-2xl text-[15px] leading-6 text-slate-500">{subtitle}</p>}
       </div>
       {actions}
     </div>
@@ -68,8 +68,8 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
 
 export function Card({ title, children, className = '' }: { title?: string; children: ReactNode; className?: string }) {
   return (
-    <section className={`rise bg-white rounded-2xl border border-slate-200/70 p-5 shadow-soft ${className}`}>
-      {title && <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-500 mb-4">{title}</h2>}
+    <section className={`rise card p-5 sm:p-6 ${className}`}>
+      {title && <h2 className="mb-4 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">{title}</h2>}
       {children}
     </section>
   );

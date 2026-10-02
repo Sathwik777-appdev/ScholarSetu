@@ -1,20 +1,32 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
 import { AuthProvider } from './auth/AuthContext';
 import { useAuth } from './auth/auth';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import ReviewQueue from './pages/ReviewQueue';
-import Applications from './pages/Applications';
-import ApplicationDetail from './pages/ApplicationDetail';
-import CoverageMap from './pages/CoverageMap';
-import Analytics from './pages/Analytics';
-import DBTMonitor from './pages/DBTMonitor';
-import DataRequests from './pages/DataRequests';
-import DemoSms from './pages/DemoSms';
-import ManageOfficers from './pages/ManageOfficers';
-import MyWork from './pages/MyWork';
 import WakingBanner from './components/WakingBanner';
+import ErrorBoundary from './components/ErrorBoundary';
+import { Loading } from './components/States';
+import { usePageTitle } from './hooks/usePageTitle';
+
+// Each screen loads on first visit, so the first paint (the sign-in page) stays small.
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const ReviewQueue = lazy(() => import('./pages/ReviewQueue'));
+const Applications = lazy(() => import('./pages/Applications'));
+const ApplicationDetail = lazy(() => import('./pages/ApplicationDetail'));
+const CoverageMap = lazy(() => import('./pages/CoverageMap'));
+const Analytics = lazy(() => import('./pages/Analytics'));
+const DBTMonitor = lazy(() => import('./pages/DBTMonitor'));
+const DataRequests = lazy(() => import('./pages/DataRequests'));
+const DemoSms = lazy(() => import('./pages/DemoSms'));
+const ManageOfficers = lazy(() => import('./pages/ManageOfficers'));
+const MyWork = lazy(() => import('./pages/MyWork'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+
+function Titles() {
+  usePageTitle();
+  return null;
+}
 
 function Home() {
   const { user } = useAuth();
@@ -23,9 +35,12 @@ function Home() {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <AuthProvider>
       <BrowserRouter>
+        <Titles />
         <WakingBanner />
+        <Suspense fallback={<div className="p-8"><Loading /></div>}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<Layout />}>
@@ -41,10 +56,12 @@ export default function App() {
             <Route path="data-requests" element={<DataRequests />} />
             <Route path="demo-sms" element={<DemoSms />} />
             <Route path="manage-officers" element={<ManageOfficers />} />
-            <Route path="*" element={<Home />} />
+            <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
+    </ErrorBoundary>
   );
 }

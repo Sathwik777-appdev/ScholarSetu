@@ -35,14 +35,14 @@ function Resolve({ request, onDone }: { request: DataRequest; onDone: () => void
   const ready = resolution.trim().length >= 10;
   return (
     <div className="mt-3 space-y-2">
-      <textarea className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" rows={2} maxLength={2000}
+      <textarea className="textarea !text-sm" rows={2} maxLength={2000}
         value={resolution} onChange={(e) => setResolution(e.target.value)}
         placeholder="What was done, or why not (the student sees this)" />
       <div className="flex gap-2">
         <button disabled={busy || !ready} onClick={() => decide('DONE')}
-          className="rounded-lg px-3 py-2 text-sm font-semibold bg-emerald-700 text-white disabled:opacity-50">Done</button>
+          className="btn btn-success btn-sm">Done</button>
         <button disabled={busy || !ready} onClick={() => decide('DECLINED')}
-          className="rounded-lg px-3 py-2 text-sm font-semibold border border-slate-300 disabled:opacity-50">Decline</button>
+          className="btn btn-outline btn-sm">Decline</button>
       </div>
       {error && <p className="text-sm text-rose-800" role="alert">{error}</p>}
     </div>
@@ -60,7 +60,7 @@ export default function DataRequests() {
       <div className="flex gap-2">
         {['OPEN', 'ALL'].map((s) => (
           <button key={s} onClick={() => setStatus(s)}
-            className={`rounded-lg px-3 py-1.5 text-sm ${status === s ? 'bg-ink-900 text-white' : 'border border-slate-300'}`}>
+            className={`btn btn-sm ${status === s ? 'btn-primary' : 'btn-outline'}`}>
             {s === 'OPEN' ? 'Open' : 'All'}
           </button>
         ))}

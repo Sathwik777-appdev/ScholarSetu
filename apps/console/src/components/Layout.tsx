@@ -15,8 +15,9 @@ export default function Layout() {
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
 
   return (
-    <div className="flex min-h-dvh bg-[#f4f6fb]">
-      <aside className="hidden lg:block w-64 shrink-0 sticky top-0 h-dvh">
+    <div className="flex min-h-dvh">
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[60] focus:rounded-lg focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:shadow-lift">Skip to content</a>
+      <aside className="no-print sticky top-0 hidden h-dvh w-[17rem] shrink-0 lg:block">
         <Sidebar />
       </aside>
       {menuOpen && (
@@ -38,7 +39,7 @@ export default function Layout() {
       )}
       <div className="flex-1 flex flex-col min-w-0">
         <header 
-          className="lg:hidden sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200/70 bg-white/90 px-4 py-3 backdrop-blur-xl"
+          className="mobile-bar sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200/70 bg-white/85 px-4 py-3 backdrop-blur-xl lg:hidden"
           style={{
             paddingTop: 'max(env(safe-area-inset-top, 0px), 14px)'
           }}
@@ -49,8 +50,8 @@ export default function Layout() {
           <BrandMark className="h-7 w-7" />
           <span className="font-semibold tracking-tight">ScholarSetu</span>
         </header>
-        <main className="flex-1">
-          <div className="px-4 sm:px-6 lg:px-10 py-6 lg:py-8 max-w-7xl mx-auto">
+        <main id="main" className="flex-1">
+          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-10 lg:py-9">
             <Outlet />
           </div>
         </main>

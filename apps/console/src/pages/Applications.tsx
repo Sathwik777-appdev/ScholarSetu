@@ -8,7 +8,7 @@ import { SCHEME_LABELS, STATE_LABELS, formatDays, schemeLabel } from '../utils/f
 import type { OfficerApplication } from '../types';
 
 const PAGE = 50;
-const control = 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-saffron-500 focus:ring-4 focus:ring-saffron-400/20';
+const control = 'select !py-2 !text-sm';
 
 export default function Applications() {
   const [params, setParams] = useSearchParams();
@@ -55,7 +55,7 @@ export default function Applications() {
           <span className="relative mt-1 block">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Student name or application ID"
-              className={`${control} w-full pl-9`} />
+              className={`${control} !pl-9`} />
           </span>
         </label>
         {!state && (
@@ -69,22 +69,22 @@ export default function Applications() {
         empty={<EmptyState title="No applications" hint={query ? `Nothing in your area matches “${query}”.` : 'None in your area match these filters.'} />}>
         {(rows) => (
           <>
-            <div className="rise overflow-x-auto rounded-2xl border border-slate-200/70 bg-white shadow-soft">
-              <table className="min-w-full text-sm">
-                <thead className="bg-slate-50 text-left text-[12px] uppercase tracking-wide text-slate-500">
-                  <tr><th className="p-3 font-semibold">Student</th><th className="p-3 font-semibold">Application</th>
-                    <th className="p-3 font-semibold">Scheme</th><th className="p-3 font-semibold">Stage</th>
-                    <th className="p-3 text-right font-semibold">In this stage</th></tr>
+            <div className="rise card overflow-x-auto">
+              <table className="table">
+                <thead>
+                  <tr><th>Student</th><th>Application</th>
+                    <th>Scheme</th><th>Stage</th>
+                    <th className="!text-right">In this stage</th></tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {rows.map((a) => (
-                    <tr key={a.id} className="hover:bg-slate-50">
-                      <td className="p-3"><Link to={`/application/${a.id}`} className="font-semibold text-slate-900 hover:underline">{a.student_name}</Link>
+                    <tr key={a.id}>
+                      <td><Link to={`/application/${a.id}`} className="font-semibold text-slate-900 hover:underline">{a.student_name}</Link>
                         <p className="text-[13px] text-slate-500">{a.district}, {a.state_name}</p></td>
-                      <td className="p-3 font-mono text-[13px] text-slate-600">{a.id}</td>
-                      <td className="p-3">{schemeLabel(a.scheme)} <span className="text-[13px] text-slate-500">{a.academic_year}</span></td>
-                      <td className="p-3"><StatusBadge status={a.canonical_state} /></td>
-                      <td className="p-3 text-right tabular-nums">{formatDays(a.days_in_state)}</td>
+                      <td className="font-mono text-[13px] text-slate-600">{a.id}</td>
+                      <td>{schemeLabel(a.scheme)} <span className="text-[13px] text-slate-500">{a.academic_year}</span></td>
+                      <td><StatusBadge status={a.canonical_state} /></td>
+                      <td className="text-right tabular-nums">{formatDays(a.days_in_state)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -92,10 +92,10 @@ export default function Applications() {
             </div>
             <div className="mt-3 flex items-center justify-between text-sm">
               <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 disabled:opacity-40">Previous</button>
+                className="btn btn-outline btn-sm">Previous</button>
               <span className="text-slate-500">{rows.length ? `${offset + 1}–${offset + rows.length}` : 'No more'}</span>
               <button disabled={rows.length < PAGE} onClick={() => setOffset(offset + PAGE)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 disabled:opacity-40">Next</button>
+                className="btn btn-outline btn-sm">Next</button>
             </div>
           </>
         )}
