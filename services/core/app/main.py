@@ -31,6 +31,7 @@ from app.channels.router import router as channels_router
 from app.sync.router import router as sync_router
 from app.digilocker.router import router as digilocker_router
 from app.privacy.router import router as privacy_router
+from app.digilocker.login import router as digilocker_login_router
 
 logging.basicConfig(level=settings.LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("scholarsetu.core")
@@ -174,8 +175,8 @@ async def unhandled_error(request: Request, exc: Exception):
     if _is_db_unreachable(exc):
         waking = request_wake()
         logger.warning("database unreachable on %s %s (%s)", request.method, request.url.path, type(exc).__name__)
-        return JSONResponse(status_code=503, headers={"Retry-After": "30"}, content={
-            "code": "WAKING", "detail": "ScholarSetu is starting up. Try again in about a minute."
+        return JSONResponse(status_code=503, headers={"Retry-After": "60"}, content={
+            "code": "WAKING", "detail": "ScholarSetu is starting up after being idle. This takes a few minutes."
             if settings.POWER_MANAGER_URL else "The database is not reachable right now. Try again shortly.",
             "wake_requested": waking})
     error_id = new_id()
@@ -219,5 +220,5 @@ async def readiness():
 
 for router in (gateway_router, ledger_router, verification_router, attestation_router, eligibility_router,
                dbt_guardian_router, wallet_router, consent_router, nudge_router, jago_skill_router,
-               reach_radar_router, adapters_router, channels_router, sync_router, digilocker_router, privacy_router):
+               reach_radar_router, adapters_router, channels_router, sync_router, digilocker_router, privacy_router, digilocker_login_router):
     app.include_router(router)

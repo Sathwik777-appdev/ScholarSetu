@@ -104,8 +104,10 @@ def _check_request(response_type: str, client_id: str, redirect_uri: str, state:
         return "response_type must be 'code'"
     if not _client_ok(client_id):
         return "Unknown client_id"
-    if not redirect_uri.startswith(("https://", "http://localhost", "http://127.0.0.1", "http://test")):
-        return "redirect_uri must use https"
+    # https, local development, or a registered app scheme (the sandbox client uses scholarsetu://).
+    if not redirect_uri.startswith(("https://", "http://localhost", "http://127.0.0.1", "http://test",
+                                    "scholarsetu://")):
+        return "redirect_uri must use https or the app's registered scheme"
     if not state or not code_challenge or code_challenge_method != "S256":
         return "state and an S256 code_challenge (PKCE) are required"
     return None

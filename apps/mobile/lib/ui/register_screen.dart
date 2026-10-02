@@ -1,32 +1,32 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../i18n.dart';
 import '../state/providers.dart';
-import 'server_sheet.dart';
+import 'theme.dart';
 import 'widgets.dart';
 
-/// Registration: the phone is confirmed by an SMS code before any account exists. Registering does NOT
-/// apply for a scholarship; the dashboard then shows "Registered — application NOT submitted".
-class RegisterScreen extends ConsumerStatefulWidget {
-  const RegisterScreen({super.key});
+/// The short sign-up after DigiLocker has confirmed a new person. Name, date of birth and gender come from
+/// DigiLocker and cannot be edited; the student adds where they study. Signing up never applies for a
+/// scholarship.
+class SignupScreen extends ConsumerStatefulWidget {
+  const SignupScreen({super.key, required this.registrationToken, required this.profile});
+
+  final String registrationToken;
+  final Map<String, dynamic> profile;
 
   @override
-  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
+  ConsumerState<SignupScreen> createState() => _SignupScreenState();
 }
 
-class _RegisterScreenState extends ConsumerState<RegisterScreen> {
+class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _form = GlobalKey<FormState>();
-  final _phone = TextEditingController();
-  final _otp = TextEditingController();
-  final _name = TextEditingController();
   final _father = TextEditingController();
-  final _state = TextEditingController();
-  final _district = TextEditingController();
-  DateTime? _dob;
-  String _gender = 'FEMALE';
-  String _language = 'hi';
-  bool _codeSent = false;
+  final _tribe = TextEditingController();
+  final _stateText = TextEditingController();
+  final _districtText = TextEditingController();
+  String? _state;
+  String? _district;
   bool _busy = false;
   String? _error;
   // States and districts that have a ScholarSetu officer (GET /v1/geo/districts). Empty = type them in.
@@ -42,180 +42,135 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           for (final s in (res['states'] as List)) s['state'] as String: (s['districts'] as List).cast<String>(),
         };
         if (mounted && served.isNotEmpty) setState(() => _served = served);
-      } catch (_) {
-        // Offline or older server: the free-text fields stay.
-      }
+      } catch (_) {/* offline: free text */}
     });
   }
 
-  Future<void> _sendCode() async {
-    if (_phone.text.trim().length != 10) {
-      setState(() => _error = 'Enter your 10-digit mobile number.');
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await ref.read(servicesProvider).api.post('/auth/register/start', {'phone': _phone.text.trim()});
-      setState(() => _codeSent = true);
-    } catch (e) {
-      setState(() => _error = errorText(e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
+  String get _chosenState => _served.isEmpty ? _stateText.text.trim() : (_state ?? '');
+  String get _chosenDistrict => _served.isEmpty ? _districtText.text.trim() : (_district ?? '');
 
-  Future<void> _complete() async {
+  Future<void> _submit() async {
     if (!_form.currentState!.validate()) return;
-    if (_dob == null) {
-      setState(() => _error = 'Choose your date of birth.');
-      return;
-    }
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final res = await ref.read(servicesProvider).api.post('/auth/register/complete', {
-        'phone': _phone.text.trim(),
-        'otp': _otp.text.trim(),
-        'full_name': _name.text.trim(),
-        'dob': _dob!.toIso8601String().substring(0, 10),
-        'gender': _gender,
-        'state': _state.text.trim(),
-        'district': _district.text.trim(),
+      final res = await ref.read(servicesProvider).api.post('/auth/digilocker/register', {
+        'registration_token': widget.registrationToken,
+        'state': _chosenState,
+        'district': _chosenDistrict,
         if (_father.text.trim().isNotEmpty) 'father_name': _father.text.trim(),
-        'preferred_language': _language,
+        if (_tribe.text.trim().isNotEmpty) 'tribe': _tribe.text.trim(),
+        'preferred_language': appLanguage.value,
       });
       await ref.read(sessionProvider.notifier).signIn(res as Map<String, dynamic>);
       if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
     } catch (e) {
-      setState(() => _error = errorText(e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _error = errorText(e));
     }
+    if (mounted) setState(() => _busy = false);
   }
 
-  String? _required(String? v) => (v == null || v.trim().length < 2) ? 'Required' : null;
+  String? _required(String? v) => (v == null || v.trim().length < 2) ? t('Required', 'ज़रूरी है') : null;
 
   @override
   Widget build(BuildContext context) {
+    final p = widget.profile;
+    final gender = {'M': t('Male', 'पुरुष'), 'F': t('Female', 'महिला'), 'T': t('Transgender', 'ट्रांसजेंडर')}[
+            '${p['gender'] ?? ''}'.toUpperCase()] ??
+        '${p['gender'] ?? '-'}';
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Register'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.dns_rounded),
-            tooltip: 'Server connection settings',
-            onPressed: () => showServerConfigSheet(context, ref),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: Text(t('Create your account', 'अपना खाता बनाएँ'))),
       body: Form(
         key: _form,
-        child: ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            const Text('Step 1: confirm your mobile number. We send a code by SMS.'),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _phone,
-              enabled: !_codeSent,
-              keyboardType: TextInputType.phone,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
-              decoration: const InputDecoration(labelText: 'Mobile number', border: OutlineInputBorder()),
+        child: ListView(padding: const EdgeInsets.all(20), children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.line)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Icon(Icons.verified_rounded, color: AppColors.teal),
+                const SizedBox(width: 8),
+                Text(t('Confirmed by DigiLocker', 'DigiLocker द्वारा पुष्टि'),
+                    style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.teal)),
+              ]),
+              const SizedBox(height: 12),
+              _Fact(t('Name', 'नाम'), '${p['name'] ?? '-'}'),
+              _Fact(t('Date of birth', 'जन्मतिथि'), '${p['dob'] ?? '-'}'),
+              _Fact(t('Gender', 'लिंग'), gender),
+            ]),
+          ),
+          const SizedBox(height: 22),
+          Text(t('Where do you study?', 'आप कहाँ पढ़ते हैं?'), style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(t('Your district\'s officers will see your applications.', 'आपके ज़िले के अधिकारी आपके आवेदन देखेंगे।'),
+              style: const TextStyle(color: AppColors.muted)),
+          const SizedBox(height: 12),
+          if (_served.isNotEmpty) ...[
+            DropdownButtonFormField<String>(
+              initialValue: _state,
+              items: [for (final s in _served.keys) DropdownMenuItem(value: s, child: Text(s))],
+              onChanged: (v) => setState(() {
+                _state = v;
+                _district = null;
+              }),
+              validator: (v) => v == null ? t('Choose your state', 'अपना राज्य चुनें') : null,
+              decoration: InputDecoration(labelText: t('State', 'राज्य'), border: const OutlineInputBorder()),
             ),
-            if (!_codeSent) ...[
-              const SizedBox(height: 12),
-              FilledButton(onPressed: _busy ? null : _sendCode, child: const Text('Send code')),
-            ],
-            if (_codeSent) ...[
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _otp,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
-                validator: (v) => (v ?? '').length == 6 ? null : 'Enter the 6-digit code',
-                decoration: const InputDecoration(labelText: 'Code from SMS', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 20),
-              const Text('Step 2: your details, as on your Aadhaar and certificates. They are checked '
-                  'with the issuing offices later; nothing here counts as verified.'),
-              const SizedBox(height: 12),
-              TextFormField(controller: _name, validator: _required,
-                  decoration: const InputDecoration(labelText: 'Full name', border: OutlineInputBorder())),
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () async {
-                  final picked = await showDatePicker(context: context, firstDate: DateTime(1970),
-                      lastDate: DateTime.now().subtract(const Duration(days: 1)), initialDate: DateTime(2008));
-                  if (picked != null) setState(() => _dob = picked);
-                },
-                child: Text(_dob == null ? 'Date of birth' : 'Born ${_dob!.toIso8601String().substring(0, 10)}'),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _gender,
-                decoration: const InputDecoration(labelText: 'Gender', border: OutlineInputBorder()),
-                items: const [
-                  DropdownMenuItem(value: 'FEMALE', child: Text('Female')),
-                  DropdownMenuItem(value: 'MALE', child: Text('Male')),
-                  DropdownMenuItem(value: 'OTHER', child: Text('Other')),
-                ],
-                onChanged: (v) => setState(() => _gender = v ?? _gender),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(controller: _father,
-                  decoration: const InputDecoration(labelText: "Father's name (optional)", border: OutlineInputBorder())),
-              const SizedBox(height: 12),
-              if (_served.isEmpty) ...[
-                TextFormField(controller: _state, validator: _required,
-                    decoration: const InputDecoration(labelText: 'State', border: OutlineInputBorder())),
-                const SizedBox(height: 12),
-                TextFormField(controller: _district, validator: _required,
-                    decoration: const InputDecoration(labelText: 'District', border: OutlineInputBorder())),
-              ] else ...[
-                DropdownButtonFormField<String>(
-                  initialValue: _served.containsKey(_state.text) ? _state.text : null,
-                  decoration: const InputDecoration(labelText: 'State', border: OutlineInputBorder()),
-                  items: [for (final s in _served.keys) DropdownMenuItem(value: s, child: Text(s))],
-                  validator: (v) => v == null ? 'Required' : null,
-                  onChanged: (v) => setState(() {
-                    _state.text = v ?? '';
-                    _district.clear();
-                  }),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  key: ValueKey(_state.text),
-                  initialValue: (_served[_state.text] ?? const []).contains(_district.text) ? _district.text : null,
-                  decoration: const InputDecoration(labelText: 'District', border: OutlineInputBorder(),
-                      helperText: 'Only districts with a ScholarSetu officer are listed.'),
-                  items: [for (final d in _served[_state.text] ?? const <String>[])
-                    DropdownMenuItem(value: d, child: Text(d))],
-                  validator: (v) => v == null ? 'Required' : null,
-                  onChanged: (v) => setState(() => _district.text = v ?? ''),
-                ),
-              ],
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _language,
-                decoration: const InputDecoration(labelText: 'Language for messages', border: OutlineInputBorder()),
-                items: const [
-                  DropdownMenuItem(value: 'hi', child: Text('हिन्दी (Hindi)')),
-                  DropdownMenuItem(value: 'en', child: Text('English')),
-                ],
-                onChanged: (v) => setState(() => _language = v ?? _language),
-              ),
-              const SizedBox(height: 20),
-              FilledButton(onPressed: _busy ? null : _complete, child: Text(_busy ? 'Please wait…' : 'Register')),
-            ],
-            if (_error != null) ErrorBox(message: _error!),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              key: ValueKey(_state),
+              initialValue: _district,
+              items: [for (final d in _served[_state] ?? const <String>[]) DropdownMenuItem(value: d, child: Text(d))],
+              onChanged: (v) => setState(() => _district = v),
+              validator: (v) => v == null ? t('Choose your district', 'अपना ज़िला चुनें') : null,
+              decoration: InputDecoration(labelText: t('District', 'ज़िला'), border: const OutlineInputBorder()),
+            ),
+          ] else ...[
+            TextFormField(controller: _stateText, validator: _required,
+                decoration: InputDecoration(labelText: t('State', 'राज्य'), border: const OutlineInputBorder())),
+            const SizedBox(height: 12),
+            TextFormField(controller: _districtText, validator: _required,
+                decoration: InputDecoration(labelText: t('District', 'ज़िला'), border: const OutlineInputBorder())),
           ],
-        ),
+          const SizedBox(height: 12),
+          TextFormField(controller: _father,
+              decoration: InputDecoration(labelText: t("Father's name (optional)", 'पिता का नाम (वैकल्पिक)'),
+                  border: const OutlineInputBorder())),
+          const SizedBox(height: 12),
+          TextFormField(controller: _tribe,
+              decoration: InputDecoration(labelText: t('Tribe (optional)', 'जनजाति (वैकल्पिक)'), border: const OutlineInputBorder())),
+          const SizedBox(height: 16),
+          Text(t('Creating an account does not apply for a scholarship. You apply from the Home tab.',
+                  'खाता बनाने से छात्रवृत्ति का आवेदन नहीं होता। आवेदन होम टैब से करें।'),
+              style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+          if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: ErrorBox(message: _error!)),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 54,
+            child: FilledButton(onPressed: _busy ? null : _submit,
+                child: Text(_busy ? t('Creating…', 'बना रहे हैं…') : t('Create account', 'खाता बनाएँ'),
+                    style: const TextStyle(fontSize: 16))),
+          ),
+        ]),
       ),
     );
   }
+}
+
+class _Fact extends StatelessWidget {
+  const _Fact(this.label, this.value);
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(children: [
+          SizedBox(width: 110, child: Text(label, style: const TextStyle(color: AppColors.muted))),
+          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600))),
+        ]),
+      );
 }

@@ -1,6 +1,6 @@
 """Auth (OTP login), DigiLocker callback and Mitra (assisted) sessions."""
 
-from datetime import date, datetime
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -12,39 +12,33 @@ from app.database import get_db
 from app.dependencies import get_current_user, require_role
 from app.gateway.models import AssistSession, User
 from app.gateway.service import (
-    AuthService, MitraService, MitraSessionError, OtpRateLimited, OtpRejected, RegistrationError,
-    RegistrationService,
+    AuthService, MitraService, MitraSessionError, OtpRateLimited, OtpRejected,
 )
 from app.shared import places
 from app.shared.ratelimit import limit_code_checks, limit_code_requests
-from app.shared.types import AssistSessionStatus, Gender, MitraScope, UserRole
+from app.shared.types import AssistSessionStatus, MitraScope, UserRole
 
 router = APIRouter(prefix="/v1", tags=["Auth & Gateway"])
 
 PHONE_PATTERN = r"^[0-9]{10}$"
 
 
+EMAIL_PATTERN = r"^[^@\s]{1,64}@[^@\s]{1,120}\.[A-Za-z]{2,}$"
+
+
 class OTPRequest(BaseModel):
-    phone: str = Field(..., pattern=PHONE_PATTERN, examples=["9876543210"])
+    phone: Optional[str] = Field(None, pattern=PHONE_PATTERN, examples=["9876543210"])
+    email: Optional[str] = Field(None, max_length=120, pattern=EMAIL_PATTERN)
+    # Sign-in from the demo toggle. The demo code then works for seeded demo accounts only (never real ones).
+    demo: bool = False
 
 
 class OTPVerifyRequest(BaseModel):
     # Unknown fields (e.g. "role") are ignored: the role always comes from the users table.
-    phone: str = Field(..., pattern=PHONE_PATTERN)
+    phone: Optional[str] = Field(None, pattern=PHONE_PATTERN)
+    email: Optional[str] = Field(None, max_length=120, pattern=EMAIL_PATTERN)
     otp: str = Field(..., pattern=r"^[0-9]{6}$")
-
-
-class RegistrationComplete(BaseModel):
-    model_config = {"extra": "forbid"}
-    phone: str = Field(..., pattern=PHONE_PATTERN)
-    otp: str = Field(..., pattern=r"^[0-9]{6}$")
-    full_name: str = Field(..., min_length=2, max_length=100)
-    dob: date
-    gender: Gender
-    state: str = Field(..., min_length=2, max_length=60)
-    district: str = Field(..., min_length=2, max_length=60)
-    father_name: Optional[str] = Field(None, max_length=100)
-    preferred_language: str = Field("hi", pattern=r"^[a-z]{2,3}$")
+    demo: bool = False
 
 
 class AuthUser(BaseModel):
@@ -62,6 +56,34 @@ class AuthTokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     user: AuthUser
+
+
+OFFICER_ROLE_CHOICES = (UserRole.INSTITUTE_OFFICER, UserRole.DISTRICT_OFFICER, UserRole.STATE_OFFICER,
+                        UserRole.MINISTRY)
+
+
+class CreateOfficerRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    name: str = Field(..., min_length=2, max_length=100)
+    email: str = Field(..., max_length=120, pattern=EMAIL_PATTERN)  # officers sign in with an emailed code
+    phone: Optional[str] = Field(None, pattern=PHONE_PATTERN)
+    role: UserRole
+    jurisdiction_state: Optional[str] = Field(None, max_length=60)
+    jurisdiction_district: Optional[str] = Field(None, max_length=60)
+    institution_code: Optional[str] = Field(None, max_length=40)
+
+
+class OfficerOut(AuthUser):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    institution_code: Optional[str] = None
+    is_active: bool
+    is_demo: bool
+
+
+class OfficerActive(BaseModel):
+    model_config = {"extra": "forbid"}
+    active: bool
 
 
 class MitraSessionRequest(BaseModel):
@@ -98,19 +120,22 @@ def _user_out(user: User) -> AuthUser:
 
 @router.post("/auth/otp/request", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(limit_code_requests)])
 async def request_otp(req: OTPRequest, db: AsyncSession = Depends(get_db)):
-    """Send a login OTP by SMS. The response is identical whether or not the phone is registered."""
+    """Send a login OTP by SMS or Email. The response is identical whether or not the account is registered."""
+    if not (req.email or req.phone):
+        raise HTTPException(status_code=422, detail="Give an email address or a mobile number")
     try:
-        await AuthService(db).request_login_otp(req.phone)
+        await AuthService(db).request_login_otp(phone=req.phone, email=req.email, demo=req.demo)
     except OtpRateLimited:
-        raise HTTPException(status_code=429, detail="Too many codes requested for this number. Try again in an hour.")
-    return {"status": "accepted",
-            "message": f"If {req.phone[:2]}******{req.phone[-2:]} is registered, an OTP has been sent."}
+        raise HTTPException(status_code=429, detail="Too many codes requested. Try again in an hour.")
+    contact = req.email.strip().lower() if req.email else f"{req.phone[:2]}******{req.phone[-2:]}"
+    return {"status": "accepted", "message": f"If {contact} is registered, a sign-in code has been sent."}
 
 
 @router.post("/auth/otp/verify", response_model=AuthTokenResponse, dependencies=[Depends(limit_code_checks)])
 async def verify_otp(req: OTPVerifyRequest, db: AsyncSession = Depends(get_db)):
     try:
-        user, token, expires_in = await AuthService(db).verify_login_otp(req.phone, req.otp)
+        user, token, expires_in = await AuthService(db).verify_login_otp(phone=req.phone, email=req.email,
+                                                                         otp=req.otp, demo=req.demo)
     except OtpRejected as exc:
         if exc.too_many_attempts:
             raise HTTPException(status_code=429, detail="Too many attempts. Request a new OTP.")
@@ -118,29 +143,11 @@ async def verify_otp(req: OTPVerifyRequest, db: AsyncSession = Depends(get_db)):
     return AuthTokenResponse(access_token=token, expires_in=expires_in, user=_user_out(user))
 
 
-@router.post("/auth/register/start", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(limit_code_requests)])
-async def start_registration(req: OTPRequest, db: AsyncSession = Depends(get_db)):
-    """Step 1: send a code to the phone. The response never reveals whether the number is registered."""
-    try:
-        await RegistrationService(db).start(req.phone)
-    except OtpRateLimited:
-        raise HTTPException(status_code=429, detail="Too many codes requested for this number. Try again in an hour.")
-    return {"status": "accepted", "message": f"A message has been sent to {req.phone[:2]}******{req.phone[-2:]}."}
-
-
-@router.post("/auth/register/complete", response_model=AuthTokenResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(limit_code_checks)])
-async def complete_registration(req: RegistrationComplete, db: AsyncSession = Depends(get_db)):
-    """Step 2: the code confirms the phone; the student account is created. No application is submitted."""
-    if req.dob >= date.today():
-        raise HTTPException(status_code=422, detail="Date of birth must be in the past")
-    details = req.model_dump(exclude={"phone", "otp"})
-    details["full_name"] = " ".join(details["full_name"].split())
-    details["state"], details["district"] = places.tidy(details["state"]), places.tidy(details["district"])
-    try:
-        user, token, expires_in = await RegistrationService(db).complete(req.phone, req.otp, details)
-    except RegistrationError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
-    return AuthTokenResponse(access_token=token, expires_in=expires_in, user=_user_out(user))
+@router.post("/auth/register/start", status_code=status.HTTP_410_GONE, include_in_schema=False)
+@router.post("/auth/register/complete", status_code=status.HTTP_410_GONE, include_in_schema=False)
+async def phone_registration_retired():
+    """Students sign up with DigiLocker (/v1/auth/digilocker/*), which confirms who they are."""
+    raise HTTPException(status_code=410, detail="Sign up with DigiLocker in the ScholarSetu app")
 
 
 @router.get("/geo/districts")
@@ -163,10 +170,103 @@ async def whoami(user: User = Depends(get_current_user)):
     return _user_out(user)
 
 
-@router.post("/auth/digilocker/callback", status_code=status.HTTP_501_NOT_IMPLEMENTED)
-async def digilocker_callback():
-    """DigiLocker OAuth is not integrated yet."""
-    raise HTTPException(status_code=501, detail="DigiLocker login is not implemented in this prototype")
+def _officer_out(u: User) -> OfficerOut:
+    return OfficerOut(**_user_out(u).model_dump(), email=u.email, phone=u.phone, institution_code=u.institution_code,
+                      is_active=u.is_active, is_demo=u.is_demo)
+
+
+@router.get("/admin/officers", response_model=list[OfficerOut])
+async def list_officers(admin: User = Depends(require_role(UserRole.MINISTRY)), db: AsyncSession = Depends(get_db)):
+    """Every officer and Ministry account, newest first."""
+    from sqlalchemy import select
+    rows = (await db.execute(select(User).where(User.role.in_(OFFICER_ROLE_CHOICES))
+                             .order_by(User.created_at.desc()))).scalars().all()
+    return [_officer_out(u) for u in rows]
+
+
+@router.post("/admin/officers", response_model=OfficerOut, status_code=status.HTTP_201_CREATED)
+async def create_officer(req: CreateOfficerRequest, admin: User = Depends(require_role(UserRole.MINISTRY)),
+                         db: AsyncSession = Depends(get_db)):
+    """Enrol an officer. They sign in with a code emailed to them; an enrolled officer is never a demo account,
+    so the demo code never works for them. District and institute officers need a state and district (their
+    jurisdiction decides what they see); state officers need a state."""
+    from sqlalchemy import or_, select
+    if req.role not in OFFICER_ROLE_CHOICES:
+        raise HTTPException(status_code=422, detail="Only officer and Ministry accounts can be enrolled here")
+    needs_state = req.role != UserRole.MINISTRY
+    needs_district = req.role in (UserRole.DISTRICT_OFFICER, UserRole.INSTITUTE_OFFICER)
+    if needs_state and not (req.jurisdiction_state or "").strip():
+        raise HTTPException(status_code=422, detail="Choose the state this officer works in")
+    if needs_district and not (req.jurisdiction_district or "").strip():
+        raise HTTPException(status_code=422, detail="Choose the district this officer works in")
+    email = req.email.strip().lower()
+    taken = await db.scalar(select(User.id).where(or_(User.email == email,
+                                                      User.phone == req.phone if req.phone else False)))
+    if taken:
+        raise HTTPException(status_code=409, detail="An account with this email or mobile number already exists")
+    user = User(name=req.name.strip(), email=email, phone=req.phone, role=req.role,
+                jurisdiction_state=places.tidy(req.jurisdiction_state) if needs_state else None,
+                jurisdiction_district=places.tidy(req.jurisdiction_district) if needs_district else None,
+                institution_code=(req.institution_code or None) if req.role == UserRole.INSTITUTE_OFFICER else None,
+                is_active=True, is_demo=False)
+    db.add(user)
+    await db.flush()
+    from app.gateway.service import record_audit
+    await record_audit(db, "OFFICER_CREATED", actor=admin,
+                       details={"new_user_id": user.id, "role": req.role.value,
+                                "state": user.jurisdiction_state, "district": user.jurisdiction_district})
+    await db.commit()
+    return _officer_out(user)
+
+
+@router.post("/admin/officers/{user_id}/active", response_model=OfficerOut)
+async def set_officer_active(user_id: str, body: OfficerActive,
+                             admin: User = Depends(require_role(UserRole.MINISTRY)), db: AsyncSession = Depends(get_db)):
+    """Deactivate (or reactivate) an officer. A deactivated account cannot sign in, and its open sessions stop
+    working at their next request. You cannot deactivate yourself."""
+    user = await db.get(User, user_id)
+    if user is None or user.role not in OFFICER_ROLE_CHOICES:
+        raise HTTPException(status_code=404, detail="Officer not found")
+    if user.id == admin.id and not body.active:
+        raise HTTPException(status_code=409, detail="You cannot deactivate your own account")
+    user.is_active = body.active
+    from app.gateway.service import record_audit
+    await record_audit(db, "OFFICER_ACTIVATED" if body.active else "OFFICER_DEACTIVATED", actor=admin,
+                       details={"user_id": user.id})
+    await db.commit()
+    return _officer_out(user)
+
+
+class DemoAccount(BaseModel):
+    name: str
+    role: UserRole
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class DemoInfo(BaseModel):
+    available: bool
+    demo_code: Optional[str] = None
+    console_accounts: list[DemoAccount] = []
+    app_accounts: list[DemoAccount] = []
+
+
+@router.get("/auth/demo", response_model=DemoInfo)
+async def demo_info(db: AsyncSession = Depends(get_db)):
+    """For the demo toggle on every sign-in page: whether this server allows demo sign-in, and the seeded demo
+    accounts it applies to. Real accounts never accept the demo code."""
+    if not settings.DEMO_MODE:
+        return DemoInfo(available=False)
+    from sqlalchemy import select
+    users = (await db.execute(select(User).where(User.is_demo.is_(True), User.is_active.is_(True))
+                              .order_by(User.role, User.name))).scalars().all()
+    officer = set(OFFICER_ROLE_CHOICES)
+    return DemoInfo(
+        available=True, demo_code=settings.DEMO_OTP,
+        console_accounts=[DemoAccount(name=u.name, role=u.role, email=u.email) for u in users
+                          if u.role in officer and u.email],
+        app_accounts=[DemoAccount(name=u.name, role=u.role, phone=u.phone) for u in users
+                      if u.role not in officer and u.phone])
 
 
 def _mitra_error(exc: MitraSessionError) -> HTTPException:

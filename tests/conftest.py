@@ -215,10 +215,10 @@ def gov():
     app.dependency_overrides.pop(get_source_client, None)
 
 
-# ── Seeded demo world (scripts/seed_demo.py) ─────────────────────────────────
+# ── Seeded test world (tests/demo_world.py) ─────────────────────────────────
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from scripts.seed_demo import seed as seed_demo  # noqa: E402
+from tests.demo_world import seed as seed_demo  # noqa: E402
 
 PHONES = {"headmaster": "9876543226", "sunita": "9876543210", "rahul": "9876543211", "salkhan": "9876543213", "guardian": "9876543212", "mitra": "9876543220",
           "institute": "9876543225", "district": "9876543230", "state": "9876543235", "ministry": "9876543240"}
@@ -297,3 +297,37 @@ def pytest_unconfigure(config):
         sys.stdout.flush()
         sys.stderr.flush()
         os._exit(_exit_status["code"])
+
+
+# ── Sign in with DigiLocker, with a stand-in DigiLocker token endpoint ────────
+
+async def digilocker_signup(client, monkeypatch, digilocker_id: str, name: str, dob: str, gender: str,
+                            state: str = "Jharkhand", district: str = "Dumka") -> dict:
+    """Register a new student through /v1/auth/digilocker/* as DigiLocker would confirm them (dob DDMMYYYY,
+    gender M/F as DigiLocker sends them). Returns auth headers."""
+    from app.config import settings
+    from app.digilocker.router import get_digilocker_http
+    monkeypatch.setattr(settings, "DIGILOCKER_CLIENT_ID", "test-client")
+    monkeypatch.setattr(settings, "DIGILOCKER_CLIENT_SECRET", "test-secret-0123456789")
+
+    def token_endpoint(request: httpx.Request) -> httpx.Response:
+        assert request.url.path.endswith("/public/oauth2/1/token")
+        return httpx.Response(200, json={"access_token": "t", "digilockerid": digilocker_id, "name": name,
+                                         "dob": dob, "gender": gender})
+
+    async def _http():
+        async with httpx.AsyncClient(base_url="http://digilocker", transport=httpx.MockTransport(token_endpoint)) as c:
+            yield c
+
+    app.dependency_overrides[get_digilocker_http] = _http
+    try:
+        start = (await client.post("/v1/auth/digilocker/start")).json()
+        done = (await client.post("/v1/auth/digilocker/complete", json={"state": start["state"], "code": "abcd1234"})).json()
+        if done["status"] == "SIGNED_IN":
+            return bearer(done["auth"]["access_token"])
+        r = await client.post("/v1/auth/digilocker/register", json={
+            "registration_token": done["registration_token"], "state": state, "district": district})
+        assert r.status_code == 201, r.text
+        return bearer(r.json()["access_token"])
+    finally:
+        app.dependency_overrides.pop(get_digilocker_http, None)

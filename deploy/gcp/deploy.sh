@@ -148,13 +148,25 @@ run_flags() {  # shared by the API service and the migration job
   secrets+=",MINIO_ACCESS_KEY=scholarsetu-$ENV-hmac-access:latest,MINIO_SECRET_KEY=scholarsetu-$ENV-hmac-secret:latest"
   exists g secrets describe "scholarsetu-$ENV-gemini-key" && secrets+=",GEMINI_API_KEY=scholarsetu-$ENV-gemini-key:latest"
   secrets+=",/secrets/attestation/key.pem=scholarsetu-$ENV-attestation-key:latest"
-  exists g secrets describe "scholarsetu-$ENV-digilocker-client-secret" && \
-    secrets+=",DIGILOCKER_CLIENT_SECRET=scholarsetu-$ENV-digilocker-client-secret:latest"
-  # DigiLocker: mock by default. Going live: DIGILOCKER_MODE=production DIGILOCKER_API_URL=... DIGILOCKER_CLIENT_ID=...
-  local number public dl
+  # Officer sign-in codes by email (Microsoft 365). Add the mailbox's password once:
+  #   printf %s "$PASSWORD" | gcloud secrets create scholarsetu-$ENV-smtp-password --data-file=-
+  exists g secrets describe "scholarsetu-$ENV-smtp-password" && secrets+=",SMTP_PASSWORD=scholarsetu-$ENV-smtp-password:latest"
+  # DigiLocker. With the MeriPehchaan sandbox secret stored, the API uses the sandbox (real DigiLocker sign-in);
+  # otherwise the test DigiLocker on the VM. Add it once:
+  #   printf %s "$SECRET" | gcloud secrets create scholarsetu-$ENV-digilocker-sandbox-secret --data-file=-
+  local number public dl dl_mode dl_client
+  if exists g secrets describe "scholarsetu-$ENV-digilocker-sandbox-secret"; then
+    secrets+=",DIGILOCKER_CLIENT_SECRET=scholarsetu-$ENV-digilocker-sandbox-secret:latest"
+    dl_mode=${DIGILOCKER_MODE:-sandbox}; dl_client=${DIGILOCKER_CLIENT_ID:-MNRNJVXE}
+    DIGILOCKER_API_URL=${DIGILOCKER_API_URL:-https://dev-meripehchaan.dl6.in}
+  else
+    exists g secrets describe "scholarsetu-$ENV-digilocker-client-secret" && \
+      secrets+=",DIGILOCKER_CLIENT_SECRET=scholarsetu-$ENV-digilocker-client-secret:latest"
+    dl_mode=${DIGILOCKER_MODE:-mock}; dl_client=${DIGILOCKER_CLIENT_ID:-scholarsetu-$ENV}
+  fi
   number=$(g projects describe "$PROJECT" --format='value(projectNumber)')
   public=https://$SERVICE-$number.$REGION.run.app
-  dl="DIGILOCKER_MODE=${DIGILOCKER_MODE:-mock},DIGILOCKER_CLIENT_ID=${DIGILOCKER_CLIENT_ID:-scholarsetu-$ENV},PUBLIC_BASE_URL=$public"
+  dl="DIGILOCKER_MODE=$dl_mode,DIGILOCKER_CLIENT_ID=$dl_client,PUBLIC_BASE_URL=$public"
   [ -n "${DIGILOCKER_API_URL:-}" ] && dl+=",DIGILOCKER_API_URL=$DIGILOCKER_API_URL"
   [ -n "${DIGILOCKER_AUTHORIZE_URL:-}" ] && dl+=",DIGILOCKER_AUTHORIZE_URL=$DIGILOCKER_AUTHORIZE_URL"
   # Demo: a request that finds the database asleep asks the (private) power manager to wake everything.

@@ -18,6 +18,9 @@ class AppColors {
   static const text = Color(0xFF0F172A);
 }
 
+/// Hindi text falls back to the bundled Noto Sans Devanagari (Inter has no Devanagari letters).
+const fontFallback = ['NotoSansDevanagari'];
+
 class AppTheme {
   static ThemeData light() {
     final scheme = ColorScheme.fromSeed(
@@ -28,7 +31,7 @@ class AppTheme {
       surface: AppColors.surface,
       error: AppColors.rose,
     );
-    final base = ThemeData(useMaterial3: true, colorScheme: scheme, fontFamily: 'Inter');
+    final base = ThemeData(useMaterial3: true, colorScheme: scheme, fontFamily: 'Inter', fontFamilyFallback: fontFallback);
     final radius = BorderRadius.circular(16);
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.surface,
@@ -44,7 +47,7 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        titleTextStyle: TextStyle(fontFamily: 'Inter', fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.text),
+        titleTextStyle: TextStyle(fontFamily: 'Inter', fontFamilyFallback: fontFallback, fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.text),
       ),
       cardTheme: CardThemeData(
         color: AppColors.card,
@@ -66,7 +69,7 @@ class AppTheme {
           foregroundColor: Colors.white,
           minimumSize: const Size(0, 52),
           shape: RoundedRectangleBorder(borderRadius: radius),
-          textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(fontFamily: 'Inter', fontFamilyFallback: fontFallback, fontSize: 15, fontWeight: FontWeight.w600),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -75,7 +78,7 @@ class AppTheme {
           foregroundColor: AppColors.ink900,
           side: const BorderSide(color: AppColors.line),
           shape: RoundedRectangleBorder(borderRadius: radius),
-          textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(fontFamily: 'Inter', fontFamilyFallback: fontFallback, fontSize: 15, fontWeight: FontWeight.w600),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
@@ -83,7 +86,7 @@ class AppTheme {
         indicatorColor: AppColors.saffronLight.withValues(alpha: 0.25),
         height: 68,
         labelTextStyle: WidgetStateProperty.resolveWith((s) => TextStyle(
-            fontFamily: 'Inter', fontSize: 12,
+            fontFamily: 'Inter', fontFamilyFallback: fontFallback, fontSize: 12,
             fontWeight: s.contains(WidgetState.selected) ? FontWeight.w600 : FontWeight.w500,
             color: s.contains(WidgetState.selected) ? AppColors.ink900 : AppColors.muted)),
       ),

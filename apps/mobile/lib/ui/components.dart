@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../i18n.dart';
+
 import 'labels.dart';
 import 'theme.dart';
 
@@ -90,7 +92,8 @@ class StageTracker extends StatelessWidget {
   const StageTracker(this.state, {super.key});
 
   final String state;
-  static const _steps = ['Applied', 'Institute', 'District', 'Sanctioned', 'Paid', 'Credited'];
+  static List<String> get _steps => [t('Applied', 'आवेदन'), t('Institute', 'संस्थान'), t('District', 'ज़िला'),
+      t('Sanctioned', 'स्वीकृत'), t('Paid', 'भेजा'), t('Credited', 'खाते में')];
 
   int get _index => switch (state) {
         'DRAFT' => -1,
@@ -109,7 +112,7 @@ class StageTracker extends StatelessWidget {
   Widget build(BuildContext context) {
     final current = _index;
     return Semantics(
-      label: 'Stage: ${stateLabel(state)}',
+      label: '${t('Stage', 'चरण')}: ${stateLabel(state)}',
       child: Column(children: [
         Row(children: [
           for (var i = 0; i < _steps.length; i++) ...[
@@ -123,7 +126,7 @@ class StageTracker extends StatelessWidget {
         const SizedBox(height: 6),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           for (var i = 0; i < _steps.length; i++)
-            Text(_steps[i], style: TextStyle(fontSize: 10.5, color: i == current ? AppColors.text : AppColors.muted,
+            Text(_steps[i], style: TextStyle(fontSize: 12, color: i == current ? AppColors.text : AppColors.muted,
                 fontWeight: i == current ? FontWeight.w600 : FontWeight.w500)),
         ]),
       ]),
@@ -166,7 +169,7 @@ class Figure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label.toUpperCase(), style: const TextStyle(fontSize: 11, letterSpacing: 0.6, color: AppColors.muted, fontWeight: FontWeight.w600)),
+        Text(label.toUpperCase(), style: const TextStyle(fontSize: 12, letterSpacing: 0.6, color: AppColors.muted, fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
         Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: color, letterSpacing: -0.4,
             fontFeatures: const [FontFeature.tabularFigures()])),

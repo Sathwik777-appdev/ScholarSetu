@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Search } from 'lucide-react';
 import { useApi } from '../hooks/useApi';
 import { ApiView, EmptyState, PageHeader } from '../components/States';
 import StatusBadge from '../components/StatusBadge';
@@ -7,65 +8,97 @@ import { SCHEME_LABELS, STATE_LABELS, formatDays, schemeLabel } from '../utils/f
 import type { OfficerApplication } from '../types';
 
 const PAGE = 50;
+const control = 'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-saffron-500 focus:ring-4 focus:ring-saffron-400/20';
 
 export default function Applications() {
-  const [state, setState] = useState('');
-  const [scheme, setScheme] = useState('');
-  const [search, setSearch] = useState('');
+  const [params, setParams] = useSearchParams();
+  const state = params.get('state') ?? '';
+  const scheme = params.get('scheme') ?? '';
+  const openOnly = params.get('open') !== 'all';
+  const [search, setSearch] = useState(params.get('q') ?? '');
+  const [query, setQuery] = useState(search);
   const [offset, setOffset] = useState(0);
+
+  useEffect(() => {  // search the whole jurisdiction on the server, not just the loaded page
+    const t = window.setTimeout(() => { setQuery(search.trim()); setOffset(0); }, 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  const update = (key: string, value: string) => {
+    const next = new URLSearchParams(params);
+    if (value) next.set(key, value); else next.delete(key);
+    setParams(next, { replace: true });
+    setOffset(0);
+  };
   const api = useApi<OfficerApplication[]>('/applications', {
-    state: state || undefined, scheme: scheme || undefined, limit: PAGE, offset,
+    state: state || undefined, scheme: scheme || undefined, q: query || undefined,
+    open_only: openOnly && !state ? 'true' : undefined, limit: PAGE, offset,
   });
-  const q = search.trim().toLowerCase();
 
   return (
     <div>
-      <PageHeader title="Applications" subtitle="Every application in your jurisdiction, longest waiting first." />
-      <div className="flex flex-wrap gap-2 mb-4 text-sm">
-        <select value={state} onChange={(e) => { setState(e.target.value); setOffset(0); }} className="border border-slate-300 rounded px-2 py-1 bg-white">
-          <option value="">All stages</option>
-          {Object.entries(STATE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <select value={scheme} onChange={(e) => { setScheme(e.target.value); setOffset(0); }} className="border border-slate-300 rounded px-2 py-1 bg-white">
-          <option value="">All schemes</option>
-          {Object.entries(SCHEME_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter this page by name or ID"
-          className="border border-slate-300 rounded px-2 py-1 flex-1 min-w-[12rem]" />
+      <PageHeader title="Applications" subtitle="Every application in your area, longest in its current stage first." />
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <label className="text-[13px] font-medium text-slate-600">Stage
+          <select value={state} onChange={(e) => update('state', e.target.value)} className={`${control} mt-1 block`}>
+            <option value="">All stages</option>
+            {Object.entries(STATE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </label>
+        <label className="text-[13px] font-medium text-slate-600">Scheme
+          <select value={scheme} onChange={(e) => update('scheme', e.target.value)} className={`${control} mt-1 block`}>
+            <option value="">All schemes</option>
+            {Object.entries(SCHEME_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </label>
+        <label className="min-w-[14rem] flex-1 text-[13px] font-medium text-slate-600">Search
+          <span className="relative mt-1 block">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Student name or application ID"
+              className={`${control} w-full pl-9`} />
+          </span>
+        </label>
+        {!state && (
+          <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
+            <input type="checkbox" checked={openOnly} onChange={(e) => update('open', e.target.checked ? '' : 'all')} className="h-4 w-4 accent-amber-500" />
+            Open only
+          </label>
+        )}
       </div>
       <ApiView state={api} isEmpty={(d) => d.length === 0 && offset === 0}
-        empty={<EmptyState title="No applications" hint="None in your jurisdiction match these filters." />}>
-        {(rows) => {
-          const shown = rows.filter((r) => !q || r.student_name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q));
-          return (
-            <>
-              <div className="rise bg-white border border-slate-200/70 rounded-2xl overflow-x-auto shadow-soft">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase text-slate-500 text-left">
-                    <tr><th className="p-3">Application</th><th className="p-3">Student</th><th className="p-3">Scheme</th><th className="p-3">Stage</th><th className="p-3 text-right">In this stage</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {shown.map((a) => (
-                      <tr key={a.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-mono text-xs"><Link className="text-blue-800 underline" to={`/application/${a.id}`}>{a.id}</Link></td>
-                        <td className="p-3"><p className="font-semibold">{a.student_name}</p><p className="text-xs text-slate-500">{a.district}, {a.state_name}</p></td>
-                        <td className="p-3">{schemeLabel(a.scheme)} <span className="text-xs text-slate-500">{a.academic_year}</span></td>
-                        <td className="p-3"><StatusBadge status={a.canonical_state} /></td>
-                        <td className="p-3 text-right tabular-nums">{formatDays(a.days_in_state)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {shown.length === 0 && <p className="p-4 text-sm text-slate-500">No application on this page matches “{search}”.</p>}
-              </div>
-              <div className="flex items-center justify-between mt-3 text-xs">
-                <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))} className="px-3 py-1 border rounded disabled:opacity-40">Previous</button>
-                <span className="text-slate-500">Showing {offset + 1}–{offset + rows.length}</span>
-                <button disabled={rows.length < PAGE} onClick={() => setOffset(offset + PAGE)} className="px-3 py-1 border rounded disabled:opacity-40">Next</button>
-              </div>
-            </>
-          );
-        }}
+        empty={<EmptyState title="No applications" hint={query ? `Nothing in your area matches “${query}”.` : 'None in your area match these filters.'} />}>
+        {(rows) => (
+          <>
+            <div className="rise overflow-x-auto rounded-2xl border border-slate-200/70 bg-white shadow-soft">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 text-left text-[12px] uppercase tracking-wide text-slate-500">
+                  <tr><th className="p-3 font-semibold">Student</th><th className="p-3 font-semibold">Application</th>
+                    <th className="p-3 font-semibold">Scheme</th><th className="p-3 font-semibold">Stage</th>
+                    <th className="p-3 text-right font-semibold">In this stage</th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rows.map((a) => (
+                    <tr key={a.id} className="hover:bg-slate-50">
+                      <td className="p-3"><Link to={`/application/${a.id}`} className="font-semibold text-slate-900 hover:underline">{a.student_name}</Link>
+                        <p className="text-[13px] text-slate-500">{a.district}, {a.state_name}</p></td>
+                      <td className="p-3 font-mono text-[13px] text-slate-600">{a.id}</td>
+                      <td className="p-3">{schemeLabel(a.scheme)} <span className="text-[13px] text-slate-500">{a.academic_year}</span></td>
+                      <td className="p-3"><StatusBadge status={a.canonical_state} /></td>
+                      <td className="p-3 text-right tabular-nums">{formatDays(a.days_in_state)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-3 flex items-center justify-between text-sm">
+              <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 disabled:opacity-40">Previous</button>
+              <span className="text-slate-500">{rows.length ? `${offset + 1}–${offset + rows.length}` : 'No more'}</span>
+              <button disabled={rows.length < PAGE} onClick={() => setOffset(offset + PAGE)}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 disabled:opacity-40">Next</button>
+            </div>
+          </>
+        )}
       </ApiView>
     </div>
   );

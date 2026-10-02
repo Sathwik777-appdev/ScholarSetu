@@ -1,0 +1,7 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'asia-south1-docker.pkg.dev/trisphere-4b121/cloud-run-source-deploy/scholarsetu-api:latest', '-f', 'services/core/Dockerfile', '.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'asia-south1-docker.pkg.dev/trisphere-4b121/cloud-run-source-deploy/scholarsetu-api:latest']
+images:
+  - 'asia-south1-docker.pkg.dev/trisphere-4b121/cloud-run-source-deploy/scholarsetu-api:latest'

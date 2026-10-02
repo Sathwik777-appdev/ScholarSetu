@@ -15,8 +15,8 @@ export default function Layout() {
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-[#f4f6fb]">
-      <aside className="hidden lg:block lg:w-68 w-64 shrink-0">
+    <div className="flex min-h-dvh bg-[#f4f6fb]">
+      <aside className="hidden lg:block w-64 shrink-0 sticky top-0 h-dvh">
         <Sidebar />
       </aside>
       {menuOpen && (
@@ -49,7 +49,7 @@ export default function Layout() {
           <BrandMark className="h-7 w-7" />
           <span className="font-semibold tracking-tight">ScholarSetu</span>
         </header>
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1">
           <div className="px-4 sm:px-6 lg:px-10 py-6 lg:py-8 max-w-7xl mx-auto">
             <Outlet />
           </div>

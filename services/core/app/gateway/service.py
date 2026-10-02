@@ -74,42 +74,45 @@ async def send_sms(db: AsyncSession, to_phone: str, body: str, category: str) ->
     logger.info("SMS queued category=%s to=%s******%s", category, to_phone[:2], to_phone[-2:])
 
 
-async def _recent(db: AsyncSession, phone: str, purpose: OtpPurpose, what):
+async def _recent(db: AsyncSession, contact: str, purpose: OtpPurpose, what):
+    cond = OtpChallenge.email == contact if '@' in contact else OtpChallenge.phone == contact
     return await db.scalar(select(what).select_from(OtpChallenge).where(
-        OtpChallenge.phone == phone, OtpChallenge.purpose == purpose,
+        cond, OtpChallenge.purpose == purpose,
         OtpChallenge.created_at >= _now() - timedelta(hours=1))) or 0
 
 
-async def _issue_challenge(db: AsyncSession, phone: str, purpose: OtpPurpose, subject_ref: Optional[str]) -> str:
+async def _issue_challenge(db: AsyncSession, contact: str, purpose: OtpPurpose, subject_ref: Optional[str]) -> str:
     """Invalidate earlier open challenges for the same target and create a fresh one. Returns the plain OTP.
-    Raises OtpRateLimited after OTP_REQUESTS_PER_HOUR codes for this phone and purpose."""
-    if await _recent(db, phone, purpose, func.count()) >= settings.OTP_REQUESTS_PER_HOUR:
+    Raises OtpRateLimited after OTP_REQUESTS_PER_HOUR codes for this contact and purpose."""
+    cond = OtpChallenge.email == contact if '@' in contact else OtpChallenge.phone == contact
+    phone, email = (None, contact) if '@' in contact else (contact, None)
+
+    if await _recent(db, contact, purpose, func.count()) >= settings.OTP_REQUESTS_PER_HOUR:
         raise OtpRateLimited()
+
     await db.execute(
         update(OtpChallenge)
-        .where(OtpChallenge.phone == phone, OtpChallenge.purpose == purpose,
+        .where(cond, OtpChallenge.purpose == purpose,
                OtpChallenge.subject_ref == subject_ref, OtpChallenge.consumed_at.is_(None))
         .values(consumed_at=_now())
     )
     challenge_id = new_id()
     otp = generate_otp()
     db.add(OtpChallenge(
-        id=challenge_id, phone=phone, purpose=purpose, subject_ref=subject_ref,
+        id=challenge_id, phone=phone, email=email, purpose=purpose, subject_ref=subject_ref,
         otp_hash=hash_otp(challenge_id, otp),
         expires_at=_now() + timedelta(minutes=settings.OTP_TTL_MINUTES),
     ))
     return otp
 
 
-async def _check_challenge(db: AsyncSession, phone: str, purpose: OtpPurpose,
+async def _check_challenge(db: AsyncSession, contact: str, purpose: OtpPurpose,
                            subject_ref: Optional[str], otp: str) -> None:
-    """Verify the latest open challenge. Consumes it on success; counts the attempt on failure.
-
-    The challenge row is locked first, so parallel guesses are checked and counted one at a time: without the
-    lock, simultaneous guesses all read the same attempt count and slip past the limits."""
+    """Verify the latest open challenge. Consumes it on success; counts the attempt on failure."""
+    cond = OtpChallenge.email == contact if '@' in contact else OtpChallenge.phone == contact
     result = await db.execute(
         select(OtpChallenge)
-        .where(OtpChallenge.phone == phone, OtpChallenge.purpose == purpose,
+        .where(cond, OtpChallenge.purpose == purpose,
                OtpChallenge.subject_ref == subject_ref, OtpChallenge.consumed_at.is_(None))
         .order_by(OtpChallenge.created_at.desc())
         .limit(1)
@@ -117,9 +120,8 @@ async def _check_challenge(db: AsyncSession, phone: str, purpose: OtpPurpose,
         .execution_options(populate_existing=True)
     )
     challenge = result.scalar_one_or_none()
-    # Wrong guesses are counted across every code sent in the last hour, so requesting a new code does not
-    # buy more guesses.
-    if await _recent(db, phone, purpose, func.coalesce(func.sum(OtpChallenge.attempts), 0)) \
+
+    if await _recent(db, contact, purpose, func.coalesce(func.sum(OtpChallenge.attempts), 0)) \
             >= settings.OTP_FAILURES_PER_HOUR:
         raise OtpRejected(too_many_attempts=True)
     if challenge is None or challenge.consumed_at is not None or _as_aware(challenge.expires_at) < _now():
@@ -133,95 +135,60 @@ async def _check_challenge(db: AsyncSession, phone: str, purpose: OtpPurpose,
     challenge.consumed_at = _now()
 
 
-def _demo_otp_allowed(user: User, otp: str) -> bool:
-    # Only seeded demo accounts (is_demo) accept the fixed demo code, and only in demo mode.
-    return settings.DEMO_MODE and user.is_demo and otp == settings.DEMO_OTP
+def demo_login_allowed(user: User, demo: bool) -> bool:
+    """The demo code signs in only a seeded demo account (is_demo), only when the server allows demo mode, and
+    only when the sign-in came from the demo toggle. Real accounts always need the code that was sent to them,
+    and a demo account with the toggle off gets a real code too."""
+    return settings.DEMO_MODE and demo and user.is_demo
+
+
+def normalise_email(email: Optional[str]) -> Optional[str]:
+    return email.strip().lower() if email else None
 
 
 class AuthService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def _active_user_by_phone(self, phone: str) -> Optional[User]:
-        result = await self.db.execute(select(User).where(User.phone == phone, User.is_active.is_(True)))
+    async def _active_user_by_contact(self, contact: str) -> Optional[User]:
+        cond = User.email == contact if "@" in contact else User.phone == contact
+        result = await self.db.execute(select(User).where(cond, User.is_active.is_(True)))
         return result.scalar_one_or_none()
 
-    async def request_login_otp(self, phone: str) -> None:
-        """Send an OTP if the phone belongs to an active user. Callers get the same answer either way."""
-        user = await self._active_user_by_phone(phone)
-        if user is None:
+    async def request_login_otp(self, phone: Optional[str] = None, email: Optional[str] = None,
+                                demo: bool = False) -> None:
+        """Send a code if the account is active. Callers get the same answer either way.
+        Demo sign-in of a demo account sends nothing: the demo code is used instead."""
+        from app.gateway.email import send_login_code
+        contact = normalise_email(email) or phone
+        if not contact:
             return
-        otp = await _issue_challenge(self.db, phone, OtpPurpose.LOGIN, None)
-        await send_sms(self.db, phone, f"ScholarSetu login code: {otp}. Valid for "
-                       f"{settings.OTP_TTL_MINUTES} minutes. Do not share it.", "OTP_LOGIN")
-        await self.db.commit()
+        user = await self._active_user_by_contact(contact)
+        if user is None or demo_login_allowed(user, demo):
+            return
+        otp = await _issue_challenge(self.db, contact, OtpPurpose.LOGIN, None)
+        await self.db.commit()  # the challenge exists before the code leaves, so it can always be checked
+        if "@" in contact:
+            await send_login_code(contact, otp)
+        else:
+            await send_sms(self.db, contact, f"ScholarSetu login code: {otp}. Valid for "
+                           f"{settings.OTP_TTL_MINUTES} minutes. Do not share it.", "OTP_LOGIN")
+            await self.db.commit()
 
-    async def verify_login_otp(self, phone: str, otp: str) -> tuple[User, str, int]:
-        user = await self._active_user_by_phone(phone)
+    async def verify_login_otp(self, phone: Optional[str] = None, email: Optional[str] = None,
+                               otp: str = "", demo: bool = False) -> tuple[User, str, int]:
+        contact = normalise_email(email) or phone
+        if not contact:
+            raise OtpRejected()
+        user = await self._active_user_by_contact(contact)
         if user is None:
-            raise OtpRejected()  # an unregistered number is never signed in as someone else
-        if not _demo_otp_allowed(user, otp):
-            await _check_challenge(self.db, phone, OtpPurpose.LOGIN, None, otp)
+            raise OtpRejected()  # an unregistered account is never signed in
+        demo_used = demo_login_allowed(user, demo) and otp == settings.DEMO_OTP
+        if not demo_used:
+            await _check_challenge(self.db, contact, OtpPurpose.LOGIN, None, otp)
         token, expires_in = create_access_token(user.id, user.role.value)
         await record_audit(self.db, "LOGIN", actor=user, student_id=user.student_id,
-                           details={"demo_otp": _demo_otp_allowed(user, otp)})
-        await self.db.commit()
-        return user, token, expires_in
-
-
-class RegistrationError(Exception):
-    def __init__(self, status_code: int, detail: str):
-        super().__init__(detail)
-        self.status_code, self.detail = status_code, detail
-
-
-class RegistrationService:
-    """Self-registration by a student: the phone must be confirmed by OTP before any account exists.
-
-    Registration creates the student record and login only. It does NOT submit an application, and nothing
-    the student typed is treated as verified: the verification mesh checks it against sources later."""
-
-    def __init__(self, db: AsyncSession):
-        self.db = db
-
-    async def start(self, phone: str) -> None:
-        existing = await AuthService(self.db)._active_user_by_phone(phone)
-        if existing is not None:
-            # Same response to the caller either way; the phone's owner learns they can simply log in.
-            # Rate-limited like a code request, so registration cannot be used to flood a user's phone.
-            sent = await self.db.scalar(select(func.count()).select_from(OutboundSms).where(
-                OutboundSms.to_phone == phone, OutboundSms.category == "REGISTRATION_EXISTS",
-                OutboundSms.created_at >= _now() - timedelta(hours=1)))
-            if sent < settings.OTP_REQUESTS_PER_HOUR:
-                await send_sms(self.db, phone, "This number is already registered with ScholarSetu. "
-                                               "Log in with it instead.", "REGISTRATION_EXISTS")
-        else:
-            otp = await _issue_challenge(self.db, phone, OtpPurpose.REGISTRATION, None)
-            await send_sms(self.db, phone, f"ScholarSetu registration code: {otp}. Valid for "
-                           f"{settings.OTP_TTL_MINUTES} minutes. Do not share it.", "OTP_REGISTRATION")
-        await self.db.commit()
-
-    async def complete(self, phone: str, otp: str, details: dict[str, Any]) -> tuple[User, str, int]:
-        from app.students.models import Student
-        if await self.db.scalar(select(User.id).where(User.phone == phone)) is not None:
-            raise RegistrationError(409, "This number is already registered. Log in instead.")
-        # The phone is always confirmed by the code sent to it, demo mode included.
-        try:
-            await _check_challenge(self.db, phone, OtpPurpose.REGISTRATION, None, otp)
-        except OtpRejected as exc:
-            raise RegistrationError(429 if exc.too_many_attempts else 401,
-                                    "Too many attempts. Request a new code." if exc.too_many_attempts
-                                    else "Invalid or expired code")
-        student = Student(id=f"stu-{new_id()}", name_variants=[], **details)
-        self.db.add(student)
-        await self.db.flush()
-        user = User(phone=phone, name=student.full_name, role=UserRole.STUDENT, student_id=student.id,
-                    is_demo=False)
-        self.db.add(user)
-        await self.db.flush()
-        await record_audit(self.db, "REGISTERED", actor=user, student_id=student.id,
-                           details={"phone_confirmed_by": "OTP"})
-        token, expires_in = create_access_token(user.id, user.role.value)
+                           details={"demo_otp": demo_used, "via": "email" if "@" in contact else "sms"})
         await self.db.commit()
         return user, token, expires_in
 
@@ -296,7 +263,6 @@ class MitraService:
 
     async def end_session(self, actor: User, session_id: str) -> AssistSession:
         session = await self.db.get(AssistSession, session_id)
-        # The helper who opened it, or the student it acts for, may end a session.
         if session is None or actor.id != session.mitra_user_id and actor.student_id != session.student_id:
             raise MitraSessionError(404, "Session not found")
         if session.status != AssistSessionStatus.ENDED:

@@ -8,8 +8,8 @@ export const ANALYTICS_ROLES: UserRole[] = ['DISTRICT_OFFICER', 'STATE_OFFICER',
 export interface AuthState {
   user: AuthUser | null;
   checking: boolean;
-  requestOtp: (phone: string) => Promise<string>;
-  verifyOtp: (phone: string, otp: string) => Promise<void>;
+  requestOtp: (email: string, demo: boolean) => Promise<string>;
+  verifyOtp: (email: string, otp: string, demo: boolean) => Promise<void>;
   logout: () => void;
 }
 

@@ -135,20 +135,29 @@ Use `make dev` instead of `make up` for live code reload, and `make down` to sto
 Without `--demo`, logins need the SMS code, which the simulated gateway stores in the `outbound_sms`
 table (with `DEMO_MODE=true` it is also shown at http://localhost:8000/v1/dev/sms-outbox).
 
-### Demo accounts (after `make seed`, `DEMO_MODE=true`, code `123456`)
+### Signing in
 
-| Phone | Who | Role |
+| Who | Where | How |
 |---|---|---|
-| 9876543210 | Sunita Hansda | Student (Post-Matric, in district verification) |
-| 9876543211 | Rahul Hansda | Student (Pre-Matric, credited) |
-| 9876543212 | Babulal Hansda | Guardian of both (family mode) |
-| 9876543220 | Kavita Tudu, hostel warden | Mitra (helper) |
-| 9876543225 / 9876543226 | College principal / school headmaster, Dumka | Institute officer |
-| 9876543230 | District Welfare Officer, Dumka | District officer |
-| 9876543235 | Tribal Welfare Department, Jharkhand | State officer |
-| 9876543240 | MoTA Scholarship Division | Ministry |
+| Students | App | **Continue with DigiLocker**. A new student signs up in the same step: name, date of birth and gender come from DigiLocker. |
+| Officers and the Ministry | Console | A 6-digit code emailed from `contact@yugnext-ai.com` (Microsoft 365). Officers are enrolled by the Ministry on the **Officers** page. |
 
-The demo code works only for these seeded accounts and only while `DEMO_MODE=true`.
+Every sign-in page has a **Demo mode** switch. With it on (and `DEMO_MODE=true` on the server) the seeded demo
+accounts below sign in with the code `123456`. The server accepts that code **only** for these demo accounts and
+only from the demo switch; real accounts always need DigiLocker or the emailed code, and the Super Admin is a real
+account.
+
+| Demo account | Where | Signs in as |
+|---|---|---|
+| Sunita Hansda | App | Student with a Post-Matric 2026-27 application at the district stage |
+| Babulal Hansda | App | Her father (family view) |
+| Principal, Dumka Government College | Console | Institute officer, Dumka |
+| District Welfare Officer, Dumka | Console | District officer |
+| Tribal Welfare Department, Jharkhand | Console | State officer |
+| MoTA Scholarship Division | Console | Ministry |
+
+`python scripts/seed_demo.py --reset` restores exactly these accounts (it deletes all people and records; take a
+backup first). The test suite uses a richer world in `tests/demo_world.py`.
 
 ### Console (officers and ministry)
 

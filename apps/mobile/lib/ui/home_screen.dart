@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config.dart';
+import '../i18n.dart';
 import '../state/providers.dart';
 import 'components.dart';
 import 'family_screen.dart';
@@ -88,12 +89,12 @@ class _StudentShellState extends ConsumerState<StudentShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.currency_rupee), label: 'Money'),
-          NavigationDestination(icon: Icon(Icons.verified_outlined), label: 'Passport'),
-          NavigationDestination(icon: Icon(Icons.chat_outlined), label: 'JAGO'),
-          NavigationDestination(icon: Icon(Icons.notifications_outlined), label: 'Alerts'),
+        destinations: [
+          NavigationDestination(icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home_rounded), label: t('Home', 'होम')),
+          NavigationDestination(icon: const Icon(Icons.currency_rupee), label: t('Money', 'पैसा')),
+          NavigationDestination(icon: const Icon(Icons.verified_outlined), selectedIcon: const Icon(Icons.verified), label: t('Passport', 'पासपोर्ट')),
+          const NavigationDestination(icon: Icon(Icons.chat_outlined), selectedIcon: Icon(Icons.chat), label: 'JAGO'),
+          NavigationDestination(icon: const Icon(Icons.notifications_outlined), selectedIcon: const Icon(Icons.notifications), label: t('Alerts', 'सूचनाएँ')),
         ],
       ),
     );
@@ -108,7 +109,7 @@ class SyncButton extends ConsumerWidget {
     final outbox = ref.watch(outboxProvider);
     final badge = outbox.pending + outbox.refused.length;
     return IconButton(
-      tooltip: 'Sync',
+      tooltip: t('Sync', 'सिंक'),
       onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SyncScreen())),
       icon: Badge(isLabelVisible: badge > 0, label: Text('$badge'), child: const Icon(Icons.sync)),
     );
@@ -122,6 +123,10 @@ class AccountMenu extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return PopupMenuButton<String>(
       onSelected: (v) async {
+        if (v == 'lang') {
+          await setLanguage(ref.read(servicesProvider).secure, isHindi ? 'en' : 'hi');
+          return;
+        }
         if (v == 'privacy') {
           Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrivacyScreen()));
           return;
@@ -132,11 +137,12 @@ class AccountMenu extends ConsumerWidget {
               await showDialog<bool>(
                     context: context,
                     builder: (c) => AlertDialog(
-                      title: const Text('Sign out?'),
-                      content: Text('$pending change(s) have not been sent yet and will be deleted from this phone.'),
+                      title: Text(t('Sign out?', 'साइन आउट करें?')),
+                      content: Text(t('$pending change(s) have not been sent yet and will be deleted from this phone.',
+                          '$pending बदलाव अभी भेजे नहीं गए हैं और इस फ़ोन से हट जाएँगे।')),
                       actions: [
-                        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-                        TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Sign out')),
+                        TextButton(onPressed: () => Navigator.pop(c, false), child: Text(t('Cancel', 'रद्द करें'))),
+                        TextButton(onPressed: () => Navigator.pop(c, true), child: Text(t('Sign out', 'साइन आउट'))),
                       ],
                     ),
                   ) ==
@@ -146,8 +152,9 @@ class AccountMenu extends ConsumerWidget {
       },
       itemBuilder: (_) => [
         if (ref.read(sessionProvider).user?.role == 'STUDENT')
-          const PopupMenuItem(value: 'privacy', child: Text('Privacy & consent')),
-        const PopupMenuItem(value: 'out', child: Text('Sign out')),
+          PopupMenuItem(value: 'privacy', child: Text(t('Privacy & consent', 'निजता और सहमति'))),
+        PopupMenuItem(value: 'lang', child: Text(isHindi ? 'Switch to English' : 'हिन्दी में देखें')),
+        PopupMenuItem(value: 'out', child: Text(t('Sign out', 'साइन आउट'))),
       ],
     );
   }
@@ -162,14 +169,15 @@ class SyncScreen extends ConsumerWidget {
     final outbox = ref.watch(outboxProvider);
     final services = ref.read(servicesProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Sync')),
+      appBar: AppBar(title: Text(t('Sync', 'सिंक'))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           HeroHeader(
-            title: outbox.lastSync == null ? 'Not synced yet' : 'Synced ${when(outbox.lastSync!)}',
-            subtitle: 'Information saved on this phone is encrypted (SQLCipher ${services.db.cipherVersion}); '
+            title: outbox.lastSync == null ? t('Not synced yet', 'अभी सिंक नहीं हुआ') : '${t('Synced', 'सिंक हुआ')} ${when(outbox.lastSync!)}',
+            subtitle: t('Information saved on this phone is encrypted (SQLCipher ${services.db.cipherVersion}); '
                 'the key is kept in the phone\'s secure storage.',
+                'इस फ़ोन पर सहेजी जानकारी एन्क्रिप्टेड है (SQLCipher ${services.db.cipherVersion}); कुंजी फ़ोन के सुरक्षित भंडार में है।'),
             image: 'assets/images/shield.webp',
             imageSize: 96,
           ),
@@ -179,31 +187,32 @@ class SyncScreen extends ConsumerWidget {
               final r = await ref.read(outboxProvider.notifier).syncNow();
               if (context.mounted) {
                 showMessage(context, r.offline
-                    ? 'No connection. Nothing was sent.'
-                    : 'Sent ${r.sent}, refused ${r.refused}, received ${r.received} update(s).');
+                    ? t('No connection. Nothing was sent.', 'कनेक्शन नहीं है। कुछ नहीं भेजा गया।')
+                    : t('Sent ${r.sent}, refused ${r.refused}, received ${r.received} update(s).',
+                        '${r.sent} भेजे, ${r.refused} अस्वीकार, ${r.received} अपडेट मिले।'));
               }
             },
             icon: const Icon(Icons.sync),
-            label: const Text('Sync now'),
+            label: Text(t('Sync now', 'अभी सिंक करें')),
           ),
-          const Section('Waiting to send'),
-          if (outbox.pending == 0) const Text('Nothing is waiting.'),
+          Section(t('Waiting to send', 'भेजने के लिए बाकी')),
+          if (outbox.pending == 0) Text(t('Nothing is waiting.', 'कुछ बाकी नहीं है।')),
           for (final i in outbox.items.where((i) => i.status == 'PENDING'))
             ListTile(
               leading: const Icon(Icons.schedule),
-              title: Text(humanize(i.action)),
-              subtitle: Text('Saved ${when(i.createdAt)}. Not sent yet.'
-                  '${i.lastError == null ? '' : ' Last try: ${i.lastError}'}'),
+              title: Text(actionLabel(i.action)),
+              subtitle: Text('${t('Saved', 'सहेजा')} ${when(i.createdAt)}. ${t('Not sent yet.', 'अभी भेजा नहीं गया।')}'
+                  '${i.lastError == null ? '' : ' ${t('Last try', 'पिछली कोशिश')}: ${i.lastError}'}'),
             ),
-          const Section('Refused by the server'),
-          if (outbox.refused.isEmpty) const Text('None.'),
+          Section(t('Refused by the server', 'सर्वर ने अस्वीकार किया')),
+          if (outbox.refused.isEmpty) Text(t('None.', 'कोई नहीं।')),
           for (final i in outbox.refused)
             ListTile(
               leading: Icon(Icons.error_outline, color: Colors.red.shade700),
-              title: Text(humanize(i.action)),
-              subtitle: Text(i.lastError ?? 'Refused'),
+              title: Text(actionLabel(i.action)),
+              subtitle: Text(i.lastError ?? t('Refused', 'अस्वीकृत')),
               trailing: TextButton(
-                  onPressed: () => ref.read(outboxProvider.notifier).dismiss(i.key), child: const Text('Dismiss')),
+                  onPressed: () => ref.read(outboxProvider.notifier).dismiss(i.key), child: Text(t('Dismiss', 'हटाएँ'))),
             ),
         ],
       ),

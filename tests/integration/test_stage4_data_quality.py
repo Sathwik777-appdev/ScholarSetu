@@ -12,24 +12,18 @@ from app.ledger.service import LedgerService
 from app.shared.types import CanonicalState, Gender, SchemeType, UserRole
 from app.students.models import Student
 from app.verification.sources import SourceClient
-from tests.conftest import bearer, latest_sms_code, login, make_student, make_user, mocks_data
+from tests.conftest import bearer, digilocker_signup, login, make_student, make_user, mocks_data
 
 NSP_APP = "NSP-JH-2026-00417"
-ME = {"full_name": "Mina Murmu", "dob": "2009-06-02", "gender": "FEMALE"}
-
-
-async def _register(client, db, phone, **place):
-    await client.post("/v1/auth/register/start", json={"phone": phone})
-    r = await client.post("/v1/auth/register/complete", json={
-        "phone": phone, "otp": await latest_sms_code(db, phone), **ME, **place})
-    assert r.status_code == 201, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+async def _register(client, monkeypatch, digilocker_id, **place):
+    """A new student, signed up through DigiLocker (which confirms name, date of birth and gender)."""
+    return await digilocker_signup(client, monkeypatch, digilocker_id, "MINA MURMU", "02062009", "F", **place)
 
 
 # ── L21: place names ─────────────────────────────────────────────────────────
 
-async def test_typed_place_names_still_reach_the_right_officers(client, db, demo, users):
-    token = await _register(client, db, "9000000444", state="jharkhand", district="  dumka ")
+async def test_typed_place_names_still_reach_the_right_officers(client, db, demo, users, monkeypatch):
+    token = await _register(client, monkeypatch, "DL-0444", state="jharkhand", district="  dumka ")
     student = (await db.execute(select(Student).where(Student.full_name == "Mina Murmu"))).scalar_one()
     assert (student.state, student.district) == ("Jharkhand", "Dumka")
     app_id = (await client.post("/v1/applications", headers=token, json={
@@ -46,11 +40,11 @@ async def test_served_districts_come_from_officer_jurisdictions(client, demo, us
 
 # ── L20: the same person registering twice ───────────────────────────────────
 
-async def test_a_second_registration_of_the_same_person_blocks_sanction(client, db, demo, users):
+async def test_a_second_registration_of_the_same_person_blocks_sanction(client, db, demo, users, monkeypatch):
     year = current_academic_year()
-    first = await _register(client, db, "9000000661", state="Jharkhand", district="Dumka")
+    first = await _register(client, monkeypatch, "DL-0661", state="Jharkhand", district="Dumka")
     await client.post("/v1/applications", headers=first, json={"scheme": "PRE_MATRIC", "academic_year": year})
-    second = await _register(client, db, "9000000662", state="Jharkhand", district="Dumka")
+    second = await _register(client, monkeypatch, "DL-0662", state="Jharkhand", district="Dumka")
     r = await client.post("/v1/applications", headers=second, json={"scheme": "PRE_MATRIC", "academic_year": year})
     assert r.status_code == 201
     app_id = r.json()["id"]

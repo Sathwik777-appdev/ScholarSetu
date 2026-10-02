@@ -99,7 +99,7 @@ async def test_breach_tells_the_student_honestly_and_reminds_the_right_officers(
 
 async def test_officer_reminders_are_one_digest_per_stage_per_day(db, demo, gov, monkeypatch):
     from app.eligibility.service import current_academic_year
-    from scripts.seed_demo import seed_synthetic_population
+    from tests.demo_world import seed_synthetic_population
     monkeypatch.setattr(settings, "SLA_DAYS_SUBMITTED", 0.00001)
     await seed_synthetic_population(db, mocks_data.ENROLLED_ST[:30], current_academic_year())
     submitted = (await db.execute(select(Application.id).where(Application.canonical_state == CanonicalState.SUBMITTED))).scalars().all()

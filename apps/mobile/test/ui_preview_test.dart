@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scholarsetu_mobile/i18n.dart';
 import 'package:scholarsetu_mobile/ui/components.dart';
 import 'package:scholarsetu_mobile/ui/login_screen.dart';
 import 'package:scholarsetu_mobile/ui/student_screens.dart';
@@ -19,6 +20,11 @@ Future<void> _loadFonts() async {
     loader.addFont(rootBundle.load('assets/fonts/Inter-$w.ttf'));
   }
   await loader.load();
+  final hindi = FontLoader('NotoSansDevanagari');
+  for (final w in ['Regular', 'Medium', 'SemiBold', 'Bold']) {
+    hindi.addFont(rootBundle.load('assets/fonts/NotoSansDevanagari-$w.ttf'));
+  }
+  await hindi.load();
   // Material icons for the preview.
   final icons = FontLoader('MaterialIcons');
   final path = '${Platform.environment['FLUTTER_ROOT'] ?? ''}/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf';
@@ -56,6 +62,7 @@ Widget _frame(Widget child) => ProviderScope(
 
 void main() {
   setUpAll(_loadFonts);
+  setUp(() => appLanguage.value = 'en');
 
   testWidgets('login screen', (tester) async {
     tester.view.physicalSize = const Size(390 * 2, 844 * 2);
@@ -63,7 +70,19 @@ void main() {
     await tester.pumpWidget(_frame(const LoginScreen()));
     await tester.pumpAndSettle();
     expect(find.text('Sign in', skipOffstage: false), findsOneWidget);
+    expect(find.text('Continue with DigiLocker', skipOffstage: false), findsOneWidget);
     await _capture(tester, 'login');
+  });
+
+  testWidgets('login screen in Hindi', (tester) async {
+    appLanguage.value = 'hi';
+    tester.view.physicalSize = const Size(390 * 2, 844 * 2);
+    tester.view.devicePixelRatio = 2;
+    await tester.pumpWidget(_frame(const LoginScreen()));
+    await tester.pumpAndSettle();
+    expect(find.text('साइन इन करें', skipOffstage: false), findsOneWidget);
+    expect(find.text('DigiLocker से आगे बढ़ें', skipOffstage: false), findsOneWidget);
+    await _capture(tester, 'login_hi');
   });
 
   testWidgets('home components', (tester) async {

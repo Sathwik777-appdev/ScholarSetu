@@ -7,7 +7,7 @@ from app.eligibility.service import current_academic_year
 from app.ledger.service import LedgerService
 from app.shared.types import Gender, SchemeType
 from app.students.service import create_student
-from scripts.seed_demo import seed_synthetic_population
+from tests.demo_world import seed_synthetic_population
 from tests.conftest import mocks_data
 
 

@@ -26,16 +26,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setChecking(false));
   }, [logout]);
 
-  const requestOtp = async (phone: string) => {
-    const res = await apiClient.post<{ message: string }>('/auth/otp/request', { phone });
+  // Officers sign in with a code emailed to them. `demo` comes from the demo toggle: the server then accepts the
+  // demo code for seeded demo accounts only.
+  const requestOtp = async (email: string, demo: boolean) => {
+    const res = await apiClient.post<{ message: string }>('/auth/otp/request', { email, demo });
     return res.data.message;
   };
 
-  const verifyOtp = async (phone: string, otp: string) => {
-    const res = await apiClient.post<AuthTokenResponse>('/auth/otp/verify', { phone, otp });
+  const verifyOtp = async (email: string, otp: string, demo: boolean) => {
+    const res = await apiClient.post<AuthTokenResponse>('/auth/otp/verify', { email, otp, demo });
     if (!CONSOLE_ROLES.includes(res.data.user.role)) {
-      const who = res.data.user.name ? `${res.data.user.name} (${res.data.user.role.toLowerCase().replace(/_/g, ' ')})` : 'This number';
-      throw new Error(`${who} is not an officer account. This console is for officers and the ministry; students and families use the ScholarSetu mobile app.`);
+      throw new Error(`${res.data.user.name || 'This account'} is not an officer account. This console is for officers `
+        + 'and the Ministry; students and families use the ScholarSetu app.');
     }
     tokenStore.set(res.data.access_token);
     setUser(res.data.user);

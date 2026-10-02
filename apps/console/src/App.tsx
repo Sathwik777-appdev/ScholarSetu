@@ -1,7 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
 import { AuthProvider } from './auth/AuthContext';
-import { ANALYTICS_ROLES, useAuth } from './auth/auth';
+import { useAuth } from './auth/auth';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import ReviewQueue from './pages/ReviewQueue';
@@ -12,20 +12,25 @@ import Analytics from './pages/Analytics';
 import DBTMonitor from './pages/DBTMonitor';
 import DataRequests from './pages/DataRequests';
 import DemoSms from './pages/DemoSms';
+import ManageOfficers from './pages/ManageOfficers';
+import MyWork from './pages/MyWork';
+import WakingBanner from './components/WakingBanner';
 
 function Home() {
   const { user } = useAuth();
-  return <Navigate to={user && ANALYTICS_ROLES.includes(user.role) ? '/dashboard' : '/review-queue'} replace />;
+  return <Navigate to={user ? '/my-work' : '/login'} replace />;
 }
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <WakingBanner />
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<Layout />}>
             <Route index element={<Home />} />
+            <Route path="my-work" element={<MyWork />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="review-queue" element={<ReviewQueue />} />
             <Route path="applications" element={<Applications />} />
@@ -35,6 +40,7 @@ export default function App() {
             <Route path="dbt-monitor" element={<DBTMonitor />} />
             <Route path="data-requests" element={<DataRequests />} />
             <Route path="demo-sms" element={<DemoSms />} />
+            <Route path="manage-officers" element={<ManageOfficers />} />
             <Route path="*" element={<Home />} />
           </Route>
         </Routes>

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../data/api.dart';
+import '../i18n.dart';
 import '../state/providers.dart';
 import 'labels.dart';
 import 'theme.dart';
@@ -77,12 +78,12 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
     if (mounted) setState(() => _busy = false);
   }
 
-  static const _statusText = {
-    'VERIFIED': 'Verified',
-    'PROVISIONAL': 'Found, waiting for an officer to confirm it is you',
-    'MANUAL_REVIEW': 'An officer will check this',
-    'SOURCE_UNAVAILABLE': 'The government source could not be reached; try again later',
-    'NOT_VERIFIED': 'Not verified yet',
+  static Map<String, String> get _statusText => {
+    'VERIFIED': t('Verified', 'सत्यापित'),
+    'PROVISIONAL': t('Found, waiting for an officer to confirm it is you', 'मिल गया, अधिकारी आपकी पहचान की पुष्टि करेंगे'),
+    'MANUAL_REVIEW': t('An officer will check this', 'एक अधिकारी इसे जाँचेगा'),
+    'SOURCE_UNAVAILABLE': t('The government source could not be reached; try again later', 'सरकारी स्रोत से संपर्क नहीं हो सका; बाद में कोशिश करें'),
+    'NOT_VERIFIED': t('Not verified yet', 'अभी सत्यापित नहीं'),
   };
 
   Color _color(String s) => s == 'VERIFIED'
@@ -101,25 +102,27 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
     };
     final allVerified = claims.isNotEmpty && claims.every((c) => c['status'] == 'VERIFIED');
     return Scaffold(
-      appBar: AppBar(title: const Text('Verify my details')),
+      appBar: AppBar(title: Text(t('Verify my details', 'मेरी जानकारी सत्यापित करें'))),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         if (_error != null) ErrorBox(message: _error!, onRetry: _load),
         if (_plan == null && _error == null) const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())),
         if (_plan != null) ...[
-          Text('ScholarSetu asks the government offices that issued your records, so you do not have to upload them. '
+          Text(t('ScholarSetu asks the government offices that issued your records, so you do not have to upload them. '
               'Verified details are reused for every scholarship.',
+              'ScholarSetu आपके रिकॉर्ड जारी करने वाले सरकारी कार्यालयों से पूछता है, इसलिए आपको कुछ अपलोड नहीं करना पड़ता। '
+              'सत्यापित जानकारी हर छात्रवृत्ति में दोबारा काम आती है।'),
               style: Theme.of(context).textTheme.bodyMedium),
-          const Section('What will be checked'),
+          Section(t('What will be checked', 'क्या जाँचा जाएगा')),
           for (final c in claims)
             Card(
               child: ListTile(
                 leading: Icon(c['status'] == 'VERIFIED' ? Icons.verified : Icons.radio_button_unchecked,
                     color: _color(results[c['claim_type']]?['status'] as String? ?? c['status'] as String)),
-                title: Text(c['label'] as String),
+                title: Text(claimLabel(c['claim_type'] as String), style: const TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: Text([
                   (c['sources'] as List).isEmpty
-                      ? 'No online source: an officer checks your document'
-                      : 'Asked: ${(c['sources'] as List).join(', ')}',
+                      ? t('No online source: an officer checks your document', 'कोई ऑनलाइन स्रोत नहीं: अधिकारी आपका दस्तावेज़ जाँचेगा')
+                      : '${t('Asked', 'पूछा जाएगा')}: ${(c['sources'] as List).join(', ')}',
                   _statusText[results[c['claim_type']]?['status'] ?? c['status']] ?? humanize(c['status'] as String),
                   if (results[c['claim_type']]?['reasons'] is List && (results[c['claim_type']]!['reasons'] as List).isNotEmpty)
                     (results[c['claim_type']]!['reasons'] as List).first as String,
@@ -129,14 +132,16 @@ class _VerifyScreenState extends ConsumerState<VerifyScreen> {
             ),
           const SizedBox(height: 8),
           if (!allVerified) ...[
-            Text('By tapping below you agree that ScholarSetu may ask these offices about the details listed above, '
-                'for "${(_plan!['consent'] as Map)['purpose']}", for ${(_plan!['consent'] as Map)['duration_days']} days. '
-                'You can withdraw this in Privacy & consent.',
-                style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+            Text(t('By tapping below you agree that ScholarSetu may ask these offices about the details listed above, '
+                'for ${(_plan!['consent'] as Map)['duration_days']} days. You can withdraw this in Privacy & consent.',
+                'नीचे टैप करके आप सहमति देते हैं कि ScholarSetu ऊपर दी गई जानकारी के बारे में इन कार्यालयों से '
+                '${(_plan!['consent'] as Map)['duration_days']} दिनों तक पूछ सकता है। इसे "निजता और सहमति" में वापस ले सकते हैं।'),
+                style: const TextStyle(fontSize: 13, color: AppColors.muted)),
             const SizedBox(height: 12),
-            FilledButton(onPressed: _busy ? null : _verify, child: Text(_busy ? 'Checking…' : 'Agree and verify')),
+            SizedBox(height: 52, child: FilledButton(onPressed: _busy ? null : _verify,
+                child: Text(_busy ? t('Checking…', 'जाँच रहे हैं…') : t('Agree and verify', 'सहमत हूँ, सत्यापित करें')))),
           ] else
-            const Text('Everything this scholarship needs is verified.'),
+            Text(t('Everything this scholarship needs is verified.', 'इस छात्रवृत्ति के लिए ज़रूरी सब कुछ सत्यापित है।')),
         ],
       ]),
     );
@@ -201,20 +206,20 @@ class _BankFixScreenState extends ConsumerState<BankFixScreen> {
         .where((p) => p['payment_id'] == widget.paymentId)
         .firstOrNull;
     final guidance = payment?['guidance'] as Map<String, dynamic>?;
-    final hindi = Localizations.localeOf(context).languageCode == 'hi';
+    final hindi = isHindi;
     final issues = ((_retry?['issues'] as List?) ?? const []).cast<Map<String, dynamic>>();
     return Scaffold(
-      appBar: AppBar(title: const Text('Fix a failed payment')),
+      appBar: AppBar(title: Text(t('Fix a failed payment', 'विफल भुगतान ठीक करें'))),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         if (_error != null) ErrorBox(message: _error!),
         if (_status == null && _error == null) const Center(child: CircularProgressIndicator()),
         if (payment != null) ...[
-          Text('Instalment ${payment['instalment']}: ${rupees(payment['amount'] as num)} · ${humanize(payment['state'] as String)}',
+          Text('${t('Instalment', 'किस्त')} ${payment['instalment']}: ${rupees(payment['amount'] as num)} · ${stateLabel(payment['state'] as String)}',
               style: Theme.of(context).textTheme.titleMedium),
           if (guidance != null) ...[
             const SizedBox(height: 8),
             Text((hindi ? guidance['message_hi'] : guidance['message']) as String),
-            const Section('How to fix it'),
+            Section(t('How to fix it', 'इसे कैसे ठीक करें')),
             for (final (i, step) in ((hindi ? guidance['fix_steps_hi'] : guidance['fix_steps']) as List).indexed)
               ListTile(dense: true, leading: CircleAvatar(radius: 12, child: Text('${i + 1}', style: const TextStyle(fontSize: 12))),
                   title: Text(step as String)),
@@ -223,16 +228,18 @@ class _BankFixScreenState extends ConsumerState<BankFixScreen> {
           if (payment['state'] == 'FAILED')
             FilledButton(
               onPressed: _busy ? null : _retryNow,
-              child: Text(_busy ? 'Checking your bank account…' : 'My bank has fixed it: check again and resend'),
+              child: Text(_busy ? t('Checking your bank account…', 'आपका बैंक खाता जाँच रहे हैं…')
+                  : t('My bank has fixed it: check again and resend', 'बैंक ने ठीक कर दिया: फिर से जाँचें और भेजें')),
             ),
           if (_retry != null && _retry!['status'] == 'SUBMITTED')
-            const Padding(padding: EdgeInsets.only(top: 12),
-                child: Text('Your bank account passed the check and the payment was requested again. '
-                    'You will see it here when PFMS confirms the credit.')),
+            Padding(padding: const EdgeInsets.only(top: 12),
+                child: Text(t('Your bank account passed the check and the payment was requested again. '
+                    'You will see it here when PFMS confirms the credit.',
+                    'आपका बैंक खाता जाँच में सही पाया गया और भुगतान फिर से माँगा गया। PFMS पुष्टि करने पर यह यहाँ दिखेगा।'))),
           if (_retry != null && _retry!['status'] == 'BLOCKED') ...[
-            const Padding(padding: EdgeInsets.only(top: 12),
-                child: Text('Not resent yet: the bank check still finds a problem.',
-                    style: TextStyle(fontWeight: FontWeight.w600))),
+            Padding(padding: const EdgeInsets.only(top: 12),
+                child: Text(t('Not resent yet: the bank check still finds a problem.', 'अभी नहीं भेजा गया: बैंक जाँच में अब भी समस्या है।'),
+                    style: const TextStyle(fontWeight: FontWeight.w600))),
             for (final issue in issues) ListTile(dense: true, leading: const Icon(Icons.error_outline),
                 title: Text((hindi ? issue['message_hi'] : issue['message']) as String)),
           ],
@@ -297,7 +304,7 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
       final bytes = Uint8List.fromList(utf8.encode(const JsonEncoder.withIndent('  ').convert(data)));
       final saved = await FilePicker.saveFile(fileName: 'scholarsetu-my-data.json', bytes: bytes,
           mimeType: 'application/json', type: FileType.custom, allowedExtensions: ['json']);
-      if (mounted) showMessage(context, saved == null ? 'Not saved.' : 'Your data was saved.');
+      if (mounted) showMessage(context, saved == null ? t('Not saved.', 'सहेजा नहीं गया।') : t('Your data was saved.', 'आपका डेटा सहेज लिया गया।'));
     } catch (e) {
       if (mounted) showMessage(context, errorText(e));
     }
@@ -311,24 +318,26 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setLocal) => AlertDialog(
-          title: const Text('Ask about your data'),
+          title: Text(t('Ask about your data', 'अपने डेटा के बारे में अनुरोध')),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             RadioGroup<String>(
               groupValue: kind,
               onChanged: (v) => setLocal(() => kind = v ?? kind),
-              child: const Column(children: [
-                RadioListTile(value: 'CORRECTION', title: Text('Correct something wrong')),
-                RadioListTile(value: 'ERASURE', title: Text('Erase my data')),
+              child: Column(children: [
+                RadioListTile(value: 'CORRECTION', title: Text(t('Correct something wrong', 'कुछ गलत सुधारें'))),
+                RadioListTile(value: 'ERASURE', title: Text(t('Erase my data', 'मेरा डेटा मिटाएँ'))),
               ]),
             ),
             TextField(controller: text, maxLines: 3, maxLength: 2000,
-                decoration: const InputDecoration(labelText: 'What should change, and why', border: OutlineInputBorder())),
-            const Text('Records of money paid to you are kept by law, even after erasure.',
-                style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                decoration: InputDecoration(labelText: t('What should change, and why', 'क्या बदलना है और क्यों'),
+                    border: const OutlineInputBorder())),
+            Text(t('Records of money paid to you are kept by law, even after erasure.',
+                    'आपको दिए गए पैसे के रिकॉर्ड क़ानून के अनुसार रखे जाते हैं, मिटाने के बाद भी।'),
+                style: const TextStyle(fontSize: 12, color: AppColors.muted)),
           ]),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Send')),
+            TextButton(onPressed: () => Navigator.pop(c, false), child: Text(t('Cancel', 'रद्द करें'))),
+            FilledButton(onPressed: () => Navigator.pop(c, true), child: Text(t('Send', 'भेजें'))),
           ],
         ),
       ),
@@ -336,7 +345,7 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     if (ok != true) return;
     try {
       await _api(ref).post('/me/data-requests', {'kind': kind, 'details': text.text.trim()});
-      if (mounted) showMessage(context, 'Sent. An officer will decide and you will see the answer here.');
+      if (mounted) showMessage(context, t('Sent. An officer will decide and you will see the answer here.', 'भेज दिया। एक अधिकारी निर्णय लेगा और जवाब यहाँ दिखेगा।'));
       await _load();
     } catch (e) {
       if (mounted) showMessage(context, errorText(e));
@@ -348,38 +357,40 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     final active = (_consents ?? []).where((c) => c['is_active'] == true).toList();
     final past = (_consents ?? []).where((c) => c['is_active'] != true).toList();
     return Scaffold(
-      appBar: AppBar(title: const Text('Privacy & consent')),
+      appBar: AppBar(title: Text(t('Privacy & consent', 'निजता और सहमति'))),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(padding: const EdgeInsets.all(16), children: [
           if (_error != null) ErrorBox(message: _error!, onRetry: _load),
-          const Section('What you have agreed to'),
-          if (_consents != null && active.isEmpty) const Text('Nothing right now.'),
+          Section(t('What you have agreed to', 'आपने किन बातों की सहमति दी है')),
+          if (_consents != null && active.isEmpty) Text(t('Nothing right now.', 'अभी कुछ नहीं।')),
           for (final c in active)
             Card(
               child: ListTile(
                 title: Text(c['purpose'] as String),
-                subtitle: Text('${humanize(c['requester'] as String)} may read: '
-                    '${(c['data_items'] as List).map((i) => humanize('$i')).join(', ')}\n'
-                    'Until ${whenIso(c['expires_at'] as String)}'),
+                subtitle: Text('${t('May read', 'पढ़ सकता है')}: '
+                    '${(c['data_items'] as List).map((i) => claimLabel('$i')).join(', ')}\n'
+                    '${t('Until', 'तक')} ${dateIso(c['expires_at'] as String)}'),
                 isThreeLine: true,
-                trailing: TextButton(onPressed: () => _revoke(c['id'] as String), child: const Text('Withdraw')),
+                trailing: TextButton(onPressed: () => _revoke(c['id'] as String), child: Text(t('Withdraw', 'वापस लें'))),
               ),
             ),
           if (past.isNotEmpty)
             Padding(padding: const EdgeInsets.only(top: 4),
-                child: Text('${past.length} earlier agreement(s) withdrawn or expired.', style: const TextStyle(fontSize: 12))),
-          const Section('Your data'),
+                child: Text(t('${past.length} earlier agreement(s) withdrawn or expired.', '${past.length} पुरानी सहमतियाँ वापस ली गईं या समाप्त हुईं।'),
+                    style: const TextStyle(fontSize: 12))),
+          Section(t('Your data', 'आपका डेटा')),
           OutlinedButton.icon(onPressed: _busy ? null : _export, icon: const Icon(Icons.download),
-              label: Text(_busy ? 'Preparing…' : 'Download a copy of all my data')),
+              label: Text(_busy ? t('Preparing…', 'तैयार कर रहे हैं…') : t('Download a copy of all my data', 'मेरे सारे डेटा की प्रति डाउनलोड करें'))),
           const SizedBox(height: 8),
           OutlinedButton.icon(onPressed: _newRequest, icon: const Icon(Icons.edit_note),
-              label: const Text('Ask to correct or erase my data')),
-          if ((_requests ?? []).isNotEmpty) const Section('Your requests'),
+              label: Text(t('Ask to correct or erase my data', 'मेरा डेटा सुधारने या मिटाने का अनुरोध'))),
+          if ((_requests ?? []).isNotEmpty) Section(t('Your requests', 'आपके अनुरोध')),
           for (final r in _requests ?? [])
             ListTile(
               leading: Icon(r['status'] == 'OPEN' ? Icons.schedule : r['status'] == 'DONE' ? Icons.check_circle : Icons.cancel),
-              title: Text('${humanize(r['kind'] as String)} · ${humanize(r['status'] as String)}'),
+              title: Text('${r['kind'] == 'ERASURE' ? t('Erase', 'मिटाना') : t('Correct', 'सुधार')} · '
+                  '${{'OPEN': t('Waiting for an officer', 'अधिकारी की प्रतीक्षा'), 'DONE': t('Done', 'पूरा'), 'DECLINED': t('Declined', 'अस्वीकृत')}[r['status']] ?? r['status']}'),
               subtitle: Text(r['resolution'] as String? ?? r['details'] as String),
             ),
         ]),
@@ -402,11 +413,12 @@ void showPassportQr(BuildContext context, String claimLabel, String jws) {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           QrImageView(data: jws, size: 260, errorCorrectionLevel: QrErrorCorrectLevel.L, backgroundColor: Colors.white),
           const SizedBox(height: 8),
-          const Text('Signed by ScholarSetu. An office can scan this to check it, even offline.',
-              textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
+          Text(t('Signed by ScholarSetu. An office can scan this to check it, even offline.',
+                  'ScholarSetu द्वारा हस्ताक्षरित। कोई भी कार्यालय इसे स्कैन करके जाँच सकता है, ऑफ़लाइन भी।'),
+              textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
         ]),
       ),
-      actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Close'))],
+      actions: [TextButton(onPressed: () => Navigator.pop(c), child: Text(t('Close', 'बंद करें')))],
     ),
   );
 }

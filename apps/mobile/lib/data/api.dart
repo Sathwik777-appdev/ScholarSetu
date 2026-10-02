@@ -5,12 +5,15 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+import '../i18n.dart';
+
 /// The server answered with an error. `detail` is the API's own explanation.
 class ApiException implements Exception {
-  ApiException(this.status, this.detail);
+  ApiException(this.status, this.detail, [this.code]);
 
   final int status;
   final dynamic detail;
+  final String? code; // e.g. WAKING: the server is starting up after being idle
 
   /// 4xx other than timeouts/rate limits: resending the same request will not help.
   bool get isPermanent => status >= 400 && status < 500 && status != 408 && status != 429;
@@ -19,9 +22,9 @@ class ApiException implements Exception {
     final d = detail;
     if (d is String) return d;
     if (d is Map && d['message'] is String) return d['message'] as String;
-    if (status == 401) return 'Please sign in again.';
-    if (status == 403) return 'You are not allowed to do this.';
-    return 'The server returned an error ($status).';
+    if (status == 401) return t('Please sign in again.', 'कृपया फिर से साइन इन करें।');
+    if (status == 403) return t('You are not allowed to do this.', 'आपको यह करने की अनुमति नहीं है।');
+    return t('The server returned an error ($status).', 'सर्वर से त्रुटि आई ($status)।');
   }
 
   @override
@@ -35,8 +38,8 @@ class OfflineException implements Exception {
 
   @override
   String toString() => serverUrl != null
-      ? 'No connection to ScholarSetu ($serverUrl).'
-      : 'No connection to ScholarSetu.';
+      ? t('No connection to ScholarSetu ($serverUrl).', 'ScholarSetu से कनेक्शन नहीं है ($serverUrl)।')
+      : t('No connection to ScholarSetu.', 'ScholarSetu से कनेक्शन नहीं है।');
 }
 
 typedef ReachabilityListener = void Function(bool reachable);
@@ -109,6 +112,6 @@ class Api {
     }
     if (res.statusCode >= 200 && res.statusCode < 300) return body;
     if (res.statusCode == 401 && token != null) onUnauthorized?.call();
-    throw ApiException(res.statusCode, body is Map ? body['detail'] : body);
+    throw ApiException(res.statusCode, body is Map ? body['detail'] : body, body is Map ? body['code'] as String? : null);
   }
 }

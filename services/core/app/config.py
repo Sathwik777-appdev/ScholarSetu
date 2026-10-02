@@ -52,6 +52,15 @@ class Settings(BaseSettings):
     DEMO_MODE: bool = False
     DEMO_OTP: str = "123456"
 
+    # Console sign-in codes by email (app/gateway/email.py): Microsoft 365 SMTP with STARTTLS.
+    # SMTP_PASSWORD comes from Secret Manager; without it no code is emailed (logged as a warning).
+    SMTP_HOST: str = "smtp.office365.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str | None = "contact@yugnext-ai.com"
+    SMTP_FROM: str | None = None  # defaults to SMTP_USERNAME
+    SMTP_FROM_NAME: str = "ScholarSetu"
+    SMTP_PASSWORD: str | None = None
+
     ATTESTATION_PRIVATE_KEY_PATH: str = "secrets/attestation_ed25519.pem"
 
     # Shared secret JAGO presents on /v1/skill/tools/*. Unset = skill endpoints disabled.
@@ -71,6 +80,9 @@ class Settings(BaseSettings):
     DIGILOCKER_AUTHORIZE_URL: str | None = None  # the page the student's browser opens (see digilocker_authorize_url)
     DIGILOCKER_CLIENT_ID: str | None = None
     DIGILOCKER_CLIENT_SECRET: str | None = None
+    # Where DigiLocker returns a person after "Sign in with DigiLocker": the app's scheme. It must be registered
+    # with the DigiLocker partner client (the sandbox client uses scholarsetu://digilocker-callback).
+    DIGILOCKER_LOGIN_REDIRECT_URI: str = "scholarsetu://digilocker-callback"
     # Public address of this API, for OAuth redirects (e.g. https://scholarsetu-api-....run.app).
     PUBLIC_BASE_URL: str = "http://localhost:8000"
 

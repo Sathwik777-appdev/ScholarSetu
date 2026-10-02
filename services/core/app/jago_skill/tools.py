@@ -40,7 +40,10 @@ _MONEY = _any(r"\bpaisa\b", r"\bpaise\b", r"\bpayment", r"\bcredited\b", r"\bcre
 _GENERAL_AMOUNT = _any(r"how much is", r"what is the (amount|stipend|value)", r"kitna milta", r"kitni milti",
                        r"scholarship amount for", r"rate of", r"कितना मिलता", r"कितनी मिलती")
 _DEFICIENCY = _any(r"deficien", r"\bkami\b", r"कमी", r"missing document", r"document (missing|required)",
-                   r"dastaveez", r"दस्तावेज़? (कम|चाहिए)", r"objection", r"returned to student", r"defect")
+                   r"dastaveez", r"दस्तावेज़? (कम|चाहिए)", r"objection", r"returned to student", r"defect",
+                   # "Is anything pending from me?" / "kya kaam baaki hai?": what the student has to do
+                   r"pending from me", r"anything pending", r"\bbaa?ki\b", r"बाकी", r"बाक़ी", r"kya karna", r"क्या करना",
+                   r"what (do|should) i (do|need)", r"to do list")
 _ELIGIBILITY = _any(r"\bam i eligible", r"\bcan i apply", r"eligible for me", r"\bkya (main|mai|mein) .*(apply|patra|eligible)",
                     r"\bpatra\s*(hu|hoon|hun)", r"\bmain patra", r"क्या मैं .*(पात्र|आवेदन)", r"मैं पात्र", r"eligibility check")
 _GUIDELINE = _any(r"\blimit\b", r"\bceiling\b", r"\brule", r"\bcriteria\b", r"guideline", r"\bniyam", r"नियम", r"सीमा",
@@ -50,7 +53,8 @@ _GUIDELINE = _any(r"\blimit\b", r"\bceiling\b", r"\brule", r"\bcriteria\b", r"gu
 _TIMELINE = _any(r"timeline", r"history", r"itihas", r"इतिहास", r"kya kya hua", r"क्या क्या हुआ", r"all events",
                  r"sab kuch")
 _STATUS = _any(r"status", r"\bkab\b", r"\bwhen\b", r"kya hua", r"kahan tak", r"progress", r"pending", r"approved",
-               r"sanction", r"rejected", r"where is my", r"स्थिति", r"कब", r"क्या हुआ", r"कहाँ तक", r"application")
+               r"sanction", r"rejected", r"where is my", r"स्थिति", r"कब", r"क्या हुआ", r"कहाँ तक", r"application",
+               r"\bsth?ith?i\b")  # sthiti, stithi, sthithi
 
 
 def detect_intent(message: str) -> Intent:

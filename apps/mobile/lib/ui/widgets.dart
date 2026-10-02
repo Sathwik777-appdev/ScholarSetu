@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/api.dart';
+import '../i18n.dart';
 import '../data/repository.dart';
 import '../state/providers.dart';
 import 'labels.dart';
@@ -20,18 +21,20 @@ class OfflineBanner extends ConsumerWidget {
     final lines = <String>[];
     Color color = Colors.amber.shade50;
     if (conn.reachable == false) {
-      lines.add('No connection to ScholarSetu since ${when(conn.since!)}. '
-          'You are seeing information saved on this phone.');
+      lines.add(t('No connection to ScholarSetu since ${when(conn.since!)}. You are seeing information saved on this phone.',
+          '${when(conn.since!)} से ScholarSetu से कनेक्शन नहीं है। आप इस फ़ोन पर सहेजी जानकारी देख रहे हैं।'));
     }
     if (outbox.pending > 0) {
       lines.add(conn.reachable == false
-          ? '${outbox.pending} change(s) saved on this phone will be sent when the connection returns. '
-              'They have NOT reached the office yet.'
-          : '${outbox.pending} saved change(s) waiting to be sent.');
+          ? t('${outbox.pending} change(s) saved on this phone will be sent when the connection returns. '
+              'They have NOT reached the office yet.',
+              'इस फ़ोन पर सहेजे ${outbox.pending} बदलाव कनेक्शन आने पर भेजे जाएँगे। वे अभी कार्यालय तक नहीं पहुँचे हैं।')
+          : t('${outbox.pending} saved change(s) waiting to be sent.', '${outbox.pending} सहेजे बदलाव भेजे जाने बाकी हैं।'));
     }
     if (outbox.refused.isNotEmpty) {
       color = Colors.red.shade50;
-      lines.add('${outbox.refused.length} saved change(s) were refused by the server. Open "Sync" to see why.');
+      lines.add(t('${outbox.refused.length} saved change(s) were refused by the server. Open "Sync" to see why.',
+          'सर्वर ने ${outbox.refused.length} सहेजे बदलाव अस्वीकार किए। कारण देखने के लिए "सिंक" खोलें।'));
     }
     if (lines.isEmpty) return const SizedBox.shrink();
     final problem = outbox.refused.isNotEmpty;
@@ -75,7 +78,8 @@ class CachedView extends ConsumerWidget {
       loading: () => const _Skeleton(),
       error: (e, _) => ErrorBox(
         message: e is OfflineException
-            ? 'No connection, and nothing has been saved on this phone yet. Connect once to load your information.'
+            ? t('No connection, and nothing has been saved on this phone yet. Connect once to load your information.',
+                'कनेक्शन नहीं है और इस फ़ोन पर अभी कुछ सहेजा नहीं गया। अपनी जानकारी लाने के लिए एक बार कनेक्ट करें।')
             : e.toString(),
         onRetry: () => ref.invalidate(provider),
       ),
@@ -93,7 +97,7 @@ class CachedView extends ConsumerWidget {
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.history_rounded, size: 14, color: Colors.brown.shade700),
                   const SizedBox(width: 6),
-                  Text('Saved copy. Last updated ${when(cached.updatedAt)}',
+                  Text('${t('Saved copy. Last updated', 'सहेजी प्रति। अंतिम अपडेट')} ${when(cached.updatedAt)}',
                       style: TextStyle(color: Colors.brown.shade800, fontSize: 12, fontWeight: FontWeight.w500)),
                 ]),
               ),
@@ -146,7 +150,7 @@ class ErrorBox extends ConsumerWidget {
                             visualDensity: VisualDensity.compact,
                           ),
                           onPressed: onRetry,
-                          child: const Text('Try again'),
+                          child: Text(t('Try again', 'फिर से कोशिश करें')),
                         ),
                       if (onConfigureServer != null || isConnectionError)
                         OutlinedButton.icon(
@@ -157,9 +161,9 @@ class ErrorBox extends ConsumerWidget {
                             side: BorderSide(color: Colors.red.shade200),
                           ),
                           icon: const Icon(Icons.settings_ethernet_rounded, size: 14, color: AppColors.ink900),
-                          label: const Text(
-                            'Server settings',
-                            style: TextStyle(fontSize: 12, color: AppColors.ink900, fontWeight: FontWeight.w600),
+                          label: Text(
+                            t('Server settings', 'सर्वर सेटिंग'),
+                            style: const TextStyle(fontSize: 12, color: AppColors.ink900, fontWeight: FontWeight.w600),
                           ),
                           onPressed: onConfigureServer ?? () => showServerConfigSheet(context, ref),
                         ),
@@ -190,7 +194,13 @@ class Section extends StatelessWidget {
 void showMessage(BuildContext context, String text) =>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
-String errorText(Object e) => e is ApiException || e is OfflineException ? e.toString() : 'Something went wrong.';
+String errorText(Object e) {
+  if (e is ApiException && e.code == 'WAKING') {
+    return t('ScholarSetu is starting up after being idle. This takes a few minutes; please try again shortly.',
+        'ScholarSetu कुछ देर बंद रहने के बाद शुरू हो रहा है। इसमें कुछ मिनट लगते हैं; थोड़ी देर बाद फिर कोशिश करें।');
+  }
+  return e is ApiException || e is OfflineException ? e.toString() : t('Something went wrong.', 'कुछ गड़बड़ हो गई।');
+}
 
 class _Skeleton extends StatefulWidget {
   const _Skeleton();
@@ -212,7 +222,7 @@ class _SkeletonState extends State<_Skeleton> with SingleTickerProviderStateMixi
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: 'Loading',
+      label: t('Loading', 'लोड हो रहा है'),
       child: FadeTransition(
         opacity: Tween(begin: 0.45, end: 1.0).animate(_c),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

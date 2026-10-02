@@ -19,7 +19,10 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    phone: Mapped[str] = mapped_column(String(15), unique=True, index=True, nullable=False)
+    phone: Mapped[Optional[str]] = mapped_column(String(15), unique=True, index=True, nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(120), unique=True, index=True, nullable=True)
+    # Set when the account signs in with DigiLocker (the DigiLocker id from the partner token response).
+    digilocker_id: Mapped[Optional[str]] = mapped_column(String(80), unique=True, nullable=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     role: Mapped[UserRole] = mapped_column(SAEnum(UserRole, name="user_role"), nullable=False)
     # Set for STUDENT users: the student record this login belongs to.
@@ -42,7 +45,8 @@ class OtpChallenge(Base):
     __tablename__ = "otp_challenges"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    phone: Mapped[str] = mapped_column(String(15), index=True, nullable=False)
+    phone: Mapped[Optional[str]] = mapped_column(String(15), index=True, nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(120), index=True, nullable=True)
     purpose: Mapped[OtpPurpose] = mapped_column(SAEnum(OtpPurpose, name="otp_purpose"), nullable=False)
     # For MITRA_CONSENT: the assist session this OTP approves.
     subject_ref: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
@@ -52,8 +56,11 @@ class OtpChallenge(Base):
     consumed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
 
-    # Rate limits count recent challenges and failures per phone and purpose.
-    __table_args__ = (Index("ix_otp_challenges_phone_purpose_created", "phone", "purpose", "created_at"),)
+    # Rate limits count recent challenges and failures per phone/email and purpose.
+    __table_args__ = (
+        Index("ix_otp_challenges_phone_purpose_created", "phone", "purpose", "created_at"),
+        Index("ix_otp_challenges_email_purpose_created", "email", "purpose", "created_at"),
+    )
 
 
 class AssistSession(Base):

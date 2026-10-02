@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { BarChart3, ClipboardCheck, CreditCard, LayoutDashboard, List, LogOut, Map, MessageSquare, ShieldCheck } from 'lucide-react';
+import { BarChart3, ClipboardCheck, CreditCard, Inbox, LayoutDashboard, List, LogOut, Map, MessageSquare, ShieldCheck, UserPlus } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ANALYTICS_ROLES, useAuth } from '../auth/auth';
 import { ROLE_LABELS } from '../utils/formatters';
@@ -13,6 +13,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  { name: 'My work', href: '/my-work', icon: Inbox },
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, analyticsOnly: true },
   { name: 'Review queue', href: '/review-queue', icon: ClipboardCheck },
   { name: 'Applications', href: '/applications', icon: List },
@@ -20,6 +21,7 @@ const NAV: NavItem[] = [
   { name: 'Bottlenecks & SLA', href: '/analytics', icon: BarChart3, analyticsOnly: true },
   { name: 'DBT failures', href: '/dbt-monitor', icon: CreditCard, analyticsOnly: true },
   { name: 'Data requests', href: '/data-requests', icon: ShieldCheck, analyticsOnly: true },
+  { name: 'Officers', href: '/manage-officers', icon: UserPlus, ministryOnly: true },
   { name: 'Demo SMS', href: '/demo-sms', icon: MessageSquare, ministryOnly: true },
 ];
 
@@ -47,7 +49,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <BrandMark />
         <div>
           <p className="text-[15px] font-semibold text-white tracking-tight">ScholarSetu</p>
-          <p className="text-[11px] text-slate-400">Officer &amp; ministry console</p>
+          <p className="text-[12px] text-slate-400">Officer &amp; ministry console</p>
         </div>
       </div>
       <nav className="flex-1">
@@ -82,7 +84,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-teal-400 to-teal-500 text-[13px] font-semibold text-ink-950">{initials}</div>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-white">{user.name}</p>
-              <p className="truncate text-[11px] text-slate-400">{ROLE_LABELS[user.role] ?? user.role}{jurisdiction && ` · ${jurisdiction}`}</p>
+              <p className="truncate text-[12px] text-slate-400">{ROLE_LABELS[user.role] ?? user.role}{jurisdiction && ` · ${jurisdiction}`}</p>
             </div>
           </div>
           <button onClick={logout} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-white/5 py-1.5 text-xs text-slate-300 hover:bg-white/10 hover:text-white">

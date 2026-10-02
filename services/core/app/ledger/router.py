@@ -239,15 +239,23 @@ def _scope(query, officer: User):
 @router.get("/applications", response_model=list[OfficerApplicationOut])
 async def list_applications(
     state: Optional[CanonicalState] = None, scheme: Optional[SchemeType] = None,
+    q: Optional[str] = Query(None, max_length=80, description="Student name or application ID (part of either)"),
+    open_only: bool = Query(False, description="Leave out finished applications (credited, rejected, surrendered)"),
     limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0),
     officer: User = Depends(require_role(*OFFICER_ROLES)), db: AsyncSession = Depends(get_db),
 ):
-    """Applications inside the officer's jurisdiction."""
+    """Applications inside the officer's jurisdiction, longest in their stage first."""
     query = _scope(select(Application, Student).join(Student, Student.id == Application.student_id), officer)
     if state:
         query = query.where(Application.canonical_state == state)
     if scheme:
         query = query.where(Application.scheme == scheme)
+    if open_only:
+        query = query.where(Application.canonical_state.notin_(
+            [CanonicalState.CREDITED, CanonicalState.REJECTED, CanonicalState.SURRENDERED]))
+    if q and q.strip():
+        like = f"%{q.strip().lower()}%"
+        query = query.where(func.lower(Student.full_name).like(like) | func.lower(Application.id).like(like))
     now = datetime.now(timezone.utc)
     rows = (await db.execute(query.order_by(Application.state_changed_at).limit(limit).offset(offset))).all()
     return [OfficerApplicationOut(**_app_out(a).model_dump(), student_name=s.full_name, district=s.district,

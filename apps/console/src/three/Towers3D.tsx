@@ -29,7 +29,7 @@ function Tower({ x, height, datum }: { x: number; height: number; datum: TowerDa
         </RoundedBox>
       </group>
       <Html position={[0, h + 0.22, 0]} center className="pointer-events-none select-none">
-        <div className="whitespace-nowrap rounded-full bg-white/95 px-2 py-0.5 text-[11px] font-semibold text-slate-900 shadow ring-1 ring-slate-200">{datum.display}</div>
+        <div className="whitespace-nowrap rounded-full bg-white/95 px-2 py-0.5 text-[12px] font-semibold text-slate-900 shadow ring-1 ring-slate-200">{datum.display}</div>
       </Html>
     </group>
   );

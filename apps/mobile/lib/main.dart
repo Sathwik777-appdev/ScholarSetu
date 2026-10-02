@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'config.dart';
 import 'data/api.dart';
 import 'data/local_db.dart';
 import 'data/secure_store.dart';
+import 'i18n.dart';
 import 'state/providers.dart';
 import 'ui/home_screen.dart';
 import 'ui/login_screen.dart';
@@ -13,6 +16,9 @@ import 'ui/theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final secure = SecureStore();
+  await initializeDateFormatting('hi');
+  await initializeDateFormatting('en');
+  await loadLanguage(secure);
   LocalDb db;
   try {
     db = await LocalDb.open(await secure.databaseKey());
@@ -53,15 +59,27 @@ class ScholarSetuApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionProvider);
     ref.watch(connectionProvider);
-    return MaterialApp(
-      title: 'ScholarSetu',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      home: session.checking
-          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-          : session.user == null
-              ? const LoginScreen()
-              : const HomeScreen(),
+    // Rebuilt when the language changes, so every screen switches at once.
+    return ValueListenableBuilder<String>(
+      valueListenable: appLanguage,
+      builder: (context, lang, _) => MaterialApp(
+        key: ValueKey(lang), // every screen redraws in the new language (text comes from t(), not Localizations)
+        title: 'ScholarSetu',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        locale: Locale(lang),
+        supportedLocales: const [Locale('hi'), Locale('en')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: session.checking
+            ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+            : session.user == null
+                ? const LoginScreen()
+                : const HomeScreen(),
+      ),
     );
   }
 }

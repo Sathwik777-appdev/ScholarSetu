@@ -19,10 +19,13 @@ PUBLIC_ROUTES = {
     ("GET", "/health/ready"),
     ("POST", "/v1/auth/otp/request"),
     ("POST", "/v1/auth/otp/verify"),
-    ("POST", "/v1/auth/register/start"),     # sends a code; reveals nothing about the number
-    ("POST", "/v1/auth/register/complete"),  # needs that code
+    ("POST", "/v1/auth/register/start"),     # retired: 410, sign up with DigiLocker
+    ("POST", "/v1/auth/register/complete"),  # retired: 410
     ("GET", "/v1/geo/districts"),              # place names with an officer, for registration pickers
-    ("POST", "/v1/auth/digilocker/callback"),  # returns 501 Not Implemented
+    ("GET", "/v1/auth/demo"),                  # demo toggle: whether demo sign-in is available, demo accounts only
+    ("POST", "/v1/auth/digilocker/start"),     # Sign in with DigiLocker (state + PKCE)
+    ("POST", "/v1/auth/digilocker/complete"),  # needs DigiLocker's code for that state
+    ("POST", "/v1/auth/digilocker/register"),  # needs the single-use registration token
     ("GET", "/v1/digilocker/callback"),        # OAuth redirect: needs the one-time state of a session
     ("GET", "/v1/digilocker-test/authorize"),  # test DigiLocker sign-in page (mock mode only; 404 otherwise)
     ("POST", "/v1/digilocker-test/authorize"),
@@ -86,14 +89,37 @@ async def test_otp_locks_after_five_wrong_attempts(client, db, demo):
     assert (await client.post("/v1/auth/otp/verify", json={"phone": PHONES["sunita"], "otp": code})).status_code == 429
 
 
-async def test_demo_otp_only_for_demo_users_in_demo_mode(client, db, demo, monkeypatch):
+async def test_demo_code_only_for_demo_accounts_from_the_demo_toggle(client, db, demo, monkeypatch):
     await make_user(db, "9000000002", UserRole.STUDENT, "Real Student", is_demo=False)
-    demo_user = {"phone": PHONES["sunita"], "otp": settings.DEMO_OTP}
-    real_user = {"phone": "9000000002", "otp": settings.DEMO_OTP}
-    assert (await client.post("/v1/auth/otp/verify", json=demo_user)).status_code == 401  # DEMO_MODE off
+    code = settings.DEMO_OTP
+    demo_user = {"phone": PHONES["sunita"], "otp": code, "demo": True}
+    real_user = {"phone": "9000000002", "otp": code, "demo": True}
+    verify = lambda body: client.post("/v1/auth/otp/verify", json=body)  # noqa: E731
+    assert (await verify(demo_user)).status_code == 401                   # server not in demo mode
     monkeypatch.setattr(settings, "DEMO_MODE", True)
-    assert (await client.post("/v1/auth/otp/verify", json=demo_user)).status_code == 200
-    assert (await client.post("/v1/auth/otp/verify", json=real_user)).status_code == 401
+    assert (await verify(demo_user)).status_code == 200                   # demo account + demo toggle
+    assert (await verify({**demo_user, "demo": False})).status_code == 401  # toggle off: the real code is needed
+    assert (await verify(real_user)).status_code == 401                   # a real account never takes the demo code
+
+
+async def test_demo_toggle_sends_nothing_to_demo_accounts_but_real_codes_to_real_ones(client, db, demo, monkeypatch):
+    from app.gateway.models import OutboundSms
+    monkeypatch.setattr(settings, "DEMO_MODE", True)
+    await make_user(db, "9000000003", UserRole.STUDENT, "Real Student", is_demo=False)
+    for phone in (PHONES["sunita"], "9000000003"):
+        assert (await client.post("/v1/auth/otp/request", json={"phone": phone, "demo": True})).status_code == 202
+    sent = {r.to_phone for r in (await db.execute(select(OutboundSms))).scalars()}
+    assert PHONES["sunita"] not in sent and "9000000003" in sent
+    info = (await client.get("/v1/auth/demo")).json()
+    assert info["available"] is True and info["demo_code"] == code_of(settings)
+    assert "9000000003" not in {a.get("phone") for a in info["app_accounts"]}
+    monkeypatch.setattr(settings, "DEMO_MODE", False)
+    assert (await client.get("/v1/auth/demo")).json() == {"available": False, "demo_code": None,
+                                                          "console_accounts": [], "app_accounts": []}
+
+
+def code_of(s):
+    return s.DEMO_OTP
 
 
 async def test_token_role_comes_from_database(client, db, users):

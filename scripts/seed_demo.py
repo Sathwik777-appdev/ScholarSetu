@@ -1,19 +1,26 @@
-"""Seed the judge-demo world (ARCHITECTURE.md §14) through the service layer.
+"""Seed the demo accounts of a hosted ScholarSetu, through the service layer (ledger hashes and IDs are real).
 
-Demo data lives here and in the mock services, never in core service logic. Everything is
-created with the same code paths the API uses, so ledger hashes, outbox events and IDs are real.
+Only these are created; there is no synthetic population:
+  App (sign in with the demo toggle, code 123456):
+    Sunita Hansda   student   9876543210   Post-Matric 2026-27 application with the district authority
+    Babulal Hansda  guardian  9876543212   Sunita's father (family view)
+  Console (sign in with the demo toggle, code 123456; with the toggle off a real code is emailed):
+    Institute officer, district officer, state officer and the Ministry, by email.
+  Super Admin (Ministry): a real account. It always needs the code emailed to it, demo toggle or not, because it
+  can enrol officers.
 
-Seeded users are is_demo=True: they may log in with DEMO_OTP only while DEMO_MODE=true.
+Demo accounts are is_demo=True: the demo code works for them only when the server has DEMO_MODE=true and the
+sign-in came from the demo toggle. Real people sign in with DigiLocker (students) or an emailed code (officers).
 
-Run inside the core container:   python /scripts/seed_demo.py
-The database must already be migrated (alembic upgrade head). The script refuses to run twice.
+    python scripts/seed_demo.py              seed an empty database
+    python scripts/seed_demo.py --if-empty   seed only if the demo accounts are not there yet
+    python scripts/seed_demo.py --reset      DELETE all people and records (rules and the guideline index are
+                                             kept), then seed. Take a database backup first.
 """
 
 import asyncio
-import json
 import sys
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -21,174 +28,92 @@ for candidate in (REPO / "services" / "core", Path("/app")):
     if (candidate / "app").is_dir():
         sys.path.insert(0, str(candidate))
         break
-RULES_DIR = next(p for p in (REPO / "rules", Path("/rules")) if p.is_dir())
 
+from sqlalchemy import text  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
-from app.database import AsyncSessionLocal, engine  # noqa: E402
+from app.database import AsyncSessionLocal, Base, engine  # noqa: E402
 import app.models  # noqa: E402,F401
 from app.gateway.models import User  # noqa: E402
 from app.ledger.models import Household  # noqa: E402
 from app.ledger.service import LedgerService  # noqa: E402
-from app.shared.types import CanonicalState, Gender, PaymentState, SchemeType, UserRole  # noqa: E402
+from app.shared.types import CanonicalState, Gender, SchemeType, UserRole  # noqa: E402
 from app.students.service import create_student  # noqa: E402
 
 SEED_ACTOR = "system:seed_demo"
+REFERENCE_TABLES = {"rule_versions", "guideline_chunks", "alembic_version"}
 HOUSEHOLD = dict(id="hh_hansda_001", guardian_name="Babulal Hansda", guardian_phone="9876543212")
 
-# Identifiers match the mock government services (mocks/synthetic_data.py).
-STUDENTS = [
-    dict(id="stu-sunita-001", full_name="Sunita Hansda", name_variants=["Sunita Hansda"], dob=date(2008, 4, 12),
-         gender=Gender.FEMALE, father_name="Babulal Hansda", mother_name="Marangmai Hansda", tribe="Santal",
-         state="Jharkhand", district="Dumka", household_id="hh_hansda_001", preferred_language="hi",
-         aadhaar_ref_token="AREF-JH-0004912", apaar_id="APAAR-JH-2026-0812"),
-    dict(id="stu-rahul-002", full_name="Rahul Hansda", name_variants=["Rahul Hansda"], dob=date(2010, 8, 15),
-         gender=Gender.MALE, father_name="Babulal Hansda", mother_name="Marangmai Hansda", tribe="Santal",
-         state="Jharkhand", district="Dumka", household_id="hh_hansda_001", preferred_language="hi",
-         aadhaar_ref_token="AREF-JH-0009914", apaar_id="APAAR-JH-2025-4192"),
-    # Salkhan's Post-Matric application lives on NSP; the NSP adapter imports it into the ledger.
-    dict(id="stu-salkhan-003", full_name="Salkhan Soren", name_variants=["Salkhan Soren"], dob=date(2007, 12, 1),
-         gender=Gender.MALE, father_name="Gopal Soren", mother_name=None, tribe="Santal", state="Jharkhand",
-         district="Dumka", household_id=None, preferred_language="hi",
-         aadhaar_ref_token="AREF-JH-0005521", apaar_id="APAAR-JH-2026-5521"),
-]
+# Identifiers match the test government services (mocks/synthetic_data.py).
+SUNITA = dict(id="stu-sunita-001", full_name="Sunita Hansda", name_variants=["Sunita Hansda"], dob=date(2008, 4, 12),
+              gender=Gender.FEMALE, father_name="Babulal Hansda", mother_name="Marangmai Hansda", tribe="Santal",
+              state="Jharkhand", district="Dumka", household_id="hh_hansda_001", preferred_language="hi",
+              aadhaar_ref_token="AREF-JH-0004912", apaar_id="APAAR-JH-2026-0812")
 
+# name, role, phone, email, student_id, household_id, (state, district), institution_code, is_demo, digilocker_id
 USERS = [
-    # phone, name, role, student_id, household_id, jurisdiction (state, district)
-    ("9876543210", "Sunita Hansda", UserRole.STUDENT, "stu-sunita-001", "hh_hansda_001", (None, None)),
-    ("9876543211", "Rahul Hansda", UserRole.STUDENT, "stu-rahul-002", "hh_hansda_001", (None, None)),
-    ("9876543213", "Salkhan Soren", UserRole.STUDENT, "stu-salkhan-003", None, (None, None)),
-    ("9876543212", "Babulal Hansda", UserRole.GUARDIAN, None, "hh_hansda_001", (None, None)),
-    ("9876543220", "Kavita Tudu (Hostel Warden)", UserRole.MITRA, None, None, (None, None)),
-    ("9876543225", "Principal, Dumka Government College", UserRole.INSTITUTE_OFFICER, None, None, ("Jharkhand", "Dumka")),
-    ("9876543226", "Headmaster, Government High School, Dumka", UserRole.INSTITUTE_OFFICER, None, None, ("Jharkhand", "Dumka")),
-    ("9876543230", "District Welfare Officer, Dumka", UserRole.DISTRICT_OFFICER, None, None, ("Jharkhand", "Dumka")),
-    ("9876543235", "Tribal Welfare Department, Jharkhand", UserRole.STATE_OFFICER, None, None, ("Jharkhand", None)),
-    ("9876543240", "MoTA Scholarship Division", UserRole.MINISTRY, None, None, (None, None)),
+    ("Sunita Hansda", UserRole.STUDENT, "9876543210", None, "stu-sunita-001", "hh_hansda_001", (None, None), None,
+     True, "TEST-AREF-JH-0004912"),
+    ("Babulal Hansda", UserRole.GUARDIAN, "9876543212", None, None, "hh_hansda_001", (None, None), None, True, None),
+    ("Principal, Dumka Government College", UserRole.INSTITUTE_OFFICER, None, "teamace088@gmail.com", None, None,
+     ("Jharkhand", "Dumka"), "C-41290", True, None),
+    ("District Welfare Officer, Dumka", UserRole.DISTRICT_OFFICER, None, "sathwikjpoojary@gmail.com", None, None,
+     ("Jharkhand", "Dumka"), None, True, None),
+    ("Tribal Welfare Department, Jharkhand", UserRole.STATE_OFFICER, None, "chethankotian006@gmail.com", None, None,
+     ("Jharkhand", None), None, True, None),
+    ("MoTA Scholarship Division", UserRole.MINISTRY, None, "kotianchethan4@gmail.com", None, None, (None, None), None,
+     True, None),
+    ("Super Admin", UserRole.MINISTRY, None, "sathwikj777@gmail.com", None, None, (None, None), None, False, None),
 ]
 
 
-INSTITUTION_CODES = {"9876543225": "C-41290", "9876543226": "20140212345"}
-# Share of each block's enrolled ST students who have registered for a scholarship (synthetic, for Reach Radar).
-BLOCK_REGISTRATION_RATE = {"Dumka": 0.8, "Jama": 0.65, "Jarmundi": 0.55, "Kathikund": 0.45, "Shikaripara": 0.3}
-FEMALE_NAMES = {"Anita", "Salomi", "Sonamuni", "Phulmani", "Sita", "Rani", "Dulari", "Maino", "Rekha", "Pinky",
-                "Parvati", "Sukhmati", "Talamai", "Kiran", "Bahamuni", "Lukhi"}
-
-
-def _variant(name: str, n: int) -> str:
-    """Spellings differ between school and scholarship records; PPRL has to tolerate that."""
-    first, last = name.split(" ", 1)
-    if n % 3 == 0 and last.endswith("a"):
-        return f"{first} {last}h"
-    if n % 3 == 1 and "u" in last:
-        return f"{first} {last.replace('u', 'oo', 1)}"
-    return f"{first[:-1]}{'ee' if first.endswith('i') else first[-1]} {last}"
-
-
-async def seed_synthetic_population(db: AsyncSession, roster: list[dict], academic_year: str) -> int:
-    """Register a (synthetic) share of the UDISE+ roster for scholarships, through the ledger. Returns the count."""
-    import hashlib
-    ledger = LedgerService(db)
-    created = 0
-    for n, record in enumerate(roster):
-        if record["record_ref"] == "UDISE-REC-000001":  # Rahul is part of the hand-made demo world
-            continue
-        draw = int(hashlib.sha256(record["record_ref"].encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
-        if draw >= BLOCK_REGISTRATION_RATE[record["block"]]:
-            continue
-        name = _variant(record["name"], n) if draw < 0.2 else record["name"]
-        student_id = f"stu-syn-{record['record_ref'][-6:]}"
-        await create_student(db, id=student_id, full_name=name, name_variants=[name],
-                             dob=date.fromisoformat(record["dob"]),
-                             gender=Gender.FEMALE if name.split()[0].rstrip("e") in FEMALE_NAMES
-                             or record["name"].split()[0] in FEMALE_NAMES else Gender.MALE,
-                             father_name=None, mother_name=None, tribe="Santal", pvtg_flag=record["pvtg"],
-                             state="Jharkhand", district=record["district"], household_id=None,
-                             preferred_language="hi", aadhaar_ref_token=None, apaar_id=record["apaar_id"])
-        scheme = SchemeType.PRE_MATRIC if record["class"] <= 10 else SchemeType.POST_MATRIC
-        await ledger.create_application(student_id, scheme, academic_year, SEED_ACTOR,
-                                        {"school": record["school_name"], "class": record["class"], "synthetic": True})
-        created += 1
+async def reset(db: AsyncSession) -> None:
+    names = ", ".join(t.name for t in Base.metadata.sorted_tables if t.name not in REFERENCE_TABLES)
+    await db.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
+    await db.execute(text("ALTER SEQUENCE application_seq RESTART WITH 1"))  # application numbers start again
     await db.commit()
-    return created
-
-
-def scheme_amounts(scheme_file: str) -> dict:
-    return json.loads((RULES_DIR / scheme_file).read_text())["amounts"]
 
 
 async def seed(db: AsyncSession, now: datetime | None = None) -> dict:
-    """Create the demo world. Returns the ids the demo and tests refer to."""
     now = now or datetime.now(timezone.utc)
     if await db.get(Household, HOUSEHOLD["id"]) is not None:
-        raise RuntimeError("Demo data already present; reset the database to reseed.")
-    ledger = LedgerService(db)
-
+        raise RuntimeError("Demo data already present; use --reset to start over.")
     db.add(Household(**HOUSEHOLD))
     await db.flush()
-    for fields in STUDENTS:
-        await create_student(db, **fields)
-    for phone, name, role, student_id, household_id, (j_state, j_district) in USERS:
-        db.add(User(phone=phone, name=name, role=role, student_id=student_id, household_id=household_id,
-                    jurisdiction_state=j_state, jurisdiction_district=j_district, is_active=True, is_demo=True,
-                    institution_code=INSTITUTION_CODES.get(phone)))
+    await create_student(db, **SUNITA)
+    for name, role, phone, email, student_id, household, (state, district), code, demo, dl_id in USERS:
+        db.add(User(name=name, role=role, phone=phone, email=email, student_id=student_id, household_id=household,
+                    jurisdiction_state=state, jurisdiction_district=district, institution_code=code,
+                    is_active=True, is_demo=demo, digilocker_id=dl_id))
     await db.flush()
 
-    # Rahul: Pre-Matric 2025-26, Class 9 hosteller, sanctioned and credited (scene 1: "brother's Pre-Matric credited").
-    pre = scheme_amounts("pre_matric_2026_v1.json")
-    rahul = await ledger.create_application("stu-rahul-002", SchemeType.PRE_MATRIC, "2025-26", SEED_ACTOR,
-                                            {"school": "Government High School, Dumka", "class": 9,
-                                             "hosteller": True}, occurred_at=datetime(2025, 8, 1, 10, tzinfo=timezone.utc))
-    t = datetime(2025, 8, 10, 10, tzinfo=timezone.utc)
-    await ledger.transition(rahul, CanonicalState.INSTITUTE_VERIFICATION, SEED_ACTOR, occurred_at=t)
-    await ledger.transition(rahul, CanonicalState.AUTHORITY_VERIFICATION, SEED_ACTOR, occurred_at=t + timedelta(days=12))
-    payments = await ledger.sanction(rahul, [("Scholarship (hosteller, Class 9)",
-                                              Decimal(pre["hosteller_per_year"]["value"]["class_9"])),
-                                             ("Ad-hoc grant", Decimal(pre["adhoc_grant"]["value"]))],
-                                     SEED_ACTOR, occurred_at=t + timedelta(days=30))
-    for i, p in enumerate(payments):
-        await ledger.update_payment(rahul, p.id, PaymentState.INITIATED, SEED_ACTOR, pfms_ref=f"PFMS-JH-2025-{7710 + i}",
-                                    occurred_at=t + timedelta(days=45, hours=i))
-    for i, p in enumerate(payments):
-        await ledger.update_payment(rahul, p.id, PaymentState.CREDITED, SEED_ACTOR,
-                                    occurred_at=t + timedelta(days=52, hours=i))
-
-    # Sunita: Post-Matric 2026-27 (Class 11), now with the district authority; nothing sanctioned yet.
+    # Sunita: Post-Matric 2026-27 (Class 11), now with the district authority; nothing verified or sanctioned yet.
+    ledger = LedgerService(db)
     sunita = await ledger.create_application("stu-sunita-001", SchemeType.POST_MATRIC, "2026-27", SEED_ACTOR,
                                              {"institution": "Dumka Government College", "aishe_code": "C-41290",
                                               "course": "Intermediate (Class 11) Science", "hosteller": False},
                                              occurred_at=now - timedelta(days=20))
     await ledger.transition(sunita, CanonicalState.INSTITUTE_VERIFICATION, SEED_ACTOR, occurred_at=now - timedelta(days=18))
     await ledger.transition(sunita, CanonicalState.AUTHORITY_VERIFICATION, SEED_ACTOR, occurred_at=now - timedelta(days=9))
-
     await db.commit()
-    return {"rahul_application": rahul.id, "sunita_application": sunita.id}
+    return {"sunita_application": sunita.id}
 
 
 async def main() -> None:
-    import httpx
-    from app.config import settings
-    from app.eligibility.service import current_academic_year
     async with AsyncSessionLocal() as db:
-        if "--if-empty" in sys.argv and await db.get(Household, HOUSEHOLD["id"]) is not None:
-            print("Demo data already present; not reseeded.")
+        if "--reset" in sys.argv:
+            await reset(db)
+            print("All people and records deleted (rules and guideline index kept).")
+        elif "--if-empty" in sys.argv and await db.get(Household, HOUSEHOLD["id"]) is not None:
+            print("Demo accounts already present; not reseeded.")
             await engine.dispose()
             return
         ids = await seed(db)
-    try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            roster = (await client.get(f"{settings.MOCK_SERVICE_URL}/udise/_synthetic/roster")).json()
-        async with AsyncSessionLocal() as db:
-            ids["synthetic_scholarship_registrations"] = await seed_synthetic_population(db, roster, current_academic_year())
-    except Exception as exc:
-        print(f"Note: synthetic school roster not seeded (mock service offline: {exc})")
     await engine.dispose()
-    print("Seeded demo world:")
-    for key, value in ids.items():
-        print(f"  {key}: {value}")
-    print("Demo logins (DEMO_MODE=true only):")
-    for phone, name, role, *_ in USERS:
-        print(f"  {phone}  {role.value:<17} {name}")
+    print("Seeded:", ids)
+    for name, role, phone, email, *_rest in USERS:
+        demo = _rest[-2]
+        print(f"  {(email or phone):<28} {role.value:<18} {name}{'' if demo else '  (real account: emailed code)'}")
 
 
 if __name__ == "__main__":

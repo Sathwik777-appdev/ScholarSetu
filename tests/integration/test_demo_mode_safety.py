@@ -42,11 +42,10 @@ async def test_the_demo_code_is_only_for_seeded_demo_users(client, db, demo):
     assert real.status_code == 401
 
 
-async def test_registration_always_confirms_the_phone(client, demo):
-    r = await client.post("/v1/auth/register/complete", json={
-        "phone": "9000000555", "otp": settings.DEMO_OTP, "full_name": "Someone Else", "dob": "2009-01-01",
-        "gender": "MALE", "state": "Jharkhand", "district": "Dumka"})
-    assert r.status_code == 401
+async def test_phone_registration_is_retired(client, demo):
+    for path in ("/v1/auth/register/start", "/v1/auth/register/complete"):
+        r = await client.post(path, json={"phone": "9000000555"})
+        assert r.status_code == 410 and "DigiLocker" in r.json()["detail"]
 
 
 def test_safe_defaults():

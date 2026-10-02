@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/api.dart';
+import '../i18n.dart';
 import '../state/providers.dart';
 import 'theme.dart';
 
@@ -31,7 +32,7 @@ class JagoScreen extends ConsumerStatefulWidget {
 class _JagoScreenState extends ConsumerState<JagoScreen> {
   final _input = TextEditingController();
   final _messages = <_Message>[];
-  String _language = 'hi';
+  String _language = appLanguage.value; // answers in the app's language unless changed here
   bool _aiAssist = false;
   bool _busy = false;
 
@@ -63,9 +64,9 @@ class _JagoScreenState extends ConsumerState<JagoScreen> {
           sources: sources.cast<String>(), aiPhrased: phrased,
           verifiedText: phrased ? res['verified_text'] as String? : null)));
     } on OfflineException {
-      setState(() => _messages.add(_Message(false, 'JAGO needs an internet connection. Your question was not sent.')));
+      setState(() => _messages.add(_Message(false, t('JAGO needs an internet connection. Your question was not sent.', 'JAGO को इंटरनेट चाहिए। आपका सवाल नहीं भेजा गया।'))));
     } on ApiException catch (e) {
-      setState(() => _messages.add(_Message(false, 'JAGO could not answer: ${e.message}')));
+      setState(() => _messages.add(_Message(false, '${t('JAGO could not answer', 'JAGO जवाब नहीं दे सका')}: ${e.message}')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -87,7 +88,7 @@ class _JagoScreenState extends ConsumerState<JagoScreen> {
             onChanged: (v) => setState(() => _language = v ?? _language),
           ),
           const Spacer(),
-          const Text('AI phrasing', style: TextStyle(fontSize: 13)),
+          Text(t('AI phrasing', 'AI भाषा'), style: const TextStyle(fontSize: 13)),
           Switch(
             value: _aiAssist,
             onChanged: (v) async {
@@ -95,14 +96,16 @@ class _JagoScreenState extends ConsumerState<JagoScreen> {
                 final ok = await showDialog<bool>(
                   context: context,
                   builder: (c) => AlertDialog(
-                    title: const Text('Use AI phrasing?'),
-                    content: const Text(
+                    title: Text(t('Use AI phrasing?', 'AI भाषा इस्तेमाल करें?')),
+                    content: Text(t(
                         'Your questions and JAGO\'s verified answers will be sent to Google (Gemini) so they can be '
                         're-worded. Amounts, dates and application numbers are always checked against your records, '
-                        'and the verified answer stays available. You can turn this off at any time.'),
+                        'and the verified answer stays available. You can turn this off at any time.',
+                        'आपके सवाल और JAGO के सत्यापित जवाब Google (Gemini) को दोबारा लिखने के लिए भेजे जाएँगे। राशि, तिथियाँ और '
+                        'आवेदन संख्या हमेशा आपके रिकॉर्ड से जाँची जाती हैं, और सत्यापित जवाब उपलब्ध रहता है। इसे कभी भी बंद कर सकते हैं।')),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('No')),
-                      TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Yes, turn on')),
+                      TextButton(onPressed: () => Navigator.pop(c, false), child: Text(t('No', 'नहीं'))),
+                      TextButton(onPressed: () => Navigator.pop(c, true), child: Text(t('Yes, turn on', 'हाँ, चालू करें'))),
                     ],
                   ),
                 );
@@ -116,12 +119,12 @@ class _JagoScreenState extends ConsumerState<JagoScreen> {
       Expanded(
         child: ListView(padding: const EdgeInsets.all(16), children: [
           if (_messages.isEmpty) ...[
-            const Text('Ask about your application status, your money, or scheme rules.',
-                style: TextStyle(color: AppColors.muted)),
+            Text(t('Ask about your application status, your money, or scheme rules.', 'अपने आवेदन, पैसे या योजना के नियमों के बारे में पूछें।'),
+                style: const TextStyle(color: AppColors.muted)),
             const SizedBox(height: 12),
             Wrap(spacing: 8, runSpacing: 8, children: [
               for (final q in _quick[_language]!)
-                ActionChip(label: Text(q, style: const TextStyle(fontSize: 12.5)), onPressed: _busy ? null : () => _send(q)),
+                ActionChip(label: Text(q, style: const TextStyle(fontSize: 13.5)), onPressed: _busy ? null : () => _send(q)),
             ]),
           ],
           for (final m in _messages) _Bubble(m),
@@ -134,9 +137,9 @@ class _JagoScreenState extends ConsumerState<JagoScreen> {
           padding: const EdgeInsets.all(8),
           child: Row(children: [
             Expanded(child: TextField(controller: _input, onSubmitted: (_) => _send(),
-                decoration: const InputDecoration(hintText: 'Type your question'))),
+                decoration: InputDecoration(hintText: t('Type your question', 'अपना सवाल लिखें')))),
             const SizedBox(width: 4),
-            IconButton.filled(onPressed: _busy ? null : () => _send(), icon: const Icon(Icons.send_rounded)),
+            IconButton.filled(tooltip: t('Send', 'भेजें'), onPressed: _busy ? null : () => _send(), icon: const Icon(Icons.send_rounded)),
           ]),
         ),
       ),
@@ -171,18 +174,18 @@ class _BubbleState extends State<_Bubble> {
               Text(m.text, style: TextStyle(color: m.fromUser ? Colors.white : AppColors.text, height: 1.4)),
               for (final s in m.sources)
                 Padding(padding: const EdgeInsets.only(top: 6),
-                    child: Text('Source: $s', style: const TextStyle(fontSize: 11, color: AppColors.muted))),
+                    child: Text('${t('Source', 'स्रोत')}: $s', style: const TextStyle(fontSize: 12, color: AppColors.muted))),
               if (m.aiPhrased) ...[
                 const SizedBox(height: 6),
                 Row(children: [
                   const Icon(Icons.auto_awesome, size: 13, color: AppColors.muted),
                   const SizedBox(width: 4),
-                  const Text('AI-phrased · figures checked', style: TextStyle(fontSize: 11, color: AppColors.muted)),
+                  Text(t('AI-phrased · figures checked', 'AI द्वारा लिखा · आँकड़े जाँचे गए'), style: const TextStyle(fontSize: 12, color: AppColors.muted)),
                   const Spacer(),
                   TextButton(
                     style: TextButton.styleFrom(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero),
                     onPressed: () => setState(() => _showVerified = !_showVerified),
-                    child: Text(_showVerified ? 'Hide' : 'Verified answer', style: const TextStyle(fontSize: 11)),
+                    child: Text(_showVerified ? t('Hide', 'छिपाएँ') : t('Verified answer', 'सत्यापित जवाब'), style: const TextStyle(fontSize: 12)),
                   ),
                 ]),
                 if (_showVerified && m.verifiedText != null)

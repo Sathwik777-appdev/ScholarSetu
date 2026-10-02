@@ -33,10 +33,19 @@ export const setUnauthorizedHandler = (fn: () => void) => {
   onUnauthorized = fn;
 };
 
+// The API answers 503 WAKING while its database starts after an idle period; listeners show progress.
+type WakingListener = () => void;
+const wakingListeners = new Set<WakingListener>();
+export const onWaking = (fn: WakingListener) => {
+  wakingListeners.add(fn);
+  return () => { wakingListeners.delete(fn); };
+};
+
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401 && onUnauthorized) onUnauthorized();
+    if (isWaking(error)) wakingListeners.forEach((fn) => fn());
     return Promise.reject(error);
   },
 );
@@ -51,7 +60,7 @@ export function isWaking(error: unknown): boolean {
 /** A message fit to show an officer: the API's own detail when there is one, never a stack trace. */
 export function errorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    if (isWaking(error)) return 'ScholarSetu is starting up after being idle. Try again in about a minute.';
+    if (isWaking(error)) return 'ScholarSetu is starting up after being idle. This takes a few minutes; this page will refresh itself.';
     if (!error.response) return 'The ScholarSetu API could not be reached.';
     const detail = (error.response.data as { detail?: unknown })?.detail;
     if (typeof detail === 'string') return detail;

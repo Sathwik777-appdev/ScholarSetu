@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../i18n.dart';
 import '../state/providers.dart';
 import 'home_screen.dart';
 import 'components.dart';
@@ -15,7 +16,7 @@ class FamilyScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Family'), actions: const [SyncButton(), AccountMenu()]),
+      appBar: AppBar(title: Text(t('Family', 'परिवार')), actions: const [SyncButton(), AccountMenu()]),
       body: Column(children: [
         const OfflineBanner(),
         Expanded(
@@ -32,17 +33,22 @@ class FamilyScreen extends ConsumerWidget {
                   return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                     HeroHeader(
                       title: data['guardian_name'] as String,
-                      subtitle: '${children.length} ${children.length == 1 ? 'child' : 'children'} · family view (read-only)',
+                      subtitle: t('${children.length} ${children.length == 1 ? 'child' : 'children'} · family view (read-only)',
+                          '${children.length} बच्चे · परिवार दृश्य (केवल देखने के लिए)'),
                       image: 'assets/images/badge.webp',
                       imageSize: 88,
                     ),
                     for (final child in children) ...[
                       Section(child['student']['name'] as String),
                       if ((child['applications'] as List).isEmpty)
-                        const Text('Registered — application NOT submitted.'),
+                        Text(t('Registered — application NOT submitted.', 'पंजीकृत — आवेदन जमा नहीं हुआ।')),
                       for (final a in (child['applications'] as List).cast<Map<String, dynamic>>())
                         ApplicationCard(application: a),
-                      Text('Received: ${rupees(child['total_received'] as num)}'),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text('${t('Received so far', 'अब तक मिला')}: ${rupees(child['total_received'] as num)}',
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                      ),
                     ],
                   ]);
                 },

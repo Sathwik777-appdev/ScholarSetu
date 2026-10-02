@@ -11,7 +11,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app.config import settings
 from app.database import AsyncSessionLocal
-from app.gateway.models import OtpChallenge, OutboundSms
+from app.gateway.models import OtpChallenge
 from app.ledger.models import Application, LedgerEvent
 from app.ledger.service import LedgerError, LedgerService
 from app.shared.types import CanonicalState, SchemeType, UserRole
@@ -33,18 +33,6 @@ async def test_parallel_otp_guesses_cannot_exceed_the_limits(client, db, demo):
     # At most OTP_MAX_ATTEMPTS guesses are ever checked against the code (the last one is answered 429).
     assert recorded == settings.OTP_MAX_ATTEMPTS and checked == settings.OTP_MAX_ATTEMPTS - 1
     assert {r.status_code for r in rs} <= {401, 429} and any(r.status_code == 429 for r in rs)
-
-
-# ── A10: registration cannot flood a registered user's phone ──────────────────
-
-
-async def test_register_start_for_a_registered_number_is_rate_limited(client, db, demo):
-    phone = PHONES["sunita"]
-    rs = [await client.post("/v1/auth/register/start", json={"phone": phone}) for _ in range(25)]
-    assert {r.status_code for r in rs} == {202}  # the caller learns nothing either way
-    sent = await db.scalar(select(func.count()).select_from(OutboundSms).where(
-        OutboundSms.to_phone == phone, OutboundSms.category == "REGISTRATION_EXISTS"))
-    assert sent == settings.OTP_REQUESTS_PER_HOUR
 
 
 # ── A3: the public demo outbox never shows a real person's code ───────────────
@@ -152,7 +140,7 @@ async def test_unreachable_database_is_503_waking_with_retry_after(monkeypatch):
     down = DBAPIError("SELECT 1", {}, ConnectionRefusedError("connection refused"))
     response = await unhandled_error(_FakeRequest(), down)
     await asyncio.sleep(0)
-    assert response.status_code == 503 and response.headers["retry-after"] == "30"
+    assert response.status_code == 503 and response.headers["retry-after"] == "60"
     assert b'"code":"WAKING"' in response.body and sent == [True]
     await unhandled_error(_FakeRequest(), down)  # a second failure within a minute sends no second wake
     await asyncio.sleep(0)
@@ -333,3 +321,51 @@ async def test_one_client_cannot_spray_code_requests_across_many_numbers(client,
         assert (await client.post("/v1/auth/otp/request", headers=other, json={"phone": "9000000098"})).status_code == 202
     finally:
         ratelimit.reset()
+
+
+async def test_a_stopped_cloud_sql_socket_is_503_waking(monkeypatch):
+    """A stopped Cloud SQL instance has no unix socket: asyncpg's connect raises a bare FileNotFoundError."""
+    import asyncio as aio
+    from app.main import unhandled_error
+    from app.shared import wake
+    monkeypatch.setattr(settings, "POWER_MANAGER_URL", "https://power.example")
+    monkeypatch.setattr(wake, "_last_sent", 0.0)
+
+    async def fake_send():
+        return None
+    monkeypatch.setattr(wake, "_send", fake_send)
+
+    async def create_unix_connection():  # same function name as uvloop/asyncio's socket connect
+        raise FileNotFoundError(2, "No such file or directory")
+    try:
+        await create_unix_connection()
+    except FileNotFoundError as exc:
+        response = await unhandled_error(_FakeRequest(), exc)
+    await aio.sleep(0)
+    assert response.status_code == 503 and b"WAKING" in response.body
+    other = FileNotFoundError(2, "No such file or directory", "/rules/missing.json")
+    assert (await unhandled_error(_FakeRequest(), other)).status_code == 500  # a real missing file stays a bug
+
+
+async def test_applications_search_and_open_only(client, demo, users):
+    ministry = await users.headers("ministry")
+    found = (await client.get("/v1/applications", headers=ministry, params={"q": "sunita"})).json()
+    assert [a["student_name"] for a in found] == ["Sunita Hansda"]
+    by_id = (await client.get("/v1/applications", headers=ministry, params={"q": demo["sunita_application"][-6:]})).json()
+    assert [a["id"] for a in by_id] == [demo["sunita_application"]]
+    open_ids = {a["id"] for a in (await client.get("/v1/applications", headers=ministry,
+                                                   params={"open_only": "true"})).json()}
+    assert demo["rahul_application"] not in open_ids and demo["sunita_application"] in open_ids  # Rahul's is credited
+
+
+def test_jago_understands_the_apps_suggested_questions_and_romanised_hindi():
+    from app.jago_skill.tools import Intent, detect_intent
+    # The three suggestion chips in the app (lib/ui/jago_screen.dart), both languages.
+    assert detect_intent("मेरी छात्रवृत्ति की स्थिति क्या है?") == Intent.STATUS_CHECK
+    assert detect_intent("मेरा पैसा कब आएगा?") == Intent.PAYMENT_INFO
+    assert detect_intent("क्या कोई काम बाकी है?") == Intent.DEFICIENCY_HELP
+    assert detect_intent("What is my scholarship status?") == Intent.STATUS_CHECK
+    assert detect_intent("When will my money come?") == Intent.PAYMENT_INFO
+    assert detect_intent("Is anything pending from me?") == Intent.DEFICIENCY_HELP
+    assert detect_intent("Meri scholarship ki sthiti kya hai?") == Intent.STATUS_CHECK
+    assert detect_intent("mera kya kaam baaki hai") == Intent.DEFICIENCY_HELP

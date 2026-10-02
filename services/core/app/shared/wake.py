@@ -27,6 +27,15 @@ def _is_db_unreachable(exc: BaseException) -> bool:
     from sqlalchemy.exc import DBAPIError, IntegrityError
     if isinstance(exc, (ConnectionRefusedError, ConnectionResetError)):  # raised by asyncpg before SQLAlchemy wraps
         return True
+    # A stopped Cloud SQL instance has no socket: asyncpg raises FileNotFoundError for /cloudsql/.../.s.PGSQL.5432.
+    # Only that socket counts; any other missing file is a real bug and stays a 500.
+    if isinstance(exc, FileNotFoundError):
+        path = str(getattr(exc, "filename", "") or "")
+        if "/cloudsql/" in path or ".s.PGSQL" in path:
+            return True
+        import traceback
+        frames = {(f.name, f.filename) for f in traceback.extract_tb(exc.__traceback__)}
+        return any(name == "create_unix_connection" or "asyncpg" in filename for name, filename in frames)
     if isinstance(exc, DBAPIError) and not isinstance(exc, IntegrityError):
         if exc.connection_invalidated or isinstance(exc.orig, (ConnectionError, TimeoutError, OSError)):
             return True

@@ -4,6 +4,7 @@ import { useApi } from '../hooks/useApi';
 import { ApiView, Card, EmptyState } from '../components/States';
 import StatusBadge from '../components/StatusBadge';
 import { formatCurrency, formatDateTime, humanize, schemeLabel } from '../utils/formatters';
+import { describeActor, describeEvent } from '../utils/events';
 import type { Application, ChainVerification, DBTStatus, LedgerEvent } from '../types';
 import { useAuth } from '../auth/auth';
 import { BankCheckButton, DocumentsPanel, SanctionPanel, StageActions } from '../components/Workbench';
@@ -90,8 +91,8 @@ export default function ApplicationDetail() {
               {events.map((e) => (
                 <li key={e.event_id} className="ml-4">
                   <span className="absolute -left-1.5 mt-1.5 w-3 h-3 rounded-full bg-slate-400" />
-                  <p className="text-sm font-semibold">{humanize(e.type.replace(/([a-z])([A-Z])/g, '$1_$2'))}</p>
-                  <p className="text-xs text-slate-500">{formatDateTime(e.occurred_at)} · {e.actor} · via {e.source}</p>
+                  <p className="text-sm font-medium text-slate-900">{describeEvent(e.type, e.payload)}</p>
+                  <p className="text-[13px] text-slate-500">{formatDateTime(e.occurred_at)} · {describeActor(e.actor, e.source)}</p>
                   {Array.isArray(e.payload.document_ids) && e.payload.document_ids.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-2">
                       {(e.payload.document_ids as string[]).map((docId) => (
@@ -102,10 +103,13 @@ export default function ApplicationDetail() {
                       ))}
                     </div>
                   )}
-                  {Object.keys(e.payload).length > 0 && (
-                    <pre className="mt-1 text-xs bg-slate-50 border border-slate-200 rounded p-2 overflow-x-auto">{JSON.stringify(e.payload, null, 2)}</pre>
-                  )}
-                  <p className="text-[10px] font-mono text-slate-400 mt-1 flex items-center gap-1 break-all"><Link2 className="w-3 h-3 shrink-0" />{e.hash}</p>
+                  <details className="mt-1 group">
+                    <summary className="cursor-pointer text-[12px] text-slate-400 hover:text-slate-600">Technical details (for audit)</summary>
+                    {Object.keys(e.payload).length > 0 && (
+                      <pre className="mt-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-2 text-[12px]">{JSON.stringify(e.payload, null, 2)}</pre>
+                    )}
+                    <p className="mt-1 flex items-center gap-1 break-all font-mono text-[12px] text-slate-400"><Link2 className="h-3 w-3 shrink-0" />{e.hash}</p>
+                  </details>
                 </li>
               ))}
             </ol>

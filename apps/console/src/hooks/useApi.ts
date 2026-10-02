@@ -36,5 +36,11 @@ export function useApi<T>(endpoint: string | null, params?: Record<string, strin
   }, [endpoint, paramKey, nonce]);
 
   const reload = useCallback(() => setNonce((n) => n + 1), []);
+  // Reload once the API has finished starting up (see components/WakingBanner.tsx).
+  useEffect(() => {
+    const onReady = () => setNonce((n) => n + 1);
+    window.addEventListener('scholarsetu:ready', onReady);
+    return () => window.removeEventListener('scholarsetu:ready', onReady);
+  }, []);
   return { data, loading, error, reload };
 }

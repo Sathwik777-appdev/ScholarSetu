@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/api.dart';
+import '../i18n.dart';
 import '../state/providers.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -74,7 +75,7 @@ class _DigiLockerScreenState extends ConsumerState<DigiLockerScreen> with Widget
 
   Future<void> _openSignIn() async {
     final ok = await launchUrl(Uri.parse(_authorizeUrl!), mode: LaunchMode.externalApplication);
-    if (!ok && mounted) setState(() => _error = 'Could not open the browser for $_label.');
+    if (!ok && mounted) setState(() => _error = t('Could not open the browser for $_label.', '$_label के लिए ब्राउज़र नहीं खुल सका।'));
   }
 
   Future<void> _refresh() async {
@@ -97,7 +98,7 @@ class _DigiLockerScreenState extends ConsumerState<DigiLockerScreen> with Widget
       final n = (r['imported'] as List).length;
       ref.invalidate(walletProvider);
       if (!mounted) return;
-      showMessage(context, 'Imported $n document${n == 1 ? '' : 's'} from $_label.');
+      showMessage(context, t('Imported $n document${n == 1 ? '' : 's'} from $_label.', '$_label से $n दस्तावेज़ लाए गए।'));
       Navigator.of(context).pop();
     } catch (e) {
       if (mounted) setState(() => _error = errorText(e));
@@ -110,7 +111,7 @@ class _DigiLockerScreenState extends ConsumerState<DigiLockerScreen> with Widget
     final status = _session?['status'] as String?;
     final docs = ((_session?['documents'] as List?) ?? const []).cast<Map<String, dynamic>>();
     return Scaffold(
-      appBar: AppBar(title: Text('Get from $_label')),
+      appBar: AppBar(title: Text(t('Get from $_label', '$_label से लाएँ'))),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         if (_testService)
           Container(
@@ -118,33 +119,35 @@ class _DigiLockerScreenState extends ConsumerState<DigiLockerScreen> with Widget
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.orange.shade300)),
-            child: Text('$_label: a test service. Documents from it are test data, not issuer-signed.',
+            child: Text(t('$_label: a test service. Documents from it are test data, not issuer-signed.', '$_label: एक परीक्षण सेवा। इसके दस्तावेज़ परीक्षण डेटा हैं, जारीकर्ता द्वारा हस्ताक्षरित नहीं।'),
                 style: TextStyle(color: Colors.orange.shade900, fontWeight: FontWeight.w600)),
           ),
         if (_error != null) ErrorBox(message: _error!),
         if (_busy && _session == null) const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())),
         if (_sessionId != null && (status == null || status == 'PENDING')) ...[
-          const Text('Sign in to DigiLocker in your browser and allow ScholarSetu to read your documents, '
-              'then come back here.'),
+          Text(t('Sign in to DigiLocker in your browser and allow ScholarSetu to read your documents, then come back here.',
+              'ब्राउज़र में DigiLocker में साइन इन करें और ScholarSetu को अपने दस्तावेज़ पढ़ने की अनुमति दें, फिर यहाँ लौटें।')),
           const SizedBox(height: 12),
           OutlinedButton.icon(onPressed: _openSignIn, icon: const Icon(Icons.open_in_browser),
-              label: const Text('Open the sign-in page again')),
+              label: Text(t('Open the sign-in page again', 'साइन-इन पेज फिर से खोलें'))),
           const SizedBox(height: 8),
-          const Row(children: [
-            SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-            SizedBox(width: 10),
-            Text('Waiting for DigiLocker…', style: TextStyle(color: AppColors.muted)),
+          Row(children: [
+            const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(width: 10),
+            Text(t('Waiting for DigiLocker…', 'DigiLocker की प्रतीक्षा…'), style: const TextStyle(color: AppColors.muted)),
           ]),
         ],
         if (status == 'FAILED') ...[
-          Text(_session?['error'] as String? ?? 'The sign-in did not complete.'),
+          Text(_session?['error'] as String? ?? t('The sign-in did not complete.', 'साइन-इन पूरा नहीं हुआ।')),
           const SizedBox(height: 12),
-          FilledButton(onPressed: _busy ? null : _connect, child: const Text('Try again')),
+          FilledButton(onPressed: _busy ? null : _connect, child: Text(t('Try again', 'फिर से कोशिश करें'))),
         ],
         if (status == 'CONNECTED') ...[
-          Text('Signed in as ${_session?['digilocker_name'] ?? 'you'}. Choose the documents to import:',
+          Text(t('Signed in as ${_session?['digilocker_name'] ?? 'you'}. Choose the documents to import:',
+                  '${_session?['digilocker_name'] ?? 'आप'} के रूप में साइन इन। लाने के लिए दस्तावेज़ चुनें:'),
               style: Theme.of(context).textTheme.titleSmall),
-          if (docs.isEmpty) const Padding(padding: EdgeInsets.only(top: 8), child: Text('No issued documents in DigiLocker.')),
+          if (docs.isEmpty)
+            Padding(padding: const EdgeInsets.only(top: 8), child: Text(t('No issued documents in DigiLocker.', 'DigiLocker में कोई जारी दस्तावेज़ नहीं।'))),
           for (final d in docs)
             CheckboxListTile(
               value: d['already_imported'] == true || _chosen.contains(d['uri']),
@@ -152,11 +155,11 @@ class _DigiLockerScreenState extends ConsumerState<DigiLockerScreen> with Widget
                   ? null
                   : (v) => setState(() => v == true ? _chosen.add(d['uri'] as String) : _chosen.remove(d['uri'])),
               title: Text(d['name'] as String? ?? d['doctype'] as String? ?? 'Document'),
-              subtitle: Text('${d['issuer'] ?? ''}${d['already_imported'] == true ? ' · already in your wallet' : ''}'),
+              subtitle: Text('${d['issuer'] ?? ''}${d['already_imported'] == true ? ' · ${t('already in your wallet', 'पहले से आपके वॉलेट में')}' : ''}'),
             ),
           const SizedBox(height: 12),
           FilledButton(onPressed: _busy || _chosen.isEmpty ? null : _import,
-              child: Text(_busy ? 'Importing…' : 'Import ${_chosen.length} document${_chosen.length == 1 ? '' : 's'}')),
+              child: Text(_busy ? t('Importing…', 'ला रहे हैं…') : t('Import ${_chosen.length} document${_chosen.length == 1 ? '' : 's'}', '${_chosen.length} दस्तावेज़ लाएँ'))),
         ],
       ]),
     );
