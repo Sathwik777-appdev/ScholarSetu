@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     SKILL_SERVICE_TOKEN: str | None = None
 
     GROQ_API_KEY: str | None = None
-    GROQ_MODEL: str = "llama3-70b-8192"
+    GROQ_MODEL: str = "openai/gpt-oss-20b"
 
     # DigiLocker, authorised-partner OAuth 2.0 (authorisation code + PKCE).
     #   mock       the test DigiLocker in mocks/: documents are test data, never issuer-signed, and never

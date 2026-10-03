@@ -98,10 +98,10 @@ class _JagoScreenState extends ConsumerState<JagoScreen> {
                   builder: (c) => AlertDialog(
                     title: Text(t('Use AI phrasing?', 'AI भाषा इस्तेमाल करें?')),
                     content: Text(t(
-                        'Your questions and JAGO\'s verified answers will be sent to Google (Gemini) so they can be '
+                        'Your questions and JAGO\'s verified answers will be sent to Groq AI so they can be '
                         're-worded. Amounts, dates and application numbers are always checked against your records, '
                         'and the verified answer stays available. You can turn this off at any time.',
-                        'आपके सवाल और JAGO के सत्यापित जवाब Google (Gemini) को दोबारा लिखने के लिए भेजे जाएँगे। राशि, तिथियाँ और '
+                        'आपके सवाल और JAGO के सत्यापित जवाब Groq AI को दोबारा लिखने के लिए भेजे जाएँगे। राशि, तिथियाँ और '
                         'आवेदन संख्या हमेशा आपके रिकॉर्ड से जाँची जाती हैं, और सत्यापित जवाब उपलब्ध रहता है। इसे कभी भी बंद कर सकते हैं।')),
                     actions: [
                       TextButton(onPressed: () => Navigator.pop(c, false), child: Text(t('No', 'नहीं'))),
