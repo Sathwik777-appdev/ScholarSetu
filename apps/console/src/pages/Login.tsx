@@ -132,13 +132,13 @@ export default function Login() {
           {/* Hero Logo (Center empty space) */}
           <div className="flex flex-1 items-center justify-center my-8 lg:my-0">
             <div className="relative">
-              {/* Huge Custom Logo Image */}
-              <img src="/hero-logo.jpg" alt="ScholarSetu Logo" className="relative h-48 w-auto lg:h-72 rounded-3xl shadow-2xl" />
+              <div className="absolute inset-0 bg-gradient-to-br from-[#ff9933] via-white to-[#138808] blur-2xl opacity-10 rounded-full scale-110" />
+              <img src="/hero-logo.png" alt="ScholarSetu Logo" className="relative h-48 w-auto lg:h-72 drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]" />
             </div>
           </div>
 
           {/* Slogan & Typography (Bottom) */}
-          <div className="max-w-xl">
+          <div className="max-w-xl mx-auto flex flex-col items-center text-center">
             <h1 className="text-4xl lg:text-5xl font-outfit font-extrabold leading-[1.1] tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-white via-slate-100 to-slate-400">
               Building Bridges to <br/>
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ff9933] via-white to-[#138808]">Tribal Education.</span>
@@ -147,7 +147,7 @@ export default function Login() {
               Verify once, reuse everywhere. A unified platform bringing transparency and speed to every tribal student's scholarship journey.
             </p>
             
-            <div className="mt-8 flex items-center gap-4 text-sm font-medium text-slate-400">
+            <div className="mt-8 flex items-center justify-center gap-4 text-sm font-medium text-slate-400">
               <div className="flex items-center gap-1.5">
                 <div className="h-2 w-2 rounded-full bg-[#138808] shadow-[0_0_8px_rgba(19,136,8,0.8)]" />
                 Live and Audited
