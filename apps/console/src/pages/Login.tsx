@@ -4,7 +4,6 @@ import { ArrowLeft, Building2, ChevronRight, Landmark, Mail, MapPin, School, Shi
 import { errorMessage } from '../api/client';
 import { useAuth } from '../auth/auth';
 import { useDemoMode, type DemoAccount } from '../auth/demo';
-import { Hero3D } from '../components/Lazy3D';
 import { BrandMark } from '../components/Sidebar';
 import { ROLE_LABELS } from '../utils/formatters';
 
