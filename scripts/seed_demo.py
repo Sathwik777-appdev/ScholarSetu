@@ -34,11 +34,13 @@ from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
 from app.database import AsyncSessionLocal, Base, engine  # noqa: E402
 import app.models  # noqa: E402,F401
+from app.attestation.keys import get_signer  # noqa: E402
+from app.attestation.service import AttestationService  # noqa: E402
 from app.gateway.models import User  # noqa: E402
 from app.ledger.models import Household  # noqa: E402
 from app.wallet.models import WalletDocument  # noqa: E402
 from app.ledger.service import LedgerService  # noqa: E402
-from app.shared.types import CanonicalState, Gender, SchemeType, UserRole  # noqa: E402
+from app.shared.types import AttestationStatus, CanonicalState, ClaimType, Gender, SchemeType, UserRole, VerificationMethod  # noqa: E402
 from app.students.service import create_student  # noqa: E402
 
 SEED_ACTOR = "system:seed_demo"
@@ -111,6 +113,25 @@ async def seed(db: AsyncSession, now: datetime | None = None) -> dict:
             size_bytes=1024, issuer_signed=True, uploaded_by=SEED_ACTOR, created_at=now
         )
     ])
+    
+    # Hardcoded attestations (passport claims) for Sunita
+    att_service = AttestationService(db, get_signer())
+    await att_service.issue_attestation(
+        student_id="stu-sunita-001", claim_type=ClaimType.IDENTITY,
+        claim_value={"name": "Sunita Hansda", "dob": "2008-04-12", "gender": "F"},
+        source="UIDAI", method=VerificationMethod.CRYPTOGRAPHIC, confidence=1.0, evidence_hash="dummy"
+    )
+    await att_service.issue_attestation(
+        student_id="stu-sunita-001", claim_type=ClaimType.ST_STATUS,
+        claim_value={"tribe": "Santal", "state": "Jharkhand"},
+        source="Revenue Department, Jharkhand", method=VerificationMethod.CRYPTOGRAPHIC, confidence=1.0, evidence_hash="dummy"
+    )
+    await att_service.issue_attestation(
+        student_id="stu-sunita-001", claim_type=ClaimType.INCOME,
+        claim_value={"family_income": 45000},
+        source="Revenue Department, Jharkhand", method=VerificationMethod.CRYPTOGRAPHIC, confidence=1.0, evidence_hash="dummy"
+    )
+    
     await db.commit()
     return {"sunita_application": sunita.id}
 
