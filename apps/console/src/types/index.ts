@@ -27,6 +27,7 @@ export interface AuthTokenResponse {
   access_token: string;
   token_type: string;
   expires_in: number;
+  refresh_token?: string | null;
   user: AuthUser;
 }
 
@@ -102,6 +103,8 @@ export interface ReviewCase {
   decided_at: string | null;
   notes: string | null;
   decision_event_id: string | null;
+  info_response: string | null;
+  info_responded_at: string | null;
   sla_deadline: string;
 }
 

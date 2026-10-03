@@ -6,8 +6,6 @@ import '../i18n.dart';
 import '../data/repository.dart';
 import '../state/providers.dart';
 import 'labels.dart';
-import 'server_sheet.dart';
-import 'theme.dart';
 
 /// Says what is actually happening: whether the server answered the last request, how many saved
 /// changes are waiting, and what was refused. Hidden while online with nothing pending.
@@ -170,7 +168,8 @@ void showMessage(BuildContext context, String text) =>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
 String errorText(Object e) {
-  if (e is ApiException && e.code == 'WAKING') {
+  // 502/504 is what the hosting gateway answers while the database is still starting.
+  if (e is ApiException && (e.code == 'WAKING' || e.status == 502 || e.status == 504)) {
     return t('ScholarSetu is starting up after being idle. This takes a few minutes; please try again shortly.',
         'ScholarSetu कुछ देर बंद रहने के बाद शुरू हो रहा है। इसमें कुछ मिनट लगते हैं; थोड़ी देर बाद फिर कोशिश करें।');
   }

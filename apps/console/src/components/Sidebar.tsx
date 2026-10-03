@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { BarChart3, ClipboardCheck, CreditCard, Inbox, LayoutDashboard, List, LogOut, Map, MessageSquare, ShieldCheck, UserPlus } from 'lucide-react';
+import { BarChart3, ClipboardCheck, CreditCard, Inbox, LayoutDashboard, List, LogOut, Map, MessageSquare, RefreshCw, ShieldCheck, UserPlus } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ANALYTICS_ROLES, useAuth } from '../auth/auth';
 import { ROLE_LABELS } from '../utils/formatters';
@@ -26,6 +26,8 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
   ] },
   { title: 'Administration', items: [
     { name: 'Data requests', href: '/data-requests', icon: ShieldCheck, analyticsOnly: true },
+    { name: 'Portal sync', href: '/portal-sync', icon: RefreshCw },
+    { name: 'Outreach', href: '/outreach', icon: MessageSquare },
     { name: 'Officers', href: '/manage-officers', icon: UserPlus, ministryOnly: true },
     { name: 'Demo SMS', href: '/demo-sms', icon: MessageSquare, ministryOnly: true },
   ] },

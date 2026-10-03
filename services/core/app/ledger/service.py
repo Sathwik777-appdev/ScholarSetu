@@ -475,7 +475,8 @@ class LedgerService:
                             "reference_id": case.id,
                             "description": f"An officer needs more information about your {case.claim_type.value}: "
                                            f"{case.notes or 'see the officer note'}",
-                            "deadline": case.sla_deadline, "action_url": None})
+                            "deadline": case.sla_deadline,
+                            "action_url": f"/v1/review/cases/{case.id}/respond"})
         now = datetime.now(timezone.utc)
         soon = now + timedelta(days=settings.ATTESTATION_EXPIRY_WARNING_DAYS)
         attestations = (await self.db.execute(select(Attestation).where(

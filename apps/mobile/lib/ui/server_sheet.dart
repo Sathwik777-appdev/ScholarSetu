@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import '../config.dart';
+import '../i18n.dart';
 import '../state/providers.dart';
 import 'theme.dart';
 
@@ -144,10 +145,10 @@ class _ServerConfigSheetState extends State<_ServerConfigSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Server Connection', style: Theme.of(context).textTheme.titleLarge),
+                      Text(t('Server Connection', 'सर्वर कनेक्शन'), style: Theme.of(context).textTheme.titleLarge),
                       const SizedBox(height: 2),
-                      const Text(
-                        'Set the ScholarSetu Core API endpoint',
+                      Text(
+                        t('Set the ScholarSetu Core API endpoint', 'ScholarSetu सर्वर का पता तय करें'),
                         style: TextStyle(color: AppColors.muted, fontSize: 13),
                       ),
                     ],
@@ -161,7 +162,7 @@ class _ServerConfigSheetState extends State<_ServerConfigSheet> {
               keyboardType: TextInputType.url,
               autocorrect: false,
               decoration: InputDecoration(
-                labelText: 'Server Base URL',
+                labelText: t('Server Base URL', 'सर्वर का पता'),
                 hintText: 'http://192.168.31.202:8000',
                 prefixIcon: const Icon(Icons.link_rounded),
                 suffixIcon: IconButton(
@@ -171,7 +172,7 @@ class _ServerConfigSheetState extends State<_ServerConfigSheet> {
               ),
             ),
             const SizedBox(height: 12),
-            const Text('Quick presets:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.muted)),
+            Text(t('Quick presets:', 'त्वरित विकल्प:'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.muted)),
             const SizedBox(height: 6),
             Wrap(
               spacing: 8,
@@ -248,14 +249,14 @@ class _ServerConfigSheetState extends State<_ServerConfigSheet> {
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Test Connection'),
+                        : Text(t('Test Connection', 'कनेक्शन जाँचें')),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
                     onPressed: _testing ? null : _save,
-                    child: const Text('Save & Apply'),
+                    child: Text(t('Save & Apply', 'सहेजें और लागू करें')),
                   ),
                 ),
               ],

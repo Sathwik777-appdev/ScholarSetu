@@ -36,6 +36,9 @@ class ReviewCase(Base):
     decided_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     decision_event_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # The student's answer to a REQUEST_INFO decision; answering reopens the case for the officer.
+    info_response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    info_responded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     sla_deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
 

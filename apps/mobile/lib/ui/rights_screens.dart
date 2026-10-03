@@ -183,6 +183,21 @@ class _BankFixScreenState extends ConsumerState<BankFixScreen> {
     }
   }
 
+  /// Demo only: the server offers this just when it runs against the test bank service.
+  Future<void> _pretendFixed() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await _api(ref).post('/dbt/applications/${widget.applicationId}/simulate-bank-fix');
+      if (mounted) showMessage(context, t('Test bank service updated. Now check again.', 'टेस्ट बैंक सेवा बदल दी गई। अब फिर से जाँचें।'));
+    } catch (e) {
+      if (mounted) setState(() => _error = errorText(e));
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
   Future<void> _retryNow() async {
     setState(() {
       _busy = true;
@@ -225,6 +240,15 @@ class _BankFixScreenState extends ConsumerState<BankFixScreen> {
                   title: Text(step as String)),
           ],
           const SizedBox(height: 12),
+          if (_status?['can_simulate_bank_fix'] == true)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: OutlinedButton.icon(
+                onPressed: _busy ? null : _pretendFixed,
+                icon: const Icon(Icons.science_outlined),
+                label: Text(t('Test only: pretend my bank fixed it', 'सिर्फ़ टेस्ट: मान लें बैंक ने ठीक कर दिया')),
+              ),
+            ),
           if (payment['state'] == 'FAILED')
             FilledButton(
               onPressed: _busy ? null : _retryNow,

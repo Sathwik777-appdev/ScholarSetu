@@ -81,6 +81,14 @@ def do_wake() -> dict[str, Any]:
     Cloud SQL answers 409 while its previous operation runs, and a VM that is still stopping ignores a start,
     so both are retried until they take or WAKE_PATIENCE_SECONDS pass."""
     headers = _headers()
+    # Already awake or starting (the API asks again every minute until the database answers): answer at once instead
+    # of queueing behind the start that is under way, which is what held these requests for 90 seconds.
+    current = _state(headers)
+    if current["cloud_sql"]["policy"] == "ALWAYS" and current["vm"]["status"] in ("RUNNING", "PROVISIONING", "STAGING"):
+        ready = current["cloud_sql"]["state"] == "RUNNABLE" and current["vm"]["status"] == "RUNNING"
+        logger.info("wake: already %s (SQL %s, VM %s)", "awake" if ready else "starting",
+                    current["cloud_sql"]["state"], current["vm"]["status"])
+        return {"state": "awake" if ready else "waking", "already": True, "complete": True}
     deadline = time.monotonic() + WAKE_PATIENCE_SECONDS
     sql = requests.patch(SQL_URL, headers=headers, json={"settings": {"activationPolicy": "ALWAYS"}}, timeout=TIMEOUT)
     while sql.status_code == 409 and time.monotonic() < deadline:

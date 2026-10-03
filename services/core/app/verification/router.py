@@ -2,15 +2,16 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.dependencies import OFFICER_ROLES, Reader, officer_or_student, require_role
+from app.dependencies import OFFICER_ROLES, Reader, StudentPrincipal, officer_or_student, require_role, student_principal
 from app.gateway.models import User
-from app.ledger.router import ensure_application_access
+from app.ledger.router import actor_of, ensure_application_access
 from app.consent.service import ConsentError, ConsentService
 from app.shared.types import MitraScope, ReviewCaseStatus
 from app.students.service import StudentNotFound
 from app.verification.schemas import (
-    ReviewCaseOut, ReviewDecisionRequest, ReviewDecisionResponse, VerificationReport, VerifyClaimsRequest,
+    InfoResponseRequest, ReviewCaseOut, ReviewDecisionRequest, ReviewDecisionResponse, VerificationReport, VerifyClaimsRequest,
 )
+from app.verification.plugins.base import source_label
 from app.verification.service import ReviewCaseError, VerificationMeshService, get_verification_service
 
 router = APIRouter(prefix="/v1", tags=["Verification Mesh & Review"])
@@ -71,6 +72,22 @@ async def post_review_decision(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
 
 
+@router.post("/review/cases/{case_id}/respond", response_model=ReviewCaseOut)
+async def respond_to_info_request(
+    case_id: str, body: InfoResponseRequest,
+    principal: StudentPrincipal = Depends(student_principal(MitraScope.RESPOND_DEFICIENCY)),
+    service: VerificationMeshService = Depends(get_verification_service),
+):
+    """The student (or a helper they allowed) answers an officer's request for more information. The case goes back
+    to the officer's queue with the answer attached."""
+    try:
+        return await service.respond_info(case_id, principal.student_id, body.response_text.strip(),
+                                          actor_of(principal.user),
+                                          principal.assist_session.id if principal.via_mitra else None)
+    except ReviewCaseError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+
+
 CLAIM_LABELS = {
     "IDENTITY": "Your identity (Aadhaar e-KYC)", "ST_STATUS": "Scheduled Tribe certificate",
     "INCOME": "Family income certificate", "DOMICILE": "Domicile certificate",
@@ -111,7 +128,7 @@ async def verification_plan(application_id: str,
     names: list = ["IDENTITY"]
     _claims_in(table, names)
     claims = [ClaimType(n) for n in dict.fromkeys(names) if n in ClaimType.__members__]
-    sources = {c: [p.source_name for p in service.verifiers.get(c, [])] for c in claims}
+    sources = {c: [source_label(p.source_name) for p in service.verifiers.get(c, [])] for c in claims}
     rows = (await service.db.execute(select(Attestation).where(
         Attestation.student_id == app.student_id, Attestation.claim_type.in_(claims),
         Attestation.status.in_([AttestationStatus.ACTIVE, AttestationStatus.PROVISIONAL]))

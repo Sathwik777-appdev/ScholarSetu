@@ -247,7 +247,7 @@ async def test_verification_plan_lists_the_rules_claims_and_their_sources(client
     claims = {c["claim_type"]: c for c in plan["claims"]}
     assert plan["claims"][0]["claim_type"] == "IDENTITY"
     assert {"ST_STATUS", "INCOME"} <= set(claims)  # Post-Matric rules read both
-    assert "e-District" in claims["INCOME"]["sources"] and claims["INCOME"]["status"] == "NOT_VERIFIED"
+    assert "e-District (test)" in claims["INCOME"]["sources"] and claims["INCOME"]["status"] == "NOT_VERIFIED"
     assert plan["consent"]["data_items"] == [c["claim_type"] for c in plan["claims"]]
 
     # Consent to exactly that list, verify, and the plan reflects the outcome.
@@ -258,7 +258,7 @@ async def test_verification_plan_lists_the_rules_claims_and_their_sources(client
     assert report.status_code == 200, report.text
     after = {c["claim_type"]: c for c in (await client.get(f"/v1/applications/{app_id}/verification-plan",
                                                            headers=sunita)).json()["claims"]}
-    assert after["INCOME"]["status"] == "VERIFIED" and after["INCOME"]["verified_by"] == "e-District"
+    assert after["INCOME"]["status"] == "VERIFIED" and after["INCOME"]["verified_by"] == "e-District (test)"
     # F9: each signed attestation fits in one QR code (binary mode, error correction L: 2953 bytes).
     passport = (await client.get("/v1/me/attestations", headers=sunita)).json()["attestations"]
     signatures = [a["signature"] for items in passport.values() for a in items]

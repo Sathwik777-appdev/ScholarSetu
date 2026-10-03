@@ -145,4 +145,100 @@ void main() {
     await expectLater(repo.cached('payments', '/me/payments'), throwsA(isA<OfflineException>()));
     await db.close();
   });
+
+  group('an expired sign-in (access token lasts 15 minutes)', () {
+    /// A server whose access token "old" has expired. /auth/refresh swaps the refresh token for a new pair once.
+    http.Client expiringServer({required List<String> log, int refreshStatus = 200, bool refreshReachable = true}) =>
+        MockClient((req) async {
+          log.add('${req.method} ${req.url.path} ${req.headers['authorization'] ?? ''}');
+          if (req.url.path.endsWith('/auth/refresh')) {
+            if (!refreshReachable) throw http.ClientException('network is unreachable');
+            if (refreshStatus != 200) return http.Response('{"detail":"Your session has ended."}', refreshStatus);
+            expect(jsonDecode(req.body)['refresh_token'], 'refresh-1');
+            return http.Response(jsonEncode({'access_token': 'new', 'refresh_token': 'refresh-2'}), 200);
+          }
+          if (req.headers['authorization'] != 'Bearer new') return http.Response('{"detail":"Invalid token"}', 401);
+          if (req.url.path.endsWith('/sync/outbox')) {
+            final items = (jsonDecode(req.body)['items'] as List).cast<Map<String, dynamic>>();
+            return http.Response(jsonEncode({'results': [
+              for (final i in items)
+                {'idempotency_key': i['idempotency_key'], 'action': i['action'], 'status': 'APPLIED', 'http_status': 200,
+                 'result': {}}
+            ]}), 200);
+          }
+          return http.Response(jsonEncode({'ok': true}), 200);
+        });
+
+    test('is renewed with the refresh token and the request is repeated, with no new code asked for', () async {
+      final log = <String>[];
+      final api = Api('http://api/v1', client: expiringServer(log: log))
+        ..token = 'old'
+        ..refreshToken = 'refresh-1';
+      final saved = <String>[];
+      api.onTokensRenewed = (a, r) async => saved.add('$a/$r');
+      var signedOut = false;
+      api.onUnauthorized = () => signedOut = true;
+
+      expect(await api.get('/me/dashboard'), {'ok': true});
+      expect(saved, ['new/refresh-2'], reason: 'the new pair is saved before it is relied on');
+      expect(api.token, 'new');
+      expect(api.refreshToken, 'refresh-2');
+      expect(signedOut, isFalse);
+      expect(log, ['GET /v1/me/dashboard Bearer old', 'POST /v1/auth/refresh ', 'GET /v1/me/dashboard Bearer new']);
+    });
+
+    test('parallel requests share one renewal (a second use of a refresh token would end the session)', () async {
+      final log = <String>[];
+      final api = Api('http://api/v1', client: expiringServer(log: log))
+        ..token = 'old'
+        ..refreshToken = 'refresh-1';
+      await Future.wait([api.get('/me/dashboard'), api.get('/me/payments'), api.get('/me/notifications')]);
+      expect(log.where((l) => l.contains('/auth/refresh')).length, 1);
+    });
+
+    test('keeps unsent actions and uploads when the server ends the session', () async {
+      final log = <String>[];
+      final server = expiringServer(log: log, refreshStatus: 401);
+      final db = await LocalDb.openFile(file, key1);
+      final api = Api('http://api/v1', client: server)
+        ..token = 'old'
+        ..refreshToken = 'refresh-1';
+      var ended = 0;
+      api.onUnauthorized = () => ended++;
+      final repo = Repository(api, db);
+      await repo.queueUpload('INCOME_CERT', 'Income certificate', 'income.pdf', Uint8List.fromList([37, 80, 68, 70]));
+      await repo.queueAction(OutboxActions.submitApplication, {'application_id': 'APP-1'});
+
+      final report = await repo.drainOutbox();
+      expect(report.refused, 0);
+      expect((await db.outbox(status: 'PENDING')).length, 2, reason: 'nothing may be thrown away because the session ended');
+      expect(await db.outbox(status: 'REJECTED'), isEmpty);
+      expect(ended, greaterThan(0));
+
+      // Signing in again (a new token pair) sends them.
+      api
+        ..token = 'new'
+        ..refreshToken = 'refresh-2';
+      final after = await repo.drainOutbox();
+      expect(after.sent, 2, reason: 'the upload and the action both go once the person signs in again');
+      expect(await db.outbox(status: 'PENDING'), isEmpty);
+      await db.close();
+    });
+
+    test('does not sign anyone out when the server cannot be reached to renew', () async {
+      final api = Api('http://api/v1', client: expiringServer(log: <String>[], refreshReachable: false))
+        ..token = 'old'
+        ..refreshToken = 'refresh-1';
+      var signedOut = false;
+      api.onUnauthorized = () => signedOut = true;
+      await expectLater(api.get('/me/dashboard'), throwsA(isA<OfflineException>()));
+      expect(signedOut, isFalse);
+      expect(api.refreshToken, 'refresh-1', reason: 'still usable when the connection returns');
+    });
+
+    test('a 401 is not a permanent refusal, a 404 is', () {
+      expect(ApiException(401, 'x').isPermanent, isFalse);
+      expect(ApiException(404, 'x').isPermanent, isTrue);
+    });
+  });
 }

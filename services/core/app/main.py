@@ -102,12 +102,38 @@ async def _poll_portals(stop: asyncio.Event) -> None:
         try:
             async with AsyncSessionLocal() as db:
                 results = await AdapterSyncService(db, client).sync_all()
+                from app.dbt_guardian.service import DBTGuardianService
+                dbt = DBTGuardianService(db, client)
+                await dbt.process_scheduled_payments()
+                await dbt.poll_in_flight_payments()
+
+                await db.commit()
             logger.info("portal sync: %d students, %d imported, %d parked", len(results),
                         sum(len(r.imported) for r in results), sum(r.parked for r in results))
         except Exception:
             logger.exception("portal sync failed")
         finally:
             await client.aclose()
+
+
+async def _purge_forever(stop: asyncio.Event) -> None:
+    """Delete rows with no further use, a minute after start and then every RETENTION_INTERVAL_SECONDS."""
+    from app.privacy.retention import purge_expired
+    delay = 60.0
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=delay)
+            break
+        except asyncio.TimeoutError:
+            pass
+        delay = float(settings.RETENTION_INTERVAL_SECONDS)
+        try:
+            async with AsyncSessionLocal() as db:
+                counts = await purge_expired(db)
+                await db.commit()
+            logger.info("retention: %s", {k: v for k, v in counts.items() if v})
+        except Exception:
+            logger.exception("retention failed")
 
 
 @asynccontextmanager
@@ -120,9 +146,10 @@ async def lifespan(app: FastAPI):
     reference_task = asyncio.create_task(_prepare_reference_data())
     bus_task = asyncio.create_task(_run_event_bus(stop)) if settings.OUTBOX_PUBLISHER_ENABLED else None
     poll_task = asyncio.create_task(_poll_portals(stop)) if settings.ADAPTER_SYNC_INTERVAL_SECONDS > 0 else None
+    purge_task = asyncio.create_task(_purge_forever(stop)) if settings.RETENTION_INTERVAL_SECONDS > 0 else None
     yield
     stop.set()
-    await asyncio.wait([t for t in (bus_task, reference_task, poll_task) if t], timeout=5)
+    await asyncio.wait([t for t in (bus_task, reference_task, poll_task, purge_task) if t], timeout=5)
     await engine.dispose()
     logger.info("ScholarSetu core stopped")
 

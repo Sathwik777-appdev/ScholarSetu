@@ -57,7 +57,7 @@ async def test_one_source_down_and_one_without_record_is_manual_review(client, p
     st = _claims(report)["ST_STATUS"]
     assert st["status"] == "MANUAL_REVIEW" and report["overall_status"] == "MANUAL_REVIEW"
     assert {s["source"]: s["status"] for s in st["sources_consulted"]} == {
-        "DigiLocker (test)": "MANUAL_REVIEW", "e-District": "SOURCE_UNAVAILABLE"}
+        "DigiLocker (test)": "MANUAL_REVIEW", "e-District (test)": "SOURCE_UNAVAILABLE"}
 
 
 async def test_source_without_a_matching_record_is_never_verified(client, people, gov):
@@ -119,7 +119,7 @@ async def test_hansdah_certificate_opens_review_case_with_provisional_attestatio
     report = (await _verify(client, people["sunita"], ["ST_STATUS"])).json()
     st = _claims(report)["ST_STATUS"]
     assert st["status"] == "PROVISIONAL" and report["overall_status"] == "PROVISIONAL"
-    assert st["source"] == "e-District" and st["identity_decision"] == "PROVISIONAL"
+    assert st["source"] == "e-District (test)" and st["identity_decision"] == "PROVISIONAL"
     assert st["attestation_status"] == "PROVISIONAL" and st["claim_value"]["tribe"] == "Santal"
     assert "Sunita Hansdah" in st["reasons"][0] and "Sunita Hansda" in st["reasons"][0]
 
@@ -129,7 +129,7 @@ async def test_hansdah_certificate_opens_review_case_with_provisional_attestatio
     assert case["id"] == st["review_case_id"] and case["claim_type"] == "ST_STATUS"
     assert case["reason"] == "IDENTITY_NOT_CONFIRMED" and case["status"] == "PENDING"
     assert case["attestation_id"] == st["attestation_id"] and case["student_name"] == "Sunita Hansda"
-    assert {e["source"] for e in case["evidence_refs"]} == {"DigiLocker (test)", "e-District"}
+    assert {e["source"] for e in case["evidence_refs"]} == {"DigiLocker (test)", "e-District (test)"}
 
     db.expire_all()
     subjects = {m.subject for m in (await db.execute(select(OutboxMessage))).scalars()}
@@ -166,7 +166,8 @@ async def test_approve_activates_attestation_and_writes_ledger_event(client, peo
     assert event["payload"]["decision"] == "APPROVE" and event["payload"]["review_case_id"] == case_id
 
     check = await client.get(f"/v1/attestations/{att_id}/verify", headers=bearer(people["sunita"]))
-    assert check.json() == {"is_valid": True, "reason": None}
+    verdict = check.json()
+    assert verdict["is_valid"] is True and verdict["reason"] is None
 
     # Approved attestation is now reused instead of re-verified.
     gov.calls.clear()

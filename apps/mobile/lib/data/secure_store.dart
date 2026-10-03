@@ -3,13 +3,14 @@ import 'dart:math';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Secrets that must never sit in the (encrypted) database file itself: the database key and the
-/// access token. Held in the Android Keystore / iOS Keychain via flutter_secure_storage.
+/// access and refresh tokens. Held in the Android Keystore / iOS Keychain via flutter_secure_storage.
 class SecureStore {
   SecureStore([FlutterSecureStorage? storage]) : _s = storage ?? const FlutterSecureStorage();
 
   final FlutterSecureStorage _s;
   static const _dbKey = 'db_key_v1';
   static const _token = 'access_token';
+  static const _refresh = 'refresh_token';
   static const _apiUrlKey = 'custom_api_url';
   static const _langKey = 'language';
   static const _demoKey = 'demo_mode';
@@ -25,8 +26,18 @@ class SecureStore {
   }
 
   Future<String?> token() => _s.read(key: _token);
-  Future<void> setToken(String value) => _s.write(key: _token, value: value);
-  Future<void> clearToken() => _s.delete(key: _token);
+  Future<String?> refreshToken() => _s.read(key: _refresh);
+
+  /// Both tokens together: the refresh token is single-use, so a renewed pair must be saved before it is relied on.
+  Future<void> setTokens(String access, String? refresh) async {
+    await _s.write(key: _token, value: access);
+    if (refresh != null) await _s.write(key: _refresh, value: refresh);
+  }
+
+  Future<void> clearToken() async {
+    await _s.delete(key: _token);
+    await _s.delete(key: _refresh);
+  }
 
   Future<String?> apiUrl() => _s.read(key: _apiUrlKey);
   Future<void> setApiUrl(String value) => _s.write(key: _apiUrlKey, value: value);

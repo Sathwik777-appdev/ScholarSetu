@@ -135,7 +135,11 @@ class StudentHomeTab extends ConsumerWidget {
                                       deficiencyId: a['reference_id'] as String,
                                       description: a['description'] as String))),
                               child: Text(t('Respond', 'जवाब दें')))
-                          : null,
+                          : a['type'] == 'REVIEW_INFO_REQUESTED' && a['action_url'] != null
+                              ? FilledButton.tonal(
+                                  onPressed: () => _answerOfficer(context, ref, a),
+                                  child: Text(t('Reply', 'जवाब दें')))
+                              : null,
                     ),
                   ),
               ]);
@@ -731,5 +735,42 @@ class _InstalmentTile extends StatelessWidget {
                 builder: (_) => BankFixScreen(applicationId: applicationId, paymentId: i['payment_id'] as String))),
       ),
     );
+  }
+}
+
+
+/// An officer asked for more information about a claim: the student answers in words and the case goes back to the
+/// officer. Needs a connection (the officer's question is current, and the answer is not queued behind other work).
+Future<void> _answerOfficer(BuildContext context, WidgetRef ref, Map<String, dynamic> action) async {
+  final text = TextEditingController();
+  final send = await showDialog<bool>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: Text(t('Reply to the office', 'कार्यालय को जवाब')),
+      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(action['description'] as String, style: const TextStyle(fontSize: 14)),
+        const SizedBox(height: 12),
+        TextField(
+          controller: text,
+          maxLines: 4,
+          maxLength: 2000,
+          decoration: InputDecoration(hintText: t('Write your answer', 'अपना जवाब लिखें')),
+        ),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: Text(t('Cancel', 'रद्द करें'))),
+        TextButton(onPressed: () => Navigator.pop(c, true), child: Text(t('Send', 'भेजें'))),
+      ],
+    ),
+  );
+  if (send != true || text.text.trim().length < 2) return;
+  final url = action['action_url'] as String;
+  try {
+    // The app's base URL already ends in /v1.
+    await ref.read(servicesProvider).api.post(url.startsWith('/v1/') ? url.substring(3) : url, {'response_text': text.text.trim()});
+    ref.invalidate(pendingActionsProvider);
+    if (context.mounted) showMessage(context, t('Your answer was sent to the office.', 'आपका जवाब कार्यालय को भेज दिया गया।'));
+  } catch (e) {
+    if (context.mounted) showMessage(context, errorText(e));
   }
 }

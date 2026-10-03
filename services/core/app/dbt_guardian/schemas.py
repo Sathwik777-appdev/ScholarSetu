@@ -54,6 +54,8 @@ class DBTStatus(BaseModel):
     latest_health_check: Optional[DBTHealthCheckResult]
     payments: list[PaymentWithGuidance]
     retries: list[DBTRetryOut]
+    # True only in a demo against the test bank service: the app then offers "pretend my bank fixed it (test)".
+    can_simulate_bank_fix: bool = False
 
 
 class RetryRequest(BaseModel):

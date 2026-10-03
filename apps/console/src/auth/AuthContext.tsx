@@ -8,6 +8,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [checking, setChecking] = useState(true);
 
   const logout = useCallback(() => {
+    const refresh = tokenStore.getRefresh();
+    // End the session on the server too, so a copied refresh token stops working; failure changes nothing here.
+    if (refresh) apiClient.post('/auth/logout', { refresh_token: refresh }).catch(() => undefined);
     tokenStore.clear();
     setUser(null);
   }, []);
@@ -39,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(`${res.data.user.name || 'This account'} is not an officer account. This console is for officers `
         + 'and the Ministry; students and families use the ScholarSetu app.');
     }
-    tokenStore.set(res.data.access_token);
+    tokenStore.set(res.data.access_token, res.data.refresh_token);
     setUser(res.data.user);
   };
 

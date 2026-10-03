@@ -24,6 +24,7 @@ from app.ledger.service import LedgerError, LedgerService, get_ledger_service
 from app.shared import places
 from app.shared.types import CanonicalState, MitraScope, SchemeType, UserRole
 from app.students.models import Student
+from app.dbt_guardian.service import DBTGuardianService, get_dbt_service
 
 router = APIRouter(prefix="/v1", tags=["Scholarship Ledger"])
 
@@ -356,7 +357,8 @@ async def officer_raise_deficiency(application_id: str, body: RaiseDeficiencyReq
 @router.post("/officer/applications/{application_id}/sanction", response_model=ApplicationOut)
 async def officer_sanction(application_id: str, body: SanctionRequest,
                            officer: User = Depends(require_role(UserRole.DISTRICT_OFFICER, UserRole.STATE_OFFICER)),
-                           ledger: LedgerService = Depends(get_ledger_service)):
+                           ledger: LedgerService = Depends(get_ledger_service),
+                           dbt: DBTGuardianService = Depends(get_dbt_service)):
     """Sanction with the instalment plan. Amounts are recorded here, once, and read by every other view.
 
     Refused (409) while a review case is open or while the student holds another scholarship that is
@@ -381,8 +383,23 @@ async def officer_sanction(application_id: str, body: SanctionRequest,
             "message": "Decide the open review cases first: " + ", ".join(c.claim_type.value for c in open_cases),
             "review_case_ids": [c.id for c in open_cases]})
 
-    eligibility = EligibilityService(db)
     actor = actor_of(officer)
+    # The money must be able to land: a bank account that fails the DBT check blocks the sanction (ARCHITECTURE.md §6.6)
+    check = await dbt.health_check(app, actor)
+    if check.status != "PASS":
+        await db.commit()  # keep the check: it is the evidence the error points to
+        if check.status == "UNAVAILABLE":
+            raise HTTPException(status_code=503, detail={
+                "code": "DBT_HEALTH_CHECK_UNAVAILABLE",
+                "message": "The bank account check could not run (PFMS/NPCI unreachable). Try again shortly."})
+        raise HTTPException(status_code=409, detail={
+            "code": "DBT_HEALTH_CHECK_FAILED",
+            "message": "The bank account check failed. The student must fix the issue before sanction.",
+            "health_check_id": check.id,
+            "issues": check.issues
+        })
+
+    eligibility = EligibilityService(db)
     # One scheme at a time: another scholarship held this year must be surrendered in this same step.
     held = [h for h in await eligibility.active_holdings(app.student_id, app.academic_year) if h.id != app.id]
     if held and body.surrender_application_id != held[0].id:
@@ -423,6 +440,7 @@ async def officer_sanction(application_id: str, body: SanctionRequest,
         record["override"] = {"reason": body.override_reason, "violations": violations, "by": actor}
     if body.note:
         record["note"] = body.note
+
     try:
         await ledger.sanction(app, [(i.description, Decimal(str(i.amount))) for i in body.instalments],
                               actor, record=record)

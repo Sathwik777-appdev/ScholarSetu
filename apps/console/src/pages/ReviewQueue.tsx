@@ -153,6 +153,21 @@ export default function ReviewQueue() {
                       <p className="text-xs font-bold text-slate-700 mb-1">Evidence from sources</p>
                       <Evidence refs={c.evidence_refs} />
                     </div>
+                    {c.status === 'INFO_REQUESTED' && c.notes && (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <p className="text-xs font-bold text-slate-700 mb-1">You asked the student</p>
+                        <p className="text-sm text-slate-700">“{c.notes}”</p>
+                        <p className="mt-1 text-xs text-slate-500">Waiting for the student's answer; the case returns to Pending when they reply.</p>
+                      </div>
+                    )}
+                    {c.info_response && (
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                        <p className="text-xs font-bold text-emerald-900 mb-1">
+                          The student answered{c.info_responded_at && ` on ${formatDateTime(c.info_responded_at)}`}
+                        </p>
+                        <p className="text-sm text-emerald-950 whitespace-pre-wrap">{c.info_response}</p>
+                      </div>
+                    )}
                     <Link to={`/application/${c.application_id}`} className="inline-block text-xs text-blue-800 underline">Open application timeline</Link>
                     {c.status === 'PENDING' || c.status === 'INFO_REQUESTED' ? (
                       <DecisionForm item={c} onDecided={onDecided} />

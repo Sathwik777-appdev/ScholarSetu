@@ -5,6 +5,7 @@ const TITLES: [string, string][] = [
   ['/my-work', 'My work'], ['/dashboard', 'Dashboard'], ['/review-queue', 'Review queue'],
   ['/application/', 'Application'], ['/applications', 'Applications'], ['/coverage-map', 'Coverage'],
   ['/analytics', 'Bottlenecks and SLA'], ['/dbt-monitor', 'DBT failures'], ['/data-requests', 'Data requests'],
+  ['/portal-sync', 'Portal sync'], ['/outreach', 'Outreach'],
   ['/manage-officers', 'Officers'], ['/demo-sms', 'Demo SMS'], ['/login', 'Sign in'],
 ];
 

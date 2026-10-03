@@ -115,3 +115,28 @@ and not sent (documented). A student whose app is closed gets nothing.
 2. **W3** (sessions) because it loses data.
 3. **W6, W7, W4** are small and remove false or silent behaviour.
 4. **W5, W8, W9, W10, W11, W12** next; **W13** needs a Firebase project and credentials.
+
+## 5. Status after the fix pass (2026-10-03)
+
+The decision behind it: the prototype keeps the **test DigiLocker** and the other test government services
+(`DIGILOCKER_MODE=mock`); nothing here needs a real DigiLocker account. Every fix has a test
+(`tests/integration/test_workflow_fixes.py`, `tests/unit/test_power_manager.py`, `apps/mobile/test/outbox_test.dart`).
+
+| | Finding | Status | What changed |
+|---|---|---|---|
+| W1 | New DigiLocker student cannot be verified | Fixed | The test DigiLocker returns the Aadhaar reference and APAAR ID; sign-up stores them; verification then confirms identity and ST status without manual review. One identity, one record (a second sign-up is refused, 409). The test sign-in page lists test people. |
+| W2 | Nothing pays after sanction | Fixed | The worker sends scheduled instalments of ScholarSetu applications to the (test) PFMS and records the result in the ledger. Chosen over an officer "release" button: it needs no extra step and PFMS reports the outcome. |
+| W3 | 15-minute sessions, wiped phone | Fixed | Rotating refresh tokens (30 days idle) on the app and the console; a session ended by the server keeps unsent work; a 401 is never a permanent refusal. |
+| W4 | Bank check does not gate | Fixed | Sanction is refused (409, with fix steps) while the check fails, and 503 while it cannot run. |
+| W5 | Guardians and helpers cannot exist | **Open** | The sign-up endpoint accepts a role but the app has no choice and nothing links a guardian to a household. |
+| W6 | Passports claim test data as UIDAI | Fixed | Sources read "(test)"; `test_data` is in the signed payload, the passport response and the offline verifier. |
+| W7 | Gemini model name | Fixed in code | `deploy.sh` and `.env.example` use `gemini-3.8-flash`. The new key still has to be stored as a secret version (yours to do). |
+| W8 | "More information" unanswerable | Fixed | `POST /v1/review/cases/{id}/respond`, a Reply button in the app, the answer shown to the officer. |
+| W9 | Repeat wake requests time out | Fixed | The power manager answers at once when a wake is already under way. |
+| W10 | 502/504 not treated as waking | Fixed | The console treats them like 503 WAKING; the app's error text does too. |
+| W11 | Nothing cleans up | Fixed | `app/privacy/retention.py`, run by the worker every six hours; schedule in ARCHITECTURE §19 row 53. |
+| W12 | No page for parked sync events / outreach | Fixed | Console "Portal sync" (sync now, parked statuses, mark handled) and "Outreach" (a school's unreached students). |
+| W13 | Notifications only in the app | **Open** | Needs a push/SMS provider and credentials. |
+| Low | No-access page | Fixed | Pages a role cannot use say so. |
+| Low | Hindi missing in Mitra screen and server sheet | Fixed | |
+| Low | Mixed-language notification text; per-instance rate limits; morning warm-up | Open | The officer's own description stays in the language they wrote it in. |

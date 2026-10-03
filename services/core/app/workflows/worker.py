@@ -57,10 +57,10 @@ async def main() -> None:
     if settings.WORKER_RUNS_BACKGROUND_JOBS:
         # The always-on worker also publishes the outbox to NATS, runs the notification consumers and polls
         # the portals, so the API can be purely request-driven (e.g. Cloud Run scaling to zero).
-        from app.main import _poll_portals, _run_event_bus
+        from app.main import _poll_portals, _purge_forever, _run_event_bus
         stop = asyncio.Event()
-        tasks += [_run_event_bus(stop), _poll_portals(stop)]
-        logger.info("worker also runs the outbox publisher, notification consumers and portal polling")
+        tasks += [_run_event_bus(stop), _poll_portals(stop), _purge_forever(stop)]
+        logger.info("worker also runs the outbox publisher, notification consumers, portal polling and retention")
     await asyncio.gather(*tasks)
 
 

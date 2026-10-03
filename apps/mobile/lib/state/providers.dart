@@ -22,6 +22,7 @@ class Services {
     final cleanOrigin = formatOrigin(newOrigin);
     if (formatBaseUrl(cleanOrigin) == api.baseUrl) return false;
     api.token = null;
+    api.refreshToken = null;
     api.mitraSessionId = null;
     await secure.clearToken();
     await db.wipe();
@@ -62,10 +63,13 @@ class SessionUser {
 const appRoles = {'STUDENT', 'GUARDIAN', 'MITRA', 'MINISTRY'};
 
 class SessionState {
-  const SessionState({this.user, this.checking = false});
+  const SessionState({this.user, this.checking = false, this.ended = false});
 
   final SessionUser? user;
   final bool checking;
+
+  /// The server ended the session (it was not the person signing out). Unsent actions are still on the phone.
+  final bool ended;
 }
 
 class SessionNotifier extends Notifier<SessionState> {
@@ -73,7 +77,8 @@ class SessionNotifier extends Notifier<SessionState> {
 
   @override
   SessionState build() {
-    _s.api.onUnauthorized = () => signOut();
+    _s.api.onUnauthorized = () => endSession();
+    _s.api.onTokensRenewed = (access, refresh) => _s.secure.setTokens(access, refresh);
     Future.microtask(_restore);
     return const SessionState(checking: true);
   }
@@ -85,6 +90,7 @@ class SessionNotifier extends Notifier<SessionState> {
       return;
     }
     _s.api.token = token;
+    _s.api.refreshToken = await _s.secure.refreshToken();
     try {
       final me = await _s.api.get('/auth/me') as Map<String, dynamic>;
       await _s.db.putCache('me', me);
@@ -93,8 +99,14 @@ class SessionNotifier extends Notifier<SessionState> {
       // Offline start: use the saved profile; the server re-checks the token on the next request.
       final saved = await _s.db.getCache('me');
       state = SessionState(user: saved == null ? null : SessionUser.fromJson(saved.body as Map<String, dynamic>));
-    } on ApiException {
-      await signOut();
+    } on ApiException catch (e) {
+      if (e.status == 401 || e.status == 403) {
+        await endSession();
+      } else {
+        // The server is starting up or erroring: that says nothing about this sign-in. Use the saved profile.
+        final saved = await _s.db.getCache('me');
+        state = SessionState(user: saved == null ? null : SessionUser.fromJson(saved.body as Map<String, dynamic>));
+      }
     }
   }
 
@@ -108,18 +120,38 @@ class SessionNotifier extends Notifier<SessionState> {
     if (previous != null && (previous.body as Map)['id'] != user.id) {
       await _s.db.wipe(); // a different person: nothing of the previous user's may remain
     }
-    await _s.secure.setToken(tokenResponse['access_token'] as String);
+    await _s.secure.setTokens(tokenResponse['access_token'] as String, tokenResponse['refresh_token'] as String?);
     _s.api.token = tokenResponse['access_token'] as String;
+    _s.api.refreshToken = tokenResponse['refresh_token'] as String?;
     await _s.db.putCache('me', tokenResponse['user']);
     state = SessionState(user: user);
   }
 
+  /// The person signs out: the server forgets this device's session, and everything saved on the phone is wiped.
   Future<void> signOut() async {
+    final refresh = _s.api.refreshToken;
+    if (refresh != null) {
+      try {
+        await _s.api.post('/auth/logout', {'refresh_token': refresh});
+      } catch (_) {/* offline: the token still expires on its own */}
+    }
     _s.api.token = null;
+    _s.api.refreshToken = null;
     _s.api.mitraSessionId = null;
     await _s.secure.clearToken();
     await _s.db.wipe();
     state = const SessionState();
+  }
+
+  /// The server ended the session (expired or revoked). The phone's saved records and unsent actions stay, so
+  /// signing in again as the same person loses nothing; a different person signing in wipes them (see signIn).
+  Future<void> endSession() async {
+    if (state.user == null && state.ended) return;
+    _s.api.token = null;
+    _s.api.refreshToken = null;
+    _s.api.mitraSessionId = null;
+    await _s.secure.clearToken();
+    state = const SessionState(ended: true);
   }
 }
 

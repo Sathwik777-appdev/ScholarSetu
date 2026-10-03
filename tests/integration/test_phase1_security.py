@@ -19,6 +19,8 @@ PUBLIC_ROUTES = {
     ("GET", "/health/ready"),
     ("POST", "/v1/auth/otp/request"),
     ("POST", "/v1/auth/otp/verify"),
+    ("POST", "/v1/auth/refresh"),            # the refresh token is the credential
+    ("POST", "/v1/auth/logout"),             # likewise: revokes the token it carries
     ("POST", "/v1/auth/register/start"),     # retired: 410, sign up with DigiLocker
     ("POST", "/v1/auth/register/complete"),  # retired: 410
     ("GET", "/v1/geo/districts"),              # place names with an officer, for registration pickers

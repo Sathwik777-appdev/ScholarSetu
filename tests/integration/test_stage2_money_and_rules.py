@@ -103,6 +103,7 @@ async def _make_sunita_eligible(client, demo, users):
 
 
 async def test_sanction_waits_for_open_review_cases_then_follows_the_rules(client, db, demo, users, gov):
+    mocks_data.BANK_ACCOUNTS["AREF-JH-0004912"]["seeded"] = True
     district = await users.headers("district")
     case_id = await _make_sunita_eligible(client, demo, users)
     r = await _sanction(client, district, demo["sunita_application"], POST_MATRIC_PLAN)
@@ -123,7 +124,8 @@ async def test_sanction_waits_for_open_review_cases_then_follows_the_rules(clien
     assert [c["component"] for c in event.payload["components"]] == ["group_1.hosteller_monthly", "adhoc_grant"]
 
 
-async def test_amounts_outside_the_rules_need_a_recorded_override(client, db, demo, users):
+async def test_amounts_outside_the_rules_need_a_recorded_override(client, db, demo, users, gov):
+    mocks_data.BANK_ACCOUNTS["AREF-JH-0004912"]["seeded"] = True
     await LedgerService(db).db.commit()
     r = await _sanction(client, await users.headers("district"), demo["sunita_application"],
                         [{"description": "Special grant", "amount": 99000, "component": "adhoc_grant"}],
@@ -135,7 +137,8 @@ async def test_amounts_outside_the_rules_need_a_recorded_override(client, db, de
     assert event.payload["override"]["by"].startswith("user:")
 
 
-async def test_one_scheme_rule_is_enforced_at_sanction(client, db, demo, users):
+async def test_one_scheme_rule_is_enforced_at_sanction(client, db, demo, users, gov):
+    mocks_data.BANK_ACCOUNTS["AREF-JH-0004912"]["seeded"] = True
     ledger, held, [scheduled] = await _sanction_direct(db, demo["sunita_application"], "5000")
     held_id, scheduled_id = held.id, scheduled.id
     r = await client.post("/v1/applications", headers=await users.headers("sunita"), json={
@@ -158,7 +161,8 @@ async def test_one_scheme_rule_is_enforced_at_sanction(client, db, demo, users):
     assert len(held_states) == 1
 
 
-async def test_surrender_is_refused_while_a_payment_is_on_its_way(client, db, demo, users):
+async def test_surrender_is_refused_while_a_payment_is_on_its_way(client, db, demo, users, gov):
+    mocks_data.BANK_ACCOUNTS["AREF-JH-0004912"]["seeded"] = True
     ledger, held, [p] = await _sanction_direct(db, demo["sunita_application"], "5000")
     await ledger.update_payment(held, p.id, PaymentState.INITIATED, "system:t", pfms_ref="IN-FLIGHT")
     held_id = held.id

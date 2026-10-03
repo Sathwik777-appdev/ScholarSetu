@@ -55,7 +55,7 @@ async def get_current_user(
 def require_role(*roles: UserRole):
     async def _dep(user: User = Depends(get_current_user)) -> User:
         if user.role not in roles:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No Access")
         return user
     return _dep
 

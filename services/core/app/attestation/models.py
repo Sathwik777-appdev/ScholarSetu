@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlalchemy import JSON, DateTime, Enum as SAEnum, Float, ForeignKey, Index, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Enum as SAEnum, Float, ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -27,6 +27,8 @@ class Attestation(Base):
     issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     valid_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[AttestationStatus] = mapped_column(SAEnum(AttestationStatus, name="attestation_status"), nullable=False)
+    # Issued from the test government services (see Settings.SOURCES_ARE_TEST): never to be read as the real source.
+    test_data: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     # Compact JWS (EdDSA) over the full attestation; re-signed on every status change.
     signature: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)

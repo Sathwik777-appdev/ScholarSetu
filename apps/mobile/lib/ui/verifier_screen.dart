@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:convert';
 import '../state/providers.dart';
 import 'theme.dart';
-import 'widgets.dart';
 
 class VerifierScreen extends ConsumerStatefulWidget {
   const VerifierScreen({super.key});
@@ -92,6 +91,14 @@ class _VerifierScreenState extends ConsumerState<VerifierScreen> {
                 ],
                 const SizedBox(height: 8),
                 Text('Source: ${payload['source'] ?? 'Unknown'}', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                if (payload['test_data'] == true)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                        'TEST DATA: the signature is genuine, but the answer came from ScholarSetu\'s test government services. '
+                        'It is not an official confirmation.',
+                        style: TextStyle(fontSize: 12, color: Colors.amber.shade900, fontWeight: FontWeight.w600)),
+                  ),
                 Text('Issuer: ${payload['iss'] ?? 'Unknown'}', style: TextStyle(fontSize: 12, color: AppColors.muted)),
               ]
             ],

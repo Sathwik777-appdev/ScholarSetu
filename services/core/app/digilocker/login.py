@@ -27,12 +27,11 @@ from app.digilocker.models import DigiLockerLogin
 from app.digilocker.router import get_digilocker_http
 from app.digilocker.service import TOKEN_PATH, pkce_pair
 from app.gateway.models import User
-from app.gateway.router import AuthTokenResponse, _user_out
+from app.gateway.router import AuthTokenResponse, signed_in
 from app.gateway.service import record_audit
 from app.shared import places
 from app.shared.ids import new_id
 from app.shared.ratelimit import limit_code_checks, limit_code_requests
-from app.shared.security import create_access_token
 from app.shared.types import Gender, UserRole
 
 router = APIRouter(prefix="/v1/auth/digilocker", tags=["Auth & Gateway"])
@@ -96,11 +95,7 @@ class RegisterIn(BaseModel):
     father_name: Optional[str] = Field(None, max_length=100)
     tribe: Optional[str] = Field(None, max_length=60)
     preferred_language: str = Field("hi", pattern=r"^[a-z]{2,3}$")
-
-
-def _signed_in(user: User) -> AuthTokenResponse:
-    token, expires_in = create_access_token(user.id, user.role.value)
-    return AuthTokenResponse(access_token=token, expires_in=expires_in, user=_user_out(user))
+    role: UserRole = Field(UserRole.STUDENT)
 
 
 @router.post("/start", response_model=StartOut, dependencies=[Depends(limit_code_requests)])
@@ -148,7 +143,8 @@ async def complete(body: CompleteIn, db: AsyncSession = Depends(get_db),
         await db.commit()
         raise HTTPException(status_code=502, detail="DigiLocker did not say who signed in")
     attempt.digilocker_id = digilocker_id
-    attempt.profile = {"name": data.get("name"), "dob": data.get("dob"), "gender": data.get("gender")}
+    attempt.profile = {"name": data.get("name"), "dob": data.get("dob"), "gender": data.get("gender"),
+                       "eaadhaar": data.get("eaadhaar"), "apaar_id": data.get("apaar_id")}
     user = (await db.execute(select(User).where(User.digilocker_id == digilocker_id))).scalar_one_or_none()
     if user is not None:
         if not user.is_active:
@@ -158,7 +154,7 @@ async def complete(body: CompleteIn, db: AsyncSession = Depends(get_db),
         attempt.status = "DONE"
         await record_audit(db, "LOGIN", actor=user, student_id=user.student_id, details={"via": "digilocker"})
         await db.commit()
-        return CompleteOut(status="SIGNED_IN", auth=_signed_in(user))
+        return CompleteOut(status="SIGNED_IN", auth=await signed_in(db, user))
     attempt.status, attempt.registration_token = "NEEDS_SIGNUP", secrets.token_urlsafe(32)
     await db.commit()
     return CompleteOut(status="NEEDS_SIGNUP", registration_token=attempt.registration_token, profile=attempt.profile)
@@ -181,16 +177,34 @@ async def register(body: RegisterIn, db: AsyncSession = Depends(get_db)):
     name = (profile.get("name") or "").strip()
     if not (name and dob and gender):
         raise HTTPException(status_code=422, detail="DigiLocker did not share your name, date of birth and gender")
-    student = Student(id=f"stu-{new_id()}", full_name=" ".join(name.split()).title(), name_variants=[], dob=dob,
-                      gender=gender, state=places.tidy(body.state), district=places.tidy(body.district),
-                      father_name=body.father_name, tribe=body.tribe, preferred_language=body.preferred_language)
-    db.add(student)
-    await db.flush()
-    user = User(name=student.full_name, role=UserRole.STUDENT, student_id=student.id,
+    if body.role not in (UserRole.STUDENT, UserRole.GUARDIAN, UserRole.MITRA):
+        raise HTTPException(status_code=422, detail="Invalid role for registration")
+
+    student_id = None
+    household_id = None
+    full_name = " ".join(name.split()).title()
+
+    if body.role == UserRole.STUDENT:
+        # The Aadhaar reference and APAAR ID are what every government source is looked up by; one person, one record.
+        for column, value in ((Student.aadhaar_ref_token, profile.get("eaadhaar")), (Student.apaar_id, profile.get("apaar_id"))):
+            if value and await db.scalar(select(Student.id).where(column == value)):
+                raise HTTPException(status_code=409, detail="A ScholarSetu account already exists for this identity. "
+                                                            "Sign in the way you did before.")
+        student = Student(id=f"stu-{new_id()}", full_name=full_name, name_variants=[], dob=dob,
+                          gender=gender, state=places.tidy(body.state), district=places.tidy(body.district),
+                          father_name=body.father_name, tribe=body.tribe, preferred_language=body.preferred_language,
+                          aadhaar_ref_token=profile.get("eaadhaar"), apaar_id=profile.get("apaar_id"))
+        db.add(student)
+        await db.flush()
+        student_id = student.id
+    elif body.role == UserRole.GUARDIAN:
+        household_id = new_id()
+
+    user = User(name=full_name, role=body.role, student_id=student_id, household_id=household_id,
                 digilocker_id=attempt.digilocker_id, is_demo=False, is_active=True)
     db.add(user)
     attempt.status, attempt.registration_token = "DONE", None
     await db.flush()
-    await record_audit(db, "REGISTERED", actor=user, student_id=student.id, details={"identity_confirmed_by": "DigiLocker"})
+    await record_audit(db, "REGISTERED", actor=user, student_id=student_id, details={"identity_confirmed_by": "DigiLocker", "role": body.role.value})
     await db.commit()
-    return _signed_in(user)
+    return await signed_in(db, user)

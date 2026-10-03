@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user, require_role
+from app.gateway import refresh as refresh_tokens
 from app.gateway.models import AssistSession, User
 from app.gateway.service import (
     AuthService, MitraService, MitraSessionError, OtpRateLimited, OtpRejected,
@@ -55,6 +56,8 @@ class AuthTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+    # Spend it at /auth/refresh for the next access token (and the next refresh token) when this one expires.
+    refresh_token: Optional[str] = None
     user: AuthUser
 
 
@@ -140,7 +143,40 @@ async def verify_otp(req: OTPVerifyRequest, db: AsyncSession = Depends(get_db)):
         if exc.too_many_attempts:
             raise HTTPException(status_code=429, detail="Too many attempts. Request a new OTP.")
         raise HTTPException(status_code=401, detail="Invalid or expired OTP")
-    return AuthTokenResponse(access_token=token, expires_in=expires_in, user=_user_out(user))
+    return await signed_in(db, user, token, expires_in)
+
+
+async def signed_in(db: AsyncSession, user: User, token: Optional[str] = None,
+                    expires_in: Optional[int] = None) -> AuthTokenResponse:
+    """The sign-in answer for every way of signing in: an access token plus a refresh token."""
+    from app.shared.security import create_access_token
+    if token is None:
+        token, expires_in = create_access_token(user.id, user.role.value)
+    refresh = await refresh_tokens.issue(db, user.id)
+    await db.commit()
+    return AuthTokenResponse(access_token=token, expires_in=expires_in, refresh_token=refresh, user=_user_out(user))
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=20, max_length=600)
+
+
+@router.post("/auth/refresh", response_model=AuthTokenResponse, dependencies=[Depends(limit_code_checks)])
+async def refresh_token(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
+    """Trade a refresh token for a new access token and a new refresh token (the old one stops working)."""
+    from app.shared.security import create_access_token
+    try:
+        user, refresh = await refresh_tokens.rotate(db, body.refresh_token)
+    except refresh_tokens.RefreshRejected:
+        raise HTTPException(status_code=401, detail="Your session has ended. Sign in again.")
+    token, expires_in = create_access_token(user.id, user.role.value)
+    return AuthTokenResponse(access_token=token, expires_in=expires_in, refresh_token=refresh, user=_user_out(user))
+
+
+@router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
+    """Sign out on this device: the refresh token (and every token descended from it) stops working."""
+    await refresh_tokens.revoke(db, body.refresh_token)
 
 
 @router.post("/auth/register/start", status_code=status.HTTP_410_GONE, include_in_schema=False)

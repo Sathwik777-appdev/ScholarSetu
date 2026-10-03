@@ -12,12 +12,18 @@ from app.ledger.service import LedgerService
 from app.shared.types import CanonicalState, Gender, SchemeType, UserRole
 from app.students.models import Student
 from app.verification.sources import SourceClient
-from tests.conftest import bearer, digilocker_signup, login, make_student, make_user, mocks_data
+from tests.conftest import bearer, digilocker_signup, give_bank_account, login, make_student, make_user, mocks_data
 
 NSP_APP = "NSP-JH-2026-00417"
 async def _register(client, monkeypatch, digilocker_id, **place):
     """A new student, signed up through DigiLocker (which confirms name, date of birth and gender)."""
     return await digilocker_signup(client, monkeypatch, digilocker_id, "MINA MURMU", "02062009", "F", **place)
+
+
+async def _register_with_bank(client, monkeypatch, digilocker_id, aadhaar_ref, **place):
+    give_bank_account(aadhaar_ref, "Mina Murmu")
+    return await digilocker_signup(client, monkeypatch, digilocker_id, "MINA MURMU", "02062009", "F",
+                                   eaadhaar=aadhaar_ref, **place)
 
 
 # ── L21: place names ─────────────────────────────────────────────────────────
@@ -40,11 +46,11 @@ async def test_served_districts_come_from_officer_jurisdictions(client, demo, us
 
 # ── L20: the same person registering twice ───────────────────────────────────
 
-async def test_a_second_registration_of_the_same_person_blocks_sanction(client, db, demo, users, monkeypatch):
+async def test_a_second_registration_of_the_same_person_blocks_sanction(client, db, demo, users, gov, monkeypatch):
     year = current_academic_year()
-    first = await _register(client, monkeypatch, "DL-0661", state="Jharkhand", district="Dumka")
+    first = await _register_with_bank(client, monkeypatch, "DL-0661", "AREF-T-0661", state="Jharkhand", district="Dumka")
     await client.post("/v1/applications", headers=first, json={"scheme": "PRE_MATRIC", "academic_year": year})
-    second = await _register(client, monkeypatch, "DL-0662", state="Jharkhand", district="Dumka")
+    second = await _register_with_bank(client, monkeypatch, "DL-0662", "AREF-T-0662", state="Jharkhand", district="Dumka")
     r = await client.post("/v1/applications", headers=second, json={"scheme": "PRE_MATRIC", "academic_year": year})
     assert r.status_code == 201
     app_id = r.json()["id"]

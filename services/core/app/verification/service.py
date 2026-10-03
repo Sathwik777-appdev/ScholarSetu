@@ -46,6 +46,7 @@ from app.verification.plugins.digilocker_verifier import DigiLockerVerifier
 from app.verification.plugins.edistrict_verifier import EDistrictVerifier
 from app.verification.plugins.nta_verifier import NTAVerifier
 from app.verification.plugins.udise_verifier import UDISEVerifier
+from app.verification.plugins.base import source_label
 from app.verification.plugins.uidai_verifier import UIDAIeKYCVerifier
 from app.verification.schemas import (
     ClaimVerificationResult, ReviewCaseOut, ReviewDecisionResponse, SourceOutcome, VerificationReport,
@@ -175,6 +176,7 @@ class VerificationMeshService:
                 logger.warning("source unavailable claim=%s source=%s: %s", claim_type.value, plugin.source_name, exc)
                 result = VerificationResult(status=VerificationStatus.SOURCE_UNAVAILABLE, source=plugin.source_name,
                                             reasons=[f"{plugin.source_name} could not be reached"])
+            result.source = source_label(result.source)  # one place: every source says "(test)" while they are tests
             consulted.append(SourceOutcome(source=result.source, status=result.status, source_ref=result.source_ref,
                                            evidence_hash=result.evidence_hash, reasons=result.reasons))
             if result.status == VerificationStatus.VERIFIED:
@@ -397,6 +399,28 @@ class VerificationMeshService:
             attestation_status=attestation.status.value if attestation else None,
         )
 
+    async def respond_info(self, case_id: str, student_id: str, text: str, actor: str,
+                           assisted_by: Optional[str] = None) -> ReviewCaseOut:
+        """The student answers an officer's request for more information; the case goes back to the officer."""
+        case = await self.db.get(ReviewCase, case_id, with_for_update=True)
+        if case is None or case.student_id != student_id:
+            raise ReviewCaseError(404, "Review case not found")
+        if case.status != ReviewCaseStatus.INFO_REQUESTED:
+            raise ReviewCaseError(409, "This case is not waiting for information from you")
+        application = await self.ledger.get_application(case.application_id)
+        if application is None:
+            raise ReviewCaseError(409, f"Application {case.application_id} is not in the ledger")
+        payload = {"review_case_id": case.id, "claim_type": case.claim_type.value, "response_text": text}
+        if assisted_by:
+            payload["assisted_by_session"] = assisted_by
+        await self.ledger.append_event(application, "ReviewInfoProvided", payload, actor=actor,
+                                       source=SourceSystem.SCHOLARSETU)
+        case.status, case.decision = ReviewCaseStatus.PENDING, None
+        case.info_response, case.info_responded_at = text, datetime.now(timezone.utc)
+        await self.db.commit()
+        student = await self.db.get(Student, case.student_id)
+        return self._case_out(case, student.full_name if student else None)
+
     @staticmethod
     def _case_out(case: ReviewCase, student_name: Optional[str]) -> ReviewCaseOut:
         return ReviewCaseOut(
@@ -405,7 +429,8 @@ class VerificationMeshService:
             explanation=case.explanation, identity_score=case.identity_score, evidence_refs=case.evidence_refs,
             attestation_id=case.attestation_id, status=case.status, decision=case.decision,
             decided_by=case.decided_by, decided_at=case.decided_at, notes=case.notes,
-            decision_event_id=case.decision_event_id, sla_deadline=case.sla_deadline, created_at=case.created_at,
+            decision_event_id=case.decision_event_id, info_response=case.info_response,
+            info_responded_at=case.info_responded_at, sla_deadline=case.sla_deadline, created_at=case.created_at,
         )
 
 

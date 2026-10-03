@@ -5,6 +5,11 @@ from typing import Any, Optional, Protocol
 from app.shared.types import ClaimType, ConsentArtefact, VerificationMethod, VerificationStatus
 from app.verification.identity_resolver import IdentityRecord
 from app.verification.sources import SourceClient
+from app.config import settings
+
+def source_label(name: str) -> str:
+    """The source as people should read it: while the sources are the test services, say so (once)."""
+    return f"{name} (test)" if settings.SOURCES_ARE_TEST and not name.endswith("(test)") else name
 
 
 @dataclass

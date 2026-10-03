@@ -302,7 +302,8 @@ def pytest_unconfigure(config):
 # ── Sign in with DigiLocker, with a stand-in DigiLocker token endpoint ────────
 
 async def digilocker_signup(client, monkeypatch, digilocker_id: str, name: str, dob: str, gender: str,
-                            state: str = "Jharkhand", district: str = "Dumka") -> dict:
+                            state: str = "Jharkhand", district: str = "Dumka", eaadhaar: str | None = None,
+                            apaar_id: str | None = None) -> dict:
     """Register a new student through /v1/auth/digilocker/* as DigiLocker would confirm them (dob DDMMYYYY,
     gender M/F as DigiLocker sends them). Returns auth headers."""
     from app.config import settings
@@ -313,7 +314,8 @@ async def digilocker_signup(client, monkeypatch, digilocker_id: str, name: str, 
     def token_endpoint(request: httpx.Request) -> httpx.Response:
         assert request.url.path.endswith("/public/oauth2/1/token")
         return httpx.Response(200, json={"access_token": "t", "digilockerid": digilocker_id, "name": name,
-                                         "dob": dob, "gender": gender})
+                                         "dob": dob, "gender": gender,
+                                         "eaadhaar": eaadhaar, "apaar_id": apaar_id})
 
     async def _http():
         async with httpx.AsyncClient(base_url="http://digilocker", transport=httpx.MockTransport(token_endpoint)) as c:
@@ -331,3 +333,12 @@ async def digilocker_signup(client, monkeypatch, digilocker_id: str, name: str, 
         return bearer(r.json()["access_token"])
     finally:
         app.dependency_overrides.pop(get_digilocker_http, None)
+
+
+def give_bank_account(aadhaar_ref: str, holder_name: str, seeded: bool = True) -> None:
+    """An active savings account for this Aadhaar reference in the test PFMS (sanction refuses a student whose
+    account would not receive the money)."""
+    mocks_data.BANK_ACCOUNTS[aadhaar_ref] = {
+        "seeded": seeded, "status": "ACTIVE", "holder_name": holder_name.upper(), "type": "SAVINGS",
+        "bank_name": "State Bank of India", "iin": "508534", "ifsc": "SBIN0001234",
+        "account_masked": "XXXXXX" + aadhaar_ref[-4:]}

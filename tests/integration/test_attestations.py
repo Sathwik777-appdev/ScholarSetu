@@ -51,7 +51,8 @@ async def test_restart_does_not_invalidate_old_attestations(service, db):
 async def test_signature_covers_every_field(service):
     att = await _issue(service)
     payload = service.signer.decode(att.signature)
-    assert set(payload) == SIGNED_FIELDS
+    assert set(payload) == SIGNED_FIELDS | {"test_data"}  # issued while the sources are the test services
+    assert payload["test_data"] is True
     assert payload["confidence"] == 0.97 and payload["method"] == "API" and payload["status"] == "ACTIVE"
     assert payload["claim"] == {"type": "ST_STATUS", "value": {"tribe": "Santal"}}
     assert jwt.get_unverified_header(att.signature)["alg"] == "EdDSA"
@@ -113,3 +114,18 @@ def test_public_jwk_shape():
     jwk = get_signer().jwk
     assert jwk["kty"] == "OKP" and jwk["crv"] == "Ed25519" and jwk["alg"] == "EdDSA"
     assert len(base64.urlsafe_b64decode(jwk["x"] + "=")) == 32
+
+
+async def test_attestations_from_real_sources_do_not_carry_the_test_flag(service, monkeypatch):
+    monkeypatch.setattr("app.attestation.service.settings.SOURCES_ARE_TEST", False)
+    att = await _issue(service)
+    assert att.test_data is False and set(service.signer.decode(att.signature)) == SIGNED_FIELDS
+
+
+async def test_the_test_flag_is_covered_by_the_signature(service, db):
+    att = await _issue(service)
+    assert att.test_data is True and (await service.verify_attestation(att.id)).is_valid
+    att.test_data = False  # someone strips the "test" label from the stored row
+    await db.commit()
+    result = await service.verify_attestation(att.id)
+    assert not result.is_valid and "does not match" in result.reason

@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.attestation.keys import AttestationSigner, get_signer
 from app.attestation.models import Attestation
 from app.attestation.schemas import AttestationResponse, AttestationVerification, ScholarshipPassport
+from app.config import settings
 from app.database import get_db
 from app.shared.ids import new_id
 from app.shared.types import AttestationStatus, ClaimType, VerificationMethod
@@ -44,7 +45,7 @@ def _aware(dt: Optional[datetime]) -> Optional[datetime]:
 
 def signed_payload(att: Attestation) -> dict[str, Any]:
     """The exact content covered by the signature (ARCHITECTURE.md §6.4.4 field names)."""
-    return {
+    payload = {
         "iss": AttestationSigner.ISSUER,
         "attestation_id": att.id,
         "subject": att.student_id,
@@ -57,6 +58,9 @@ def signed_payload(att: Attestation) -> dict[str, Any]:
         "valid_until": _iso(_aware(att.valid_until)),
         "status": att.status.value,
     }
+    if att.test_data:  # only when true, so attestations signed before the flag existed still verify
+        payload["test_data"] = True
+    return payload
 
 
 def to_response(att: Attestation) -> AttestationResponse:
@@ -64,7 +68,7 @@ def to_response(att: Attestation) -> AttestationResponse:
         attestation_id=att.id, student_id=att.student_id, claim_type=att.claim_type, claim_value=att.claim_value,
         source=att.source, method=att.method.value, confidence=att.confidence, evidence_hash=att.evidence_hash,
         issue_date=_aware(att.issued_at), expiry_date=_aware(att.valid_until), signature=att.signature,
-        status=att.status.value,
+        status=att.status.value, test_data=att.test_data,
     )
 
 
@@ -103,6 +107,7 @@ class AttestationService:
             id=new_id(), student_id=student_id, claim_type=claim_type, claim_value=claim_value, source=source,
             method=method, confidence=confidence, evidence_hash=evidence_hash, issued_at=issued_at,
             valid_until=issued_at + validity if validity else None, status=status, signature="",
+            test_data=settings.SOURCES_ARE_TEST,
         )
         self._sign(att)
         self.db.add(att)

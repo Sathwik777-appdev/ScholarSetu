@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../config.dart';
 import '../data/digilocker_service.dart';
 import '../i18n.dart';
 import '../state/providers.dart';
 import 'register_screen.dart';
-import 'server_sheet.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -38,14 +36,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         if (mounted) setState(() => _demoInfo = info);
       } catch (_) {/* offline (or a preview without services): the toggle still shows; signing in reports problems */}
     });
-  }
-
-  String _server() {
-    try {
-      return formatOrigin(ref.read(servicesProvider).api.baseUrl);
-    } catch (_) {
-      return formatOrigin(defaultApiOrigin);
-    }
   }
 
   Future<void> _setDemo(bool on) async {
@@ -137,6 +127,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       'साइन इन करने या खाता बनाने के लिए DigiLocker का उपयोग करें। आपका नाम और जन्मतिथि DigiLocker से आते हैं।'),
               style: const TextStyle(color: AppColors.muted, fontSize: 15, height: 1.4),
             ),
+            if (ref.watch(sessionProvider).ended)
+              Container(
+                margin: const EdgeInsets.only(top: 14),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(12)),
+                child: Text(
+                    t('Your session ended. Sign in again to continue; anything you had not sent is still saved on this phone.',
+                        'आपका सत्र समाप्त हो गया। जारी रखने के लिए फिर साइन इन करें; जो आपने भेजा नहीं था वह इस फ़ोन पर सुरक्षित है।'),
+                    style: const TextStyle(fontSize: 14, height: 1.4)),
+              ),
             const SizedBox(height: 20),
             if (!_demo) ...[
               _DigiLockerButton(busy: _busy, onPressed: _digilocker),

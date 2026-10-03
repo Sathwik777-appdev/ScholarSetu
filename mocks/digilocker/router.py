@@ -122,12 +122,14 @@ def authorize_page(response_type: str = "", client_id: str = "", redirect_uri: s
     hidden = "".join(f'<input type="hidden" name="{k}" value="{html.escape(v)}">' for k, v in {
         "response_type": response_type, "client_id": client_id, "redirect_uri": redirect_uri, "state": state,
         "code_challenge": code_challenge, "code_challenge_method": code_challenge_method}.items())
+    people = html.escape(", ".join(f"{p['first_name']} {p['last_name']} {p['phone']}" for p in db.get("students", [])[1:6]))
     return _page(f"""<h2 style="margin-top:0">Sign in to DigiLocker (test)</h2>
 <p class="muted">ScholarSetu is asking to read your issued documents. You choose which ones to import next.</p>
 <form method="post">{hidden}
 <label>Mobile number<input name="mobile" inputmode="numeric" pattern="[0-9]{{10}}" required></label>
 <label>Code<input name="otp" inputmode="numeric" pattern="[0-9]{{6}}" required></label>
 <p class="muted">Test service: the code is {TEST_CODE}.</p>
+<p class="muted">Test people (mobile number): {people}</p>
 <button type="submit">Allow ScholarSetu to read my documents</button></form>""")
 
 
@@ -166,7 +168,8 @@ def token(grant_type: str = Form(""), code: str = Form(""), client_id: str = For
     person = get_student(grant["aadhaar"])
     return {"access_token": access, "token_type": "Bearer", "expires_in": 3600, "scope": "files.issueddocs",
             "digilockerid": f"TEST-{grant['aadhaar']}", "name": f"{person['first_name']} {person['last_name']}",
-            "dob": person["dob"], "gender": person["gender"][0]}
+            "dob": person["dob"], "gender": person["gender"][0],
+            "eaadhaar": grant["aadhaar"], "apaar_id": person.get("apaar_id")}
 
 
 def _holder(authorization: str | None) -> dict | None:

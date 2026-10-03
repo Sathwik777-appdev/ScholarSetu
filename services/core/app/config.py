@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # No default: the app refuses to start without a strong secret.
     JWT_SECRET: str
     JWT_EXPIRE_MINUTES: int = 15
+    # A refresh token renews the short access token without signing in again. Rotated on every use; a reused
+    # (stolen) one revokes the whole family. Idle for this long = sign in again.
+    REFRESH_TOKEN_DAYS: int = 30
 
     OTP_TTL_MINUTES: int = 5
     OTP_MAX_ATTEMPTS: int = 5
@@ -80,6 +83,12 @@ class Settings(BaseSettings):
     DIGILOCKER_AUTHORIZE_URL: str | None = None  # the page the student's browser opens (see digilocker_authorize_url)
     DIGILOCKER_CLIENT_ID: str | None = None
     DIGILOCKER_CLIENT_SECRET: str | None = None
+    # True while verification answers come from the test government services (mocks/). Attestations issued from
+    # them are marked test_data, shown as "(test)" and carry test_data in the signed payload, so a scanned passport
+    # never claims UIDAI or e-District confirmed something the synthetic services made up. Set false when the
+    # real sources are connected.
+    SOURCES_ARE_TEST: bool = True
+
     # Where DigiLocker returns a person after "Sign in with DigiLocker": the app's scheme. It must be registered
     # with the DigiLocker partner client (the sandbox client uses scholarsetu://digilocker-callback).
     DIGILOCKER_LOGIN_REDIRECT_URI: str = "scholarsetu://digilocker-callback"
@@ -143,6 +152,7 @@ class Settings(BaseSettings):
                               if (parent / "adapters" / "nsp" / "state_map.yaml").is_file()), "/adapters")
     # How often the API polls the portals for status changes (0 disables polling).
     ADAPTER_SYNC_INTERVAL_SECONDS: int = 300
+    RETENTION_INTERVAL_SECONDS: int = 21600   # how often old rows are deleted (app/privacy/retention.py); 0 = never
     # Academic years start in this month (e.g. 4 = April: 2026-04-01 starts 2026-27).
     ACADEMIC_YEAR_START_MONTH: int = 4
 

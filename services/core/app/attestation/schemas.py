@@ -23,6 +23,7 @@ class AttestationResponse(BaseModel):
     expiry_date: Optional[datetime]
     signature: str  # compact JWS (EdDSA) over the full attestation; see AttestationService.signed_payload
     status: str
+    test_data: bool = False  # answered by the test government services: shown as "(test)", never as the real source
 
 class ScholarshipPassport(BaseModel):
     student_id: str

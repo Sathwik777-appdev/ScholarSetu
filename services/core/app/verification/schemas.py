@@ -72,8 +72,15 @@ class ReviewCaseOut(BaseModel):
     decided_at: Optional[datetime]
     notes: Optional[str]
     decision_event_id: Optional[str]
+    info_response: Optional[str] = None
+    info_responded_at: Optional[datetime] = None
     sla_deadline: datetime
     created_at: datetime
+
+
+class InfoResponseRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    response_text: str = Field(..., min_length=2, max_length=2000)
 
 
 class ReviewDecisionResponse(BaseModel):

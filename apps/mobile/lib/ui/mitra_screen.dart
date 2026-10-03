@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../i18n.dart';
 import '../state/providers.dart';
 import 'home_screen.dart';
 import 'labels.dart';
@@ -80,60 +81,60 @@ class _MitraScreenState extends ConsumerState<MitraScreen> {
   Widget build(BuildContext context) {
     final status = _session?['status'];
     return Scaffold(
-      appBar: AppBar(title: const Text('Mitra: help a student'), actions: const [AccountMenu()]),
+      appBar: AppBar(title: Text(t('Mitra: help a student', 'मित्र: छात्र की मदद करें')), actions: const [AccountMenu()]),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         if (_session == null) ...[
-          const Text('Start a session for one student. They will receive a code by SMS and must read it to you.'),
+          Text(t('Start a session for one student. They will receive a code by SMS and must read it to you.', 'एक छात्र के लिए सत्र शुरू करें। उन्हें SMS से एक कोड मिलेगा और वे आपको पढ़कर बताएँगे।')),
           const SizedBox(height: 12),
           TextField(controller: _studentId,
-              decoration: const InputDecoration(labelText: 'Student ID', border: OutlineInputBorder())),
+              decoration: InputDecoration(labelText: t('Student ID', 'छात्र आईडी'), border: const OutlineInputBorder())),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             initialValue: _scope,
-            decoration: const InputDecoration(labelText: 'What you will do', border: OutlineInputBorder()),
-            items: const [
-              DropdownMenuItem(value: 'VIEW_STATUS', child: Text('Check application status')),
-              DropdownMenuItem(value: 'UPLOAD_DOCUMENTS', child: Text('Upload documents')),
-              DropdownMenuItem(value: 'RESPOND_DEFICIENCY', child: Text('Answer an office query')),
+            decoration: InputDecoration(labelText: t('What you will do', 'आप क्या करेंगे'), border: const OutlineInputBorder()),
+            items: [
+              DropdownMenuItem(value: 'VIEW_STATUS', child: Text(t('Check application status', 'आवेदन की स्थिति देखें'))),
+              DropdownMenuItem(value: 'UPLOAD_DOCUMENTS', child: Text(t('Upload documents', 'दस्तावेज़ अपलोड करें'))),
+              DropdownMenuItem(value: 'RESPOND_DEFICIENCY', child: Text(t('Answer an office query', 'कार्यालय के प्रश्न का उत्तर दें'))),
             ],
             onChanged: (v) => setState(() => _scope = v ?? _scope),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             initialValue: _minutes,
-            decoration: const InputDecoration(labelText: 'For how long', border: OutlineInputBorder()),
-            items: const [
-              DropdownMenuItem(value: 10, child: Text('10 minutes')),
-              DropdownMenuItem(value: 15, child: Text('15 minutes')),
-              DropdownMenuItem(value: 30, child: Text('30 minutes')),
+            decoration: InputDecoration(labelText: t('For how long', 'कितनी देर के लिए'), border: const OutlineInputBorder()),
+            items: [
+              DropdownMenuItem(value: 10, child: Text(t('10 minutes', '10 मिनट'))),
+              DropdownMenuItem(value: 15, child: Text(t('15 minutes', '15 मिनट'))),
+              DropdownMenuItem(value: 30, child: Text(t('30 minutes', '30 मिनट'))),
             ],
             onChanged: (v) => setState(() => _minutes = v ?? _minutes),
           ),
           const SizedBox(height: 12),
-          FilledButton(onPressed: _busy ? null : _start, child: const Text('Send code to the student')),
+          FilledButton(onPressed: _busy ? null : _start, child: Text(t('Send code to the student', 'छात्र को कोड भेजें'))),
         ] else if (status == 'PENDING_STUDENT_OTP') ...[
-          Text('A code was sent to the student ${_session!['student_id']}. Ask them to read it to you.'),
+          Text(t('A code was sent to the student ${_session!['student_id']}. Ask them to read it to you.', 'छात्र ${_session!['student_id']} को कोड भेजा गया। उनसे कहें कि वे उसे आपको पढ़कर बताएँ।')),
           const SizedBox(height: 12),
           TextField(
             controller: _otp,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
-            decoration: const InputDecoration(labelText: "Code from the student's SMS", border: OutlineInputBorder()),
+            decoration: InputDecoration(labelText: t("Code from the student's SMS", 'छात्र के SMS का कोड'), border: const OutlineInputBorder()),
           ),
           const SizedBox(height: 12),
-          FilledButton(onPressed: _busy ? null : _verify, child: const Text('Confirm')),
-          TextButton(onPressed: _busy ? null : _end, child: const Text('Cancel')),
+          FilledButton(onPressed: _busy ? null : _verify, child: Text(t('Confirm', 'पुष्टि करें'))),
+          TextButton(onPressed: _busy ? null : _end, child: Text(t('Cancel', 'रद्द करें'))),
         ] else ...[
           Card(
             color: Colors.green.shade50,
             child: ListTile(
-              title: Text('Session active for ${_session!['student_id']} (${humanize(_session!['scope'] as String)})'),
-              subtitle: Text('Ends ${whenIso(_session!['expires_at'] as String?)}. Every action is recorded.'),
+              title: Text(t('Session active for ${_session!['student_id']} (${humanize(_session!['scope'] as String)})', 'सत्र चालू है: ${_session!['student_id']} (${humanize(_session!['scope'] as String)})')),
+              subtitle: Text(t('Ends ${whenIso(_session!['expires_at'] as String?)}. Every action is recorded.', 'समाप्त: ${whenIso(_session!['expires_at'] as String?)}। हर कार्य दर्ज होता है।')),
             ),
           ),
           if (_dashboard != null) ...[
             Section(_dashboard!['student']['name'] as String),
-            if ((_dashboard!['applications'] as List).isEmpty) const Text('Registered — application NOT submitted.'),
+            if ((_dashboard!['applications'] as List).isEmpty) Text(t('Registered — application NOT submitted.', 'पंजीकृत — आवेदन जमा नहीं हुआ।')),
             for (final a in (_dashboard!['applications'] as List).cast<Map<String, dynamic>>())
               ListTile(
                 title: Text('${schemeLabel(a['scheme'] as String)} ${a['academic_year']}'),
@@ -142,10 +143,12 @@ class _MitraScreenState extends ConsumerState<MitraScreen> {
               ),
           ],
           if (_scope != 'VIEW_STATUS')
-            const Text('Use the student\'s documents or query screen from here in a later version; '
-                'this build supports status checks in Mitra mode.'),
+            Text(t('Uploading documents and answering queries for a student is not available in this version; '
+                'Mitra mode supports status checks.',
+                'इस संस्करण में छात्र के लिए दस्तावेज़ अपलोड करना और प्रश्नों का उत्तर देना उपलब्ध नहीं है; '
+                'मित्र मोड में केवल स्थिति देखी जा सकती है।')),
           const SizedBox(height: 12),
-          FilledButton.tonal(onPressed: _busy ? null : _end, child: const Text('End session')),
+          FilledButton.tonal(onPressed: _busy ? null : _end, child: Text(t('End session', 'सत्र समाप्त करें'))),
         ],
         if (_error != null) ErrorBox(message: _error!),
       ]),

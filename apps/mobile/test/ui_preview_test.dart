@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scholarsetu_mobile/i18n.dart';
+import 'package:scholarsetu_mobile/state/providers.dart';
 import 'package:scholarsetu_mobile/ui/components.dart';
 import 'package:scholarsetu_mobile/ui/login_screen.dart';
 import 'package:scholarsetu_mobile/ui/student_screens.dart';
@@ -52,7 +53,18 @@ Future<void> _capture(WidgetTester tester, String name) async {
   });
 }
 
-Widget _frame(Widget child) => ProviderScope(
+/// A session in a fixed state, so screens that read it build without the app's services.
+class _FakeSession extends SessionNotifier {
+  _FakeSession(this._state);
+  final SessionState _state;
+
+  @override
+  SessionState build() => _state;
+}
+
+Widget _frame(Widget child, {SessionState session = const SessionState()}) => ProviderScope(
+      key: ValueKey('session-${session.ended}-${appLanguage.value}'), // a new container per state
+      overrides: [sessionProvider.overrideWith(() => _FakeSession(session))],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
@@ -72,6 +84,24 @@ void main() {
     expect(find.text('Sign in', skipOffstage: false), findsOneWidget);
     expect(find.text('Continue with DigiLocker', skipOffstage: false), findsOneWidget);
     await _capture(tester, 'login');
+  });
+
+  testWidgets('login screen says when the session ended and that unsent work is kept', (tester) async {
+    tester.view.physicalSize = const Size(390 * 2, 844 * 2);
+    tester.view.devicePixelRatio = 2;
+    await tester.pumpWidget(_frame(const LoginScreen()));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Your session ended', skipOffstage: false), findsNothing);
+
+    await tester.pumpWidget(_frame(const LoginScreen(), session: const SessionState(ended: true)));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Your session ended', skipOffstage: false), findsOneWidget);
+    expect(find.textContaining('still saved on this phone', skipOffstage: false), findsOneWidget);
+
+    appLanguage.value = 'hi';
+    await tester.pumpWidget(_frame(const LoginScreen(), session: const SessionState(ended: true)));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('आपका सत्र समाप्त हो गया', skipOffstage: false), findsOneWidget);
   });
 
   testWidgets('login screen in Hindi', (tester) async {

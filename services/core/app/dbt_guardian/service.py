@@ -15,7 +15,7 @@ from app.dbt_guardian.schemas import (
     DBTCheck, DBTHealthCheckResult, DBTIssue, DBTRetryOut, DBTStatus, PaymentWithGuidance,
 )
 from app.ledger.models import Application, Payment
-from app.ledger.service import LedgerService, money
+from app.ledger.service import LedgerError, LedgerService, money
 from app.shared.events import emit
 from app.shared.types import PaymentState
 from app.students.models import Student
@@ -78,6 +78,11 @@ SUITABLE_ACCOUNT_TYPES = {"SAVINGS", "BSBD", "PMJDY"}
 def guidance(code: str) -> DBTIssue:
     g = GUIDANCE.get(code, UNKNOWN)
     return DBTIssue(code=code, message=g["en"], message_hi=g["hi"], fix_steps=g["steps_en"], fix_steps_hi=g["steps_hi"])
+
+
+def bank_fix_simulation_allowed() -> bool:
+    """Only while demonstrating against the test services; never when real sources are connected."""
+    return bool(settings.DEMO_MODE and settings.SOURCES_ARE_TEST)
 
 
 class DBTError(Exception):
@@ -175,7 +180,25 @@ class DBTGuardianService:
                       for p in payments],
             retries=[DBTRetryOut(id=r.id, payment_id=r.payment_id, status=r.status, pfms_ref=r.pfms_ref,
                                  failure_code=r.failure_code, created_at=r.created_at) for r in retries],
+            can_simulate_bank_fix=bank_fix_simulation_allowed(),
         )
+
+    async def simulate_bank_fix(self, app: Application, actor: str) -> None:
+        """Demo only: make the test bank service treat the student's account as fixed (Aadhaar seeded, active), as
+        if they had been to the branch. The student still taps "check again" to prove it through the normal check."""
+        if not bank_fix_simulation_allowed():
+            raise DBTError(404, "Not available")
+        student = await self.db.get(Student, app.student_id)
+        if not student.aadhaar_ref_token:
+            raise DBTError(422, "The student record has no Aadhaar reference")
+        try:
+            account = await self.sources.request("POST", f"/pfms/_admin/accounts/{student.aadhaar_ref_token}",
+                                                 json={"seeded": True, "status": "ACTIVE"})
+        except SourceUnavailable:
+            raise DBTError(503, "The test bank service could not be reached")
+        if account is None:
+            raise DBTError(404, "The test bank service has no account for this student")
+        logger.warning("test bank service: account of %s set to seeded and active by %s", app.student_id, actor)
 
     async def request_retry(self, app: Application, payment_id: str, actor: str) -> DBTRetryOut:
         """The student says the bank problem is fixed: re-check, then re-request the payment from PFMS.
@@ -229,6 +252,65 @@ class DBTGuardianService:
             retry.status, retry.failure_code = "FAILED", result.get("failure_code")
         await self.db.flush()
         return retry
+
+
+    async def process_scheduled_payments(self) -> None:
+        """Send the sanctioned instalments of ScholarSetu applications to PFMS. The bank check already gated the
+        sanction; if the account has lapsed since, PFMS reports the failure and the student's fix-and-retry flow
+        takes over. An unreachable PFMS leaves the instalment scheduled for the next pass."""
+        from app.shared.types import SourceSystem
+        payments = (await self.db.execute(
+            select(Payment, Application).join(Application, Application.id == Payment.application_id)
+            .where(Payment.state == PaymentState.SCHEDULED, Application.source_system == SourceSystem.SCHOLARSETU)
+        )).all()
+        for payment, app in payments:
+            actor = "pfms-sync"
+            student = await self.db.get(Student, app.student_id)
+            if not student.aadhaar_ref_token:
+                logger.warning("payment %s not sent: the student has no Aadhaar reference", payment.id)
+                continue
+            try:
+                # The payment id is the PFMS reference, so a repeated pass never moves the money twice.
+                submitted = await self.sources.request("POST", "/pfms/dbt/initiate-payment", json={
+                    "aadhaar_ref": student.aadhaar_ref_token, "amount": money(payment.amount),
+                    "reference": payment.id})
+                await self.ledger.update_payment(app, payment.id, PaymentState.INITIATED, actor, pfms_ref=submitted["txn_ref"])
+                await self.db.commit()
+            except SourceUnavailable:
+                logger.warning("PFMS unavailable for %s", payment.id)
+            except LedgerError as exc:
+                await self.db.rollback()
+                logger.warning("payment %s not moved on: %s", payment.id, exc)
+
+    async def poll_in_flight_payments(self) -> None:
+        """Ask PFMS how the instalments sent by process_scheduled_payments ended. A payment with a student retry in
+        flight belongs to the retry workflow (settle_retry) and is left to it."""
+        from app.shared.types import SourceSystem
+        retrying = select(DbtRetry.payment_id).where(DbtRetry.status == "SUBMITTED")
+        payments = (await self.db.execute(
+            select(Payment, Application).join(Application, Application.id == Payment.application_id)
+            .where(Payment.state == PaymentState.INITIATED, Application.source_system == SourceSystem.SCHOLARSETU,
+                   Payment.id.not_in(retrying))
+        )).all()
+        for payment, app in payments:
+            if not payment.pfms_ref:
+                continue
+            actor = "pfms-sync"
+            try:
+                result = await self.sources.request("GET", f"/pfms/dbt/status/{payment.pfms_ref}")
+                if result is None or result.get("status") not in ("SUCCESS", "FAILED"):
+                    continue
+                if result["status"] == "SUCCESS":
+                    await self.ledger.update_payment(app, payment.id, PaymentState.CREDITED, actor)
+                else:
+                    await self.ledger.update_payment(app, payment.id, PaymentState.FAILED, actor,
+                                                     failure_code=result.get("failure_code"))
+                await self.db.commit()
+            except SourceUnavailable:
+                continue
+            except LedgerError as exc:
+                await self.db.rollback()
+                logger.warning("payment %s not settled: %s", payment.id, exc)
 
 
 def get_dbt_service(db: AsyncSession = Depends(get_db),
