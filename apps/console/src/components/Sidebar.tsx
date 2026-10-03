@@ -35,12 +35,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
 
 export function BrandMark({ className = 'h-9 w-9' }: { className?: string }) {
   return (
-    <div className={`${className} grid shrink-0 place-items-center rounded-xl bg-gradient-to-br from-saffron-300 via-saffron-400 to-saffron-500 shadow-glow`}>
-      <svg viewBox="0 0 32 32" className="h-5 w-5" aria-hidden="true">
-        <path d="M3 21h26M6 21c0-6 4.5-10 10-10s10 4 10 10" fill="none" stroke="#0c1326" strokeWidth="2.6" strokeLinecap="round" />
-        <circle cx="16" cy="11" r="2.4" fill="#0c1326" />
-      </svg>
-    </div>
+    <img src="/hero-logo.png" alt="ScholarSetu" className={`${className} object-contain`} />
   );
 }
 
