@@ -119,17 +119,17 @@ async def seed(db: AsyncSession, now: datetime | None = None) -> dict:
     await att_service.issue_attestation(
         student_id="stu-sunita-001", claim_type=ClaimType.IDENTITY,
         claim_value={"name": "Sunita Hansda", "dob": "2008-04-12", "gender": "F"},
-        source="UIDAI", method=VerificationMethod.CRYPTOGRAPHIC, confidence=1.0, evidence_hash="dummy"
+        source="UIDAI", method=VerificationMethod.API, confidence=1.0, evidence_hash="dummy"
     )
     await att_service.issue_attestation(
         student_id="stu-sunita-001", claim_type=ClaimType.ST_STATUS,
         claim_value={"tribe": "Santal", "state": "Jharkhand"},
-        source="Revenue Department, Jharkhand", method=VerificationMethod.CRYPTOGRAPHIC, confidence=1.0, evidence_hash="dummy"
+        source="Revenue Department, Jharkhand", method=VerificationMethod.API, confidence=1.0, evidence_hash="dummy"
     )
     await att_service.issue_attestation(
         student_id="stu-sunita-001", claim_type=ClaimType.INCOME,
         claim_value={"family_income": 45000},
-        source="Revenue Department, Jharkhand", method=VerificationMethod.CRYPTOGRAPHIC, confidence=1.0, evidence_hash="dummy"
+        source="Revenue Department, Jharkhand", method=VerificationMethod.API, confidence=1.0, evidence_hash="dummy"
     )
     
     await db.commit()
