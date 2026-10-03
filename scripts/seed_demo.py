@@ -36,6 +36,7 @@ from app.database import AsyncSessionLocal, Base, engine  # noqa: E402
 import app.models  # noqa: E402,F401
 from app.gateway.models import User  # noqa: E402
 from app.ledger.models import Household  # noqa: E402
+from app.wallet.models import WalletDocument  # noqa: E402
 from app.ledger.service import LedgerService  # noqa: E402
 from app.shared.types import CanonicalState, Gender, SchemeType, UserRole  # noqa: E402
 from app.students.service import create_student  # noqa: E402
@@ -95,6 +96,21 @@ async def seed(db: AsyncSession, now: datetime | None = None) -> dict:
                                              occurred_at=now - timedelta(days=20))
     await ledger.transition(sunita, CanonicalState.INSTITUTE_VERIFICATION, SEED_ACTOR, occurred_at=now - timedelta(days=18))
     await ledger.transition(sunita, CanonicalState.AUTHORITY_VERIFICATION, SEED_ACTOR, occurred_at=now - timedelta(days=9))
+    # Hardcoded documents for Sunita's wallet
+    db.add_all([
+        WalletDocument(
+            student_id="stu-sunita-001", document_type="INCOME_CERTIFICATE", title="Income Certificate",
+            source="DIGILOCKER", source_ref="INC-JH-2026-001", issuer="Revenue Department, Jharkhand",
+            storage_key="dummy_income", content_sha256="dummy", mime_type="application/pdf",
+            size_bytes=1024, issuer_signed=True, uploaded_by=SEED_ACTOR, created_at=now
+        ),
+        WalletDocument(
+            student_id="stu-sunita-001", document_type="CASTE_CERTIFICATE", title="Caste Certificate",
+            source="DIGILOCKER", source_ref="CST-JH-2026-001", issuer="Revenue Department, Jharkhand",
+            storage_key="dummy_caste", content_sha256="dummy", mime_type="application/pdf",
+            size_bytes=1024, issuer_signed=True, uploaded_by=SEED_ACTOR, created_at=now
+        )
+    ])
     await db.commit()
     return {"sunita_application": sunita.id}
 
