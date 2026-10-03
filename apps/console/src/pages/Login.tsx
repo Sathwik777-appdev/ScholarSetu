@@ -117,15 +117,11 @@ export default function Login() {
         </div>
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNykiLz48L3N2Zz4=')] opacity-60" />
 
-        <div className="relative flex-1 flex flex-col justify-end p-8 lg:p-14 text-white">
-          {/* Logo & Branding */}
+        <div className="relative flex-1 flex flex-col justify-between p-8 lg:p-14 text-white">
+          {/* Logo & Branding (Top Left) */}
           <div className="mb-auto">
             <div className="inline-flex items-center gap-3 rounded-2xl bg-white/5 p-2 pr-5 ring-1 ring-white/10 backdrop-blur-md">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#ff9933] via-white to-[#138808] p-[2px] shadow-glow">
-                <div className="grid h-full w-full place-items-center rounded-[10px] bg-ink-950">
-                  <Landmark className="h-5 w-5 text-white" />
-                </div>
-              </div>
+              <BrandMark />
               <div>
                 <p className="text-lg font-bold tracking-tight text-white leading-none">ScholarSetu</p>
                 <p className="mt-0.5 text-[11px] font-medium tracking-wide text-slate-300 uppercase">Ministry of Tribal Affairs</p>
@@ -133,7 +129,34 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Slogan & Typography */}
+          {/* Hero Logo (Center empty space) */}
+          <div className="flex flex-1 items-center justify-center my-8 lg:my-0">
+            <div className="relative">
+              {/* Glow layers behind the logo */}
+              <div className="absolute inset-0 bg-gradient-to-br from-[#ff9933] via-white to-[#138808] blur-3xl opacity-20 rounded-full scale-150 animate-pulse" />
+              
+              {/* Huge Bridge Logo */}
+              <svg viewBox="0 0 32 32" className="h-40 w-40 lg:h-64 lg:w-64 drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]" aria-hidden="true">
+                <defs>
+                  <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#ff9933" />
+                    <stop offset="50%" stopColor="#ffffff" />
+                    <stop offset="100%" stopColor="#138808" />
+                  </linearGradient>
+                </defs>
+                <path d="M3 21h26M6 21c0-6 4.5-10 10-10s10 4 10 10" fill="none" stroke="url(#logo-grad)" strokeWidth="1.5" strokeLinecap="round" />
+                
+                {/* Decorative nodes on the bridge */}
+                <circle cx="6" cy="21" r="1.5" fill="#ff9933" />
+                <circle cx="11" cy="12.5" r="1.5" fill="#ffffff" />
+                <circle cx="16" cy="11" r="1.5" fill="#ffffff" />
+                <circle cx="21" cy="12.5" r="1.5" fill="#ffffff" />
+                <circle cx="26" cy="21" r="1.5" fill="#138808" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Slogan & Typography (Bottom) */}
           <div className="max-w-xl">
             <h1 className="text-4xl lg:text-5xl font-extrabold leading-[1.1] tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-white via-slate-100 to-slate-400">
               Building Bridges to <br/>
