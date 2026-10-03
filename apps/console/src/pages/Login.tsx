@@ -135,24 +135,8 @@ export default function Login() {
               {/* Glow layers behind the logo */}
               <div className="absolute inset-0 bg-gradient-to-br from-[#ff9933] via-white to-[#138808] blur-3xl opacity-20 rounded-full scale-150 animate-pulse" />
               
-              {/* Huge Bridge Logo */}
-              <svg viewBox="0 0 32 32" className="h-40 w-40 lg:h-64 lg:w-64 drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]" aria-hidden="true">
-                <defs>
-                  <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#ff9933" />
-                    <stop offset="50%" stopColor="#ffffff" />
-                    <stop offset="100%" stopColor="#138808" />
-                  </linearGradient>
-                </defs>
-                <path d="M3 21h26M6 21c0-6 4.5-10 10-10s10 4 10 10" fill="none" stroke="url(#logo-grad)" strokeWidth="1.5" strokeLinecap="round" />
-                
-                {/* Decorative nodes on the bridge */}
-                <circle cx="6" cy="21" r="1.5" fill="#ff9933" />
-                <circle cx="11" cy="12.5" r="1.5" fill="#ffffff" />
-                <circle cx="16" cy="11" r="1.5" fill="#ffffff" />
-                <circle cx="21" cy="12.5" r="1.5" fill="#ffffff" />
-                <circle cx="26" cy="21" r="1.5" fill="#138808" />
-              </svg>
+              {/* Huge Custom Logo Image */}
+              <img src="/hero-logo.jpg" alt="ScholarSetu Logo" className="relative h-48 w-auto lg:h-72 mix-blend-screen drop-shadow-[0_0_20px_rgba(255,255,255,0.15)] rounded-3xl" />
             </div>
           </div>
 
