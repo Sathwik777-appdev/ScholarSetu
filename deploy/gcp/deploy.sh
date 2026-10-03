@@ -146,7 +146,7 @@ run_flags() {  # shared by the API service and the migration job
   secrets+=",PPRL_HMAC_KEY=scholarsetu-$ENV-pprl-key:latest,SMS_GATEWAY_TOKEN=scholarsetu-$ENV-sms-token:latest"
   secrets+=",SKILL_SERVICE_TOKEN=scholarsetu-$ENV-skill-token:latest"
   secrets+=",MINIO_ACCESS_KEY=scholarsetu-$ENV-hmac-access:latest,MINIO_SECRET_KEY=scholarsetu-$ENV-hmac-secret:latest"
-  exists g secrets describe "scholarsetu-$ENV-gemini-key" && secrets+=",GEMINI_API_KEY=scholarsetu-$ENV-gemini-key:latest"
+  exists g secrets describe "scholarsetu-$ENV-groq-key" && secrets+=",GROQ_API_KEY=scholarsetu-$ENV-groq-key:latest"
   secrets+=",/secrets/attestation/key.pem=scholarsetu-$ENV-attestation-key:latest"
   # Officer sign-in codes by email (Microsoft 365). Add the mailbox's password once:
   #   printf %s "$PASSWORD" | gcloud secrets create scholarsetu-$ENV-smtp-password --data-file=-
@@ -174,7 +174,7 @@ run_flags() {  # shared by the API service and the migration job
   echo --image "$REPO/scholarsetu-core:$TAG" --region "$REGION" --service-account "$SA_EMAIL" \
     --set-cloudsql-instances "$CONNECTION" --network default --subnet default --vpc-egress private-ranges-only \
     --set-secrets "$secrets" \
-    --set-env-vars "DEMO_MODE=$DEMO_MODE,RUN_MIGRATIONS=false,OUTBOX_PUBLISHER_ENABLED=false,ADAPTER_SYNC_INTERVAL_SECONDS=0,RETENTION_INTERVAL_SECONDS=0,MOCK_SERVICE_URL=http://$(vm_ip):8100,MINIO_URL=https://storage.googleapis.com,MINIO_BUCKET=$BUCKET,ATTESTATION_PRIVATE_KEY_PATH=/secrets/attestation/key.pem,SLA_DEMO_SECONDS=3600,DATABASE_POOL_SIZE=3,DATABASE_MAX_OVERFLOW=2,GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.8-flash},$dl" \
+    --set-env-vars "DEMO_MODE=$DEMO_MODE,RUN_MIGRATIONS=false,OUTBOX_PUBLISHER_ENABLED=false,ADAPTER_SYNC_INTERVAL_SECONDS=0,RETENTION_INTERVAL_SECONDS=0,MOCK_SERVICE_URL=http://$(vm_ip):8100,MINIO_URL=https://storage.googleapis.com,MINIO_BUCKET=$BUCKET,ATTESTATION_PRIVATE_KEY_PATH=/secrets/attestation/key.pem,SLA_DEMO_SECONDS=3600,DATABASE_POOL_SIZE=3,DATABASE_MAX_OVERFLOW=2,GROQ_MODEL=${GROQ_MODEL:-llama3-70b-8192},$dl" \
     --cpu 1 --memory 2Gi
 }
 

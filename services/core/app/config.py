@@ -69,8 +69,8 @@ class Settings(BaseSettings):
     # Shared secret JAGO presents on /v1/skill/tools/*. Unset = skill endpoints disabled.
     SKILL_SERVICE_TOKEN: str | None = None
 
-    GEMINI_API_KEY: str | None = None
-    GEMINI_MODEL: str = "gemini-3.8-flash"
+    GROQ_API_KEY: str | None = None
+    GROQ_MODEL: str = "llama3-70b-8192"
 
     # DigiLocker, authorised-partner OAuth 2.0 (authorisation code + PKCE).
     #   mock       the test DigiLocker in mocks/: documents are test data, never issuer-signed, and never
