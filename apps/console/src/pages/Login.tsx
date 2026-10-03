@@ -132,11 +132,8 @@ export default function Login() {
           {/* Hero Logo (Center empty space) */}
           <div className="flex flex-1 items-center justify-center my-8 lg:my-0">
             <div className="relative">
-              {/* Glow layers behind the logo */}
-              <div className="absolute inset-0 bg-gradient-to-br from-[#ff9933] via-white to-[#138808] blur-3xl opacity-20 rounded-full scale-150 animate-pulse" />
-              
               {/* Huge Custom Logo Image */}
-              <img src="/hero-logo.jpg" alt="ScholarSetu Logo" className="relative h-48 w-auto lg:h-72 mix-blend-screen drop-shadow-[0_0_20px_rgba(255,255,255,0.15)] rounded-3xl" />
+              <img src="/hero-logo.jpg" alt="ScholarSetu Logo" className="relative h-48 w-auto lg:h-72 rounded-3xl shadow-2xl" />
             </div>
           </div>
 
