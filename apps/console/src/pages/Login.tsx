@@ -108,23 +108,50 @@ export default function Login() {
 
   return (
     <div className="grid min-h-dvh grid-cols-[minmax(0,1fr)] bg-white lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-      <div className="relative min-h-[44vh] min-w-0 overflow-hidden bg-ink-900 lg:min-h-dvh">
-        <Hero3D className="absolute inset-0" />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink-950/95 via-ink-950/30 to-transparent" />
-        <div className="absolute left-6 right-6 bottom-6 lg:left-12 lg:bottom-12 text-white">
-          <div className="flex items-center gap-3">
-            <BrandMark />
-            <div>
-              <p className="text-lg font-semibold tracking-tight leading-none">ScholarSetu</p>
-              <p className="mt-1 text-xs text-slate-300">Ministry of Tribal Affairs · Scholarships</p>
+      <div className="relative min-h-[44vh] min-w-0 overflow-hidden bg-ink-950 lg:min-h-dvh flex flex-col">
+        {/* Abstract Tricolour Atmosphere */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute -top-[30%] -left-[10%] w-[80%] h-[80%] rounded-full bg-[#ff9933]/20 blur-[120px] mix-blend-screen" />
+          <div className="absolute top-[10%] left-[10%] w-[80%] h-[80%] rounded-full bg-white/5 blur-[100px] mix-blend-screen" />
+          <div className="absolute -bottom-[20%] -right-[10%] w-[80%] h-[80%] rounded-full bg-[#138808]/20 blur-[120px] mix-blend-screen" />
+        </div>
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNykiLz48L3N2Zz4=')] opacity-60" />
+
+        <div className="relative flex-1 flex flex-col justify-end p-8 lg:p-14 text-white">
+          {/* Logo & Branding */}
+          <div className="mb-auto">
+            <div className="inline-flex items-center gap-3 rounded-2xl bg-white/5 p-2 pr-5 ring-1 ring-white/10 backdrop-blur-md">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#ff9933] via-white to-[#138808] p-[2px] shadow-glow">
+                <div className="grid h-full w-full place-items-center rounded-[10px] bg-ink-950">
+                  <Landmark className="h-5 w-5 text-white" />
+                </div>
+              </div>
+              <div>
+                <p className="text-lg font-bold tracking-tight text-white leading-none">ScholarSetu</p>
+                <p className="mt-0.5 text-[11px] font-medium tracking-wide text-slate-300 uppercase">Ministry of Tribal Affairs</p>
+              </div>
             </div>
           </div>
-          <p className="mt-5 max-w-md text-2xl lg:text-4xl font-semibold leading-tight tracking-tight">
-            Verify once, reuse everywhere.
-          </p>
-          <p className="mt-2 max-w-md text-sm text-slate-300">
-            Every tribal student's scholarship in one view, from application to money in the bank.
-          </p>
+
+          {/* Slogan & Typography */}
+          <div className="max-w-xl">
+            <h1 className="text-4xl lg:text-5xl font-extrabold leading-[1.1] tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-white via-slate-100 to-slate-400">
+              Building Bridges to <br/>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ff9933] via-white to-[#138808]">Tribal Education.</span>
+            </h1>
+            <p className="mt-5 text-lg text-slate-300 leading-relaxed font-medium">
+              Verify once, reuse everywhere. A unified platform bringing transparency and speed to every tribal student's scholarship journey.
+            </p>
+            
+            <div className="mt-8 flex items-center gap-4 text-sm font-medium text-slate-400">
+              <div className="flex items-center gap-1.5">
+                <div className="h-2 w-2 rounded-full bg-[#138808] shadow-[0_0_8px_rgba(19,136,8,0.8)]" />
+                Live and Audited
+              </div>
+              <span className="text-slate-600">•</span>
+              <span>Government of India</span>
+            </div>
+          </div>
         </div>
       </div>
 
