@@ -1,18 +1,41 @@
-# ScholarSetu
+<div align="center">
+  
+  <img src="apps/console/public/hero-logo.png" alt="ScholarSetu Logo" width="120" />
+  
+  # ScholarSetu 🎓
+  
+  **Unified, frictionless scholarship platform for Scheduled Tribe students.**
+  
+  *Verify once, reuse everywhere, and never lose a tribal student between schemes, systems or bank accounts.*
+  
+  [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg?style=for-the-badge)](#)
+  [![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Mobile-blue?style=for-the-badge)](#)
+  [![AI Powered](https://img.shields.io/badge/AI_Powered-Groq%20Llama3-orange?style=for-the-badge)](#)
+  [![Security](https://img.shields.io/badge/Security-Ed25519_Signed-blueviolet?style=for-the-badge)](#)
 
-**Unified scholarship platform for Scheduled Tribe students** —  Team ACE.
+</div>
 
-> Verify once, reuse everywhere, and never lose a tribal student between schemes, systems or bank accounts.
+<br/>
 
-### 🌐 Live Deployments & Quick Links
-- **Officer & Ministry Web Console**: [https://console-khaki-two.vercel.app](https://console-khaki-two.vercel.app)
-- **Live Backend API & OpenAPI Docs**: [https://scholarsetu-api-906769842576.asia-south1.run.app/docs](https://scholarsetu-api-906769842576.asia-south1.run.app/docs)
-- **Comprehensive Architectural Specification (66KB)**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- **Full Project Demo & Voiceover Script**: [docs/FULL_PROJECT_DEMO_SCRIPT.md](docs/FULL_PROJECT_DEMO_SCRIPT.md)
+### 🚀 Live Deployments & Quick Links
+- 🌐 **Officer & Ministry Web Console**: [https://console-khaki-two.vercel.app](https://console-khaki-two.vercel.app)
+- 🔌 **Live Backend API & OpenAPI Docs**: [https://scholarsetu-api-906769842576.asia-south1.run.app/docs](https://scholarsetu-api-906769842576.asia-south1.run.app/docs)
+- 🏗 **Comprehensive Architectural Specification (66KB)**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- 🎬 **Full Project Demo & Voiceover Script**: [docs/FULL_PROJECT_DEMO_SCRIPT.md](docs/FULL_PROJECT_DEMO_SCRIPT.md)
 
-This is a working prototype. Government systems (NSP, SFMP, NOS portal, DigiLocker, UIDAI, e-District,
-AISHE, UDISE+, APAAR, UGC-NTA, PFMS/NPCI) are **mock services** with synthetic data. Every place where the
-prototype differs from the design is listed in [ARCHITECTURE.md §19 "Prototype Deviations"](docs/ARCHITECTURE.md#19-prototype-deviations).
+---
+
+### ✨ Key Features at a Glance
+
+* **🛡️ Scholarship Passport**: Verified demographic claims (Income, Caste, Identity) are cryptographically signed using Ed25519 keys and converted into QR codes.
+* **🤖 Groq-Powered AI Assistant (JAGO)**: A blazing-fast, localized AI chatbot that helps students track applications and disbursements.
+* **🔗 DigiLocker Integration**: 1-click document fetch mechanism integrated natively into the mobile experience.
+* **📱 Offline-First Mobile App**: Flutter app with SQLCipher local storage and "Mitra Mode" for assisted applications.
+* **📊 3D Management Console**: Unified, real-time tracking for Ministry officials built with React, Vite, and Three.js.
+
+> **Note**: This is a working prototype. Government systems (NSP, SFMP, NOS portal, DigiLocker, UIDAI, e-District, AISHE, UDISE+, APAAR, UGC-NTA, PFMS/NPCI) are **mock services** with synthetic data. Every place where the prototype differs from the design is listed in [ARCHITECTURE.md §19 "Prototype Deviations"](docs/ARCHITECTURE.md#19-prototype-deviations).
+
+---
 
 ## Architecture & System Design
 
