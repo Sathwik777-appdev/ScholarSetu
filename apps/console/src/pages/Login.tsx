@@ -139,7 +139,7 @@ export default function Login() {
 
           {/* Slogan & Typography (Bottom) */}
           <div className="max-w-xl">
-            <h1 className="text-4xl lg:text-5xl font-extrabold leading-[1.1] tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-white via-slate-100 to-slate-400">
+            <h1 className="text-4xl lg:text-5xl font-outfit font-extrabold leading-[1.1] tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-white via-slate-100 to-slate-400">
               Building Bridges to <br/>
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ff9933] via-white to-[#138808]">Tribal Education.</span>
             </h1>

@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
+@import "@fontsource-variable/outfit";
 
 /*
   ScholarSetu design system.
@@ -8,6 +9,7 @@
 */
 @theme {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-outfit: "Outfit Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --color-ink-950: #060a15;
   --color-ink-900: #0b1222;
