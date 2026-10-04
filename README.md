@@ -20,6 +20,7 @@
 ### 🚀 Live Deployments & Quick Links
 - 🌐 **Officer & Ministry Web Console**: [https://console-khaki-two.vercel.app](https://console-khaki-two.vercel.app)
 - 🔌 **Live Backend API & OpenAPI Docs**: [https://scholarsetu-api-906769842576.asia-south1.run.app/docs](https://scholarsetu-api-906769842576.asia-south1.run.app/docs)
+- 📱 **Android Mobile App (APK)**: [Download APK (Google Drive)](https://drive.google.com/file/d/1hBN2RIaWfgWgg0PYulFaMoLm0Z1ax4YJ/view?usp=sharing)
 - 🏗 **Comprehensive Architectural Specification (66KB)**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - 🎬 **Full Project Demo & Voiceover Script**: [docs/FULL_PROJECT_DEMO_SCRIPT.md](docs/FULL_PROJECT_DEMO_SCRIPT.md)
 

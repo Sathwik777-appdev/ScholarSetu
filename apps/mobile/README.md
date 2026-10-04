@@ -3,6 +3,8 @@
 The app for students, parents/guardians (family mode) and Mitra helpers. Officers and the ministry use
 the web console in `apps/console`.
 
+> 📲 **Pre-built APK**: [Download APK (Google Drive)](https://drive.google.com/file/d/1hBN2RIaWfgWgg0PYulFaMoLm0Z1ax4YJ/view?usp=sharing)
+
 ## What it does
 
 - **Sign in / register** with a phone number confirmed by an SMS code. Registering creates the account
