@@ -3,10 +3,12 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 // When hosted on Vercel, always use same-origin relative /v1 to leverage Vercel's edge proxy and eliminate all CORS issues.
 const isVercel = typeof window !== 'undefined' && window.location.hostname.endsWith('vercel.app');
 const rawOrigin = import.meta.env.VITE_API_URL;
-const API_ORIGIN: string = isVercel
-  ? ''
-  : (rawOrigin !== undefined && rawOrigin !== '' ? rawOrigin : (import.meta.env.PROD ? '' : 'http://localhost:8000'));
-export const API_BASE_URL = API_ORIGIN ? `${API_ORIGIN.replace(/\/$/, '')}/v1` : '/v1';
+const API_ORIGIN: string = rawOrigin !== undefined && rawOrigin !== ''
+  ? rawOrigin
+  : (import.meta.env.PROD || (typeof window !== 'undefined' && window.location.hostname.endsWith('vercel.app'))
+      ? 'https://scholarsetu-api.onrender.com'
+      : 'http://localhost:8000');
+export const API_BASE_URL = `${API_ORIGIN.replace(/\/$/, '')}/v1`;
 
 const TOKEN_KEY = 'scholarsetu.console.token';
 const REFRESH_KEY = 'scholarsetu.console.refresh';
