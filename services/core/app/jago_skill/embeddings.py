@@ -18,11 +18,15 @@ class Embedder:
         with self._lock:
             if self._model is None:
                 from fastembed import TextEmbedding
-                self._model = TextEmbedding(self.model_name, cache_dir=self.cache_dir)
+                self._model = TextEmbedding(self.model_name, cache_dir=self.cache_dir, threads=1)
         return self._model
 
     def embed_sync(self, texts: list[str]) -> list[list[float]]:
-        return [vector.tolist() for vector in self._load().embed(texts)]
+        try:
+            return [vector.tolist() for vector in self._load().embed(texts)]
+        except Exception as e:
+            logger.warning("Embedder error (%s); falling back to zero vectors", e)
+            return [[0.0] * 384 for _ in texts]
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         return await asyncio.to_thread(self.embed_sync, texts)

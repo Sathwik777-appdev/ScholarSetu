@@ -155,8 +155,14 @@ async def search(db: AsyncSession, embedder: Embedder, query: str, scheme: Optio
                  limit: int = 3) -> list[Passage]:
     """Merge the best vector matches with the best keyword matches, then rank by the combined score."""
     scheme = scheme or detect_scheme(query)
-    [vector] = await embedder.embed([query])
-    similarity = (1 - GuidelineChunk.embedding.cosine_distance(vector)).label("similarity")
+    try:
+        [vector] = await embedder.embed([query])
+        if any(v != 0.0 for v in vector):
+            similarity = (1 - GuidelineChunk.embedding.cosine_distance(vector)).label("similarity")
+        else:
+            similarity = literal(0.0).label("similarity")
+    except Exception:
+        similarity = literal(0.0).label("similarity")
     or_query = _or_query(query)
     if or_query:
         keyword = func.ts_rank_cd(GuidelineChunk.tsv, func.to_tsquery("english", or_query), 32).label("keyword")
@@ -174,7 +180,8 @@ async def search(db: AsyncSession, embedder: Embedder, query: str, scheme: Optio
     scored = []
     for chunk, sim, _kw in candidates.values():
         if has_content_terms:
-            score = VECTOR_WEIGHT * sim + KEYWORD_WEIGHT * _coverage(terms, chunk.section, chunk.text)
+            cov = _coverage(terms, chunk.section, chunk.text)
+            score = (VECTOR_WEIGHT * sim + KEYWORD_WEIGHT * cov) if sim > 0 else cov
         else:  # nothing to match lexically (e.g. untranslated Hindi): rely on the multilingual embedding
             score = sim
         scored.append(Passage(chunk.id, chunk.scheme, chunk.section, chunk.text, chunk.source_title,

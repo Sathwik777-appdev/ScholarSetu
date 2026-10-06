@@ -31,3 +31,7 @@ services:
         value: "0"
       - key: CORS_ALLOWED_ORIGINS
         value: "https://console-khaki-two.vercel.app,http://localhost:5173,http://localhost:8000"
+      - key: PPRL_HMAC_KEY
+        value: "44d3887302f1d4ca4de6253cbeed5a78f037628cfc4b130d335432de6ac207d7"
+      - key: SMS_GATEWAY_TOKEN
+        value: "b010ffee3e5ff85e21dafc346ba2b527a14fa4fcbb913fbb"
