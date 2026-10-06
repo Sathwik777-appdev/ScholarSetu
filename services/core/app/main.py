@@ -224,6 +224,7 @@ async def root():
 
 
 @app.get("/health", tags=["System"])
+@app.get("/v1/health", tags=["System"])
 async def health_check():
     """Liveness: the API process is up."""
     return {"status": "ok", "service": "scholarsetu-core", "version": app.version,
@@ -231,6 +232,7 @@ async def health_check():
 
 
 @app.get("/health/ready", tags=["System"])
+@app.get("/v1/health/ready", tags=["System"])
 async def readiness():
     """Readiness: checks the database and the event bus."""
     checks = {}

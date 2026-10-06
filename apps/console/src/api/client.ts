@@ -3,7 +3,7 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 // When hosted on Vercel, always use same-origin relative /v1 to leverage Vercel's edge proxy and eliminate all CORS issues.
 const isVercel = typeof window !== 'undefined' && window.location.hostname.endsWith('vercel.app');
 const rawOrigin = import.meta.env.VITE_API_URL;
-const API_ORIGIN: string = rawOrigin !== undefined && rawOrigin !== ''
+export const API_ORIGIN: string = rawOrigin !== undefined && rawOrigin !== ''
   ? rawOrigin
   : (import.meta.env.PROD || (typeof window !== 'undefined' && window.location.hostname.endsWith('vercel.app'))
       ? 'https://scholarsetu-api.onrender.com'
@@ -29,7 +29,7 @@ export const tokenStore = {
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 60000,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -50,6 +50,9 @@ const wakingListeners = new Set<WakingListener>();
 export const onWaking = (fn: WakingListener) => {
   wakingListeners.add(fn);
   return () => { wakingListeners.delete(fn); };
+};
+export const triggerWaking = () => {
+  wakingListeners.forEach((fn) => fn());
 };
 
 type Renewed = { token: string } | { ended: true } | { unavailable: true };
@@ -102,14 +105,16 @@ apiClient.interceptors.response.use(
 export function isWaking(error: unknown): boolean {
   if (!axios.isAxiosError(error)) return false;
   const status = error.response?.status;
-  if (status === 502 || status === 504) return true;
-  return status === 503 && (error.response?.data as { code?: unknown })?.code === 'WAKING';
+  if (status === 502 || status === 504 || status === 503) return true;
+  if (error.code === 'ECONNABORTED' || (typeof error.message === 'string' && error.message.toLowerCase().includes('timeout'))) return true;
+  if (!error.response && error.code === 'ERR_NETWORK') return true;
+  return false;
 }
 
 /** A message fit to show an officer: the API's own detail when there is one, never a stack trace. */
 export function errorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    if (isWaking(error)) return 'ScholarSetu is starting up after being idle. This takes a few minutes; this page will refresh itself.';
+    if (isWaking(error)) return 'ScholarSetu cloud instance is spinning up from idle (~50s). The live counter will refresh when ready.';
     if (!error.response) return 'The ScholarSetu API could not be reached.';
     const detail = (error.response.data as { detail?: unknown })?.detail;
     if (typeof detail === 'string') return detail;

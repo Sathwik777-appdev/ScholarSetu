@@ -4,6 +4,32 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  server: {
+    port: 5173,
+    proxy: {
+      '/health': {
+        target: 'https://scholarsetu-api.onrender.com',
+        changeOrigin: true,
+      },
+      '/v1': {
+        target: 'https://scholarsetu-api.onrender.com',
+        changeOrigin: true,
+      },
+    },
+  },
+  preview: {
+    port: 4173,
+    proxy: {
+      '/health': {
+        target: 'https://scholarsetu-api.onrender.com',
+        changeOrigin: true,
+      },
+      '/v1': {
+        target: 'https://scholarsetu-api.onrender.com',
+        changeOrigin: true,
+      },
+    },
+  },
   build: {
     sourcemap: false,
     // three.js (~900 kB before compression) stays in the lazily loaded 3D chunk; it is not preloaded.

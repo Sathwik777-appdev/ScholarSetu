@@ -4,6 +4,14 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/health/ready",
+      "destination": "https://scholarsetu-api.onrender.com/health/ready"
+    },
+    {
+      "source": "/health",
+      "destination": "https://scholarsetu-api.onrender.com/health"
+    },
+    {
       "source": "/v1/(.*)",
       "destination": "https://scholarsetu-api.onrender.com/v1/$1"
     },

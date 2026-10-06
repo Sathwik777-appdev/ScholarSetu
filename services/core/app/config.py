@@ -96,7 +96,7 @@ class Settings(BaseSettings):
     PUBLIC_BASE_URL: str = "http://localhost:8000"
 
     # Comma-separated list of browser origins allowed to call the API with credentials.
-    CORS_ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:8080"  # Vite dev server, compose console
+    CORS_ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:4173,http://localhost:8080,https://console-khaki-two.vercel.app"  # Dev servers & production console
 
     MITRA_MAX_SESSION_MINUTES: int = 30
 
