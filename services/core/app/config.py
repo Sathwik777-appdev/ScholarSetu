@@ -81,8 +81,8 @@ class Settings(BaseSettings):
     DIGILOCKER_MODE: str = "mock"
     DIGILOCKER_API_URL: str | None = None        # server-to-server base; mock default MOCK_SERVICE_URL/digilocker
     DIGILOCKER_AUTHORIZE_URL: str | None = None  # the page the student's browser opens (see digilocker_authorize_url)
-    DIGILOCKER_CLIENT_ID: str | None = None
-    DIGILOCKER_CLIENT_SECRET: str | None = None
+    DIGILOCKER_CLIENT_ID: str | None = "scholarsetu-demo"
+    DIGILOCKER_CLIENT_SECRET: str | None = "demo-secret-1234567890"
     # True while verification answers come from the test government services (mocks/). Attestations issued from
     # them are marked test_data, shown as "(test)" and carry test_data in the signed payload, so a scanned passport
     # never claims UIDAI or e-District confirmed something the synthetic services made up. Set false when the

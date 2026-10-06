@@ -35,3 +35,11 @@ services:
         value: "44d3887302f1d4ca4de6253cbeed5a78f037628cfc4b130d335432de6ac207d7"
       - key: SMS_GATEWAY_TOKEN
         value: "b010ffee3e5ff85e21dafc346ba2b527a14fa4fcbb913fbb"
+      - key: DIGILOCKER_MODE
+        value: "mock"
+      - key: DIGILOCKER_CLIENT_ID
+        value: "scholarsetu-demo"
+      - key: DIGILOCKER_CLIENT_SECRET
+        value: "demo-secret-1234567890"
+      - key: PUBLIC_BASE_URL
+        value: "https://scholarsetu-api.onrender.com"

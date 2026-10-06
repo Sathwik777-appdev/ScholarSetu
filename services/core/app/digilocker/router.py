@@ -21,7 +21,11 @@ router = APIRouter(prefix="/v1", tags=["DigiLocker"])
 
 async def get_digilocker_http():
     """FastAPI dependency: the server-to-server client for DigiLocker. Tests override its transport."""
-    client = httpx.AsyncClient(base_url=settings.digilocker_api_url, timeout=10.0)
+    if settings.DIGILOCKER_MODE == "mock" and not settings.DIGILOCKER_API_URL:
+        from app.digilocker.mock_handler import get_mock_digilocker_transport
+        client = httpx.AsyncClient(base_url="http://mock-digilocker", transport=get_mock_digilocker_transport(), timeout=10.0)
+    else:
+        client = httpx.AsyncClient(base_url=settings.digilocker_api_url, timeout=10.0)
     try:
         yield client
     finally:
