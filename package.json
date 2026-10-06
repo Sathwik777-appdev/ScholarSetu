@@ -1,0 +1,8 @@
+{
+  "name": "scholarsetu-root",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix apps/console run build",
+    "dev": "npm --prefix apps/console run dev"
+  }
+}
