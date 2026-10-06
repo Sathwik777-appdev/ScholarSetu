@@ -211,6 +211,12 @@ async def unhandled_error(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "Internal error", "error_id": error_id})
 
 
+@app.api_route("/", methods=["GET", "HEAD"], tags=["System"])
+async def root():
+    """Root endpoint for health checks and load balancers."""
+    return {"status": "ok", "service": "scholarsetu-core", "version": app.version}
+
+
 @app.get("/health", tags=["System"])
 async def health_check():
     """Liveness: the API process is up."""
