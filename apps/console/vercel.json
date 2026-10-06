@@ -5,7 +5,7 @@
   "rewrites": [
     {
       "source": "/v1/(.*)",
-      "destination": "https://scholarsetu-api-906769842576.asia-south1.run.app/v1/$1"
+      "destination": "https://scholarsetu-api.onrender.com/v1/$1"
     },
     {
       "source": "/((?!assets/|favicon.svg|robots.txt).*)",

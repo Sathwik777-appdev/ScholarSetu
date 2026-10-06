@@ -1,6 +1,6 @@
 /// Build-time configuration. Pass `--dart-define=API_URL=http://...` for custom environments.
 /// The default reaches this development host machine on the current local network.
-const String defaultApiOrigin = String.fromEnvironment('API_URL', defaultValue: 'https://scholarsetu-api-906769842576.asia-south1.run.app');
+const String defaultApiOrigin = String.fromEnvironment('API_URL', defaultValue: 'https://scholarsetu-api.onrender.com');
 
 String formatBaseUrl(String origin) {
   var clean = origin.trim().replaceAll(RegExp(r'/$'), '');
