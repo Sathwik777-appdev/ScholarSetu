@@ -19,8 +19,9 @@ COPY rules/ /rules/
 COPY adapters/ /adapters/
 COPY scripts/seed_demo.py /scripts/seed_demo.py
 
+RUN chown -R app:app /app
 USER app
 EXPOSE 8000
-# Migrate (unless RUN_MIGRATIONS=false, e.g. on Cloud Run where a job migrates), then serve on $PORT.
+# Migrate & seed demo accounts (unless RUN_MIGRATIONS=false), then serve on $PORT.
 # Secrets (JWT_SECRET, signing key, database URL) are provided at runtime, never baked in.
-CMD ["sh", "-c", "if [ \"${RUN_MIGRATIONS:-true}\" != false ]; then alembic upgrade head; fi && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
+CMD ["sh", "-c", "if [ \"${RUN_MIGRATIONS:-true}\" != false ]; then alembic upgrade head && python /scripts/seed_demo.py --if-empty; fi && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]

@@ -174,6 +174,17 @@ class Settings(BaseSettings):
 
     LOG_LEVEL: str = "INFO"
 
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _normalize_database_url(cls, v: str) -> str:
+        if v.startswith("postgres://"):
+            v = "postgresql+asyncpg://" + v[len("postgres://"):]
+        elif v.startswith("postgresql://") and not v.startswith("postgresql+asyncpg://"):
+            v = "postgresql+asyncpg://" + v[len("postgresql://"):]
+        if "sslmode=" in v:
+            v = v.replace("sslmode=", "ssl=")
+        return v
+
     @field_validator("JWT_SECRET")
     @classmethod
     def _strong_jwt_secret(cls, v: str) -> str:
