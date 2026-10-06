@@ -44,14 +44,20 @@ NUDGE_SUBJECTS = {"application.>": "nudge-application", "deficiency.>": "nudge-d
 async def _prepare_reference_data() -> None:
     """Load decision tables (fail loudly on a bad rule file) and index the guideline corpus."""
     from app.eligibility.service import load_rule_files
-    from app.jago_skill.embeddings import get_embedder
     from app.jago_skill.rag import ensure_index
     async with AsyncSessionLocal() as db:
         loaded = await load_rule_files(db)
         logger.info("rule versions loaded: %d new", loaded)
     try:
-        async with AsyncSessionLocal() as db:
-            await ensure_index(db, get_embedder())
+        from pathlib import Path
+        precomputed = Path(__file__).resolve().parent / "jago_skill" / "guidelines" / "precomputed_embeddings.json"
+        if precomputed.exists():
+            async with AsyncSessionLocal() as db:
+                await ensure_index(db, None)
+        else:
+            from app.jago_skill.embeddings import get_embedder
+            async with AsyncSessionLocal() as db:
+                await ensure_index(db, get_embedder())
     except Exception:
         logger.exception("guideline index build failed; JAGO guideline answers will say they cannot answer")
 

@@ -58,7 +58,7 @@ def detect_scheme(query: str) -> Optional[SchemeType]:
     return None
 
 
-async def ensure_index(db: AsyncSession, embedder: Embedder) -> int:
+async def ensure_index(db: AsyncSession, embedder: Optional[Embedder] = None) -> int:
     """(Re)embed the corpus when it changed. Returns the number of chunks indexed now (0 if already current)."""
     version = corpus_version()
     rows = [json.loads(line) for line in CORPUS_PATH.read_text(encoding="utf-8").splitlines() if line.strip()]
@@ -66,14 +66,33 @@ async def ensure_index(db: AsyncSession, embedder: Embedder) -> int:
                               .where(GuidelineChunk.corpus_version == version))
     if current == len(rows):
         return 0
-    vectors = await embedder.embed([f"{r['section']}\n{r['text']}" for r in rows])
-    await db.execute(delete(GuidelineChunk))
-    db.add_all(GuidelineChunk(id=r["id"], scheme=r["scheme"], section=r["section"], text=r["text"],
-                              source_title=r["source_title"], source_url=r["source_url"], effective=r["effective"],
-                              corpus_version=version, embedding=v) for r, v in zip(rows, vectors, strict=True))
-    await db.commit()
-    logger.info("indexed %d guideline chunks (corpus %s)", len(rows), version[:12])
-    return len(rows)
+
+    precomputed_file = Path(__file__).with_name("guidelines") / "precomputed_embeddings.json"
+    if precomputed_file.exists():
+        try:
+            precomputed = json.loads(precomputed_file.read_text(encoding="utf-8"))
+            vectors = [precomputed.get(r["id"]) for r in rows]
+            if all(v is not None for v in vectors):
+                await db.execute(delete(GuidelineChunk))
+                db.add_all(GuidelineChunk(id=r["id"], scheme=r["scheme"], section=r["section"], text=r["text"],
+                                          source_title=r["source_title"], source_url=r["source_url"], effective=r["effective"],
+                                          corpus_version=version, embedding=v) for r, v in zip(rows, vectors, strict=True))
+                await db.commit()
+                logger.info("indexed %d guideline chunks from precomputed cache (corpus %s)", len(rows), version[:12])
+                return len(rows)
+        except Exception:
+            logger.exception("failed reading precomputed embeddings; falling back to dynamic embedding")
+
+    if embedder is not None:
+        vectors = await embedder.embed([f"{r['section']}\n{r['text']}" for r in rows])
+        await db.execute(delete(GuidelineChunk))
+        db.add_all(GuidelineChunk(id=r["id"], scheme=r["scheme"], section=r["section"], text=r["text"],
+                                  source_title=r["source_title"], source_url=r["source_url"], effective=r["effective"],
+                                  corpus_version=version, embedding=v) for r, v in zip(rows, vectors, strict=True))
+        await db.commit()
+        logger.info("indexed %d guideline chunks (corpus %s)", len(rows), version[:12])
+        return len(rows)
+    return 0
 
 
 # Hindi / Hinglish words mapped to the English terms the official guidelines use, so the keyword half
