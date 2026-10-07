@@ -48,7 +48,7 @@ export default function WakingBanner() {
   const pollTimerRef = useRef<number | null>(null);
 
   // Health probe function
-  const checkHealth = useCallback(async () => {
+  const checkHealth = useCallback(async (isWakingTrigger = false) => {
     if (pingingRef.current) return;
     pingingRef.current = true;
     setPinging(true);
@@ -56,9 +56,9 @@ export default function WakingBanner() {
     try {
       let res;
       try {
-        res = await axios.get(`${API_ORIGIN}/health/ready`, { timeout: 10000 });
+        res = await axios.get(`${API_ORIGIN}/health/ready`, { timeout: 12000 });
       } catch {
-        res = await apiClient.get('/health/ready', { timeout: 10000 });
+        res = await apiClient.get('/health/ready', { timeout: 12000 });
       }
       const latency = Math.round(performance.now() - start);
       setLastLatencyMs(latency);
@@ -67,37 +67,35 @@ export default function WakingBanner() {
       if (res.data?.ready === true || res.data?.checks?.database === 'ok' || res.data?.status === 'ok') {
         setIsWaking(false);
         setSince(null);
-        setIsReady(true);
+        setIsReady(false);
         setChecks(res.data?.checks || { database: 'ok', guideline_index: 'ok' });
         window.dispatchEvent(new Event('scholarsetu:ready'));
-
-        window.setTimeout(() => {
-          setIsReady(false);
-        }, 1500);
         return;
       }
     } catch {
-      // Backend actually cold, sleeping, or unreachable
-      setIsOnline(false);
-      setIsWaking(true);
-      setSince((prev) => prev ?? Date.now());
+      if (isWakingTrigger || isWaking) {
+        setIsOnline(false);
+        setIsWaking(true);
+        setSince((prev) => prev ?? Date.now());
+      }
     } finally {
       pingingRef.current = false;
       setPinging(false);
     }
-  }, []);
+  }, [isWaking]);
 
   // Listen for real waking events from axios interceptors (502, 503, 504, timeouts)
   useEffect(() => {
     return onWaking(() => {
       setIsWaking(true);
       setSince((prev) => prev ?? Date.now());
+      checkHealth(true);
     });
-  }, []);
+  }, [checkHealth]);
 
-  // Initial mount probe: verify current server status immediately with checkHealth
+  // Initial mount probe: verify current server status silently
   useEffect(() => {
-    checkHealth();
+    checkHealth(false);
   }, [checkHealth]);
 
   // Live timer ticks and periodic polling while waking
@@ -165,6 +163,10 @@ export default function WakingBanner() {
   const PhaseIconComponent = phaseIcon;
 
   // Minimized floating pill view
+  if (!isWaking) {
+    return null;
+  }
+
   if (minimized) {
     return (
       <div className="fixed bottom-4 right-4 z-50">

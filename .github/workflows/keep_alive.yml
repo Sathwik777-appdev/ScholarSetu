@@ -1,0 +1,28 @@
+name: Keep Backend Warm
+
+on:
+  schedule:
+    # Runs every 10 minutes (Render spins down after 15 minutes of inactivity)
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  keep_alive:
+    name: Ping Render API & Database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping API Health
+        run: |
+          echo "Pinging ScholarSetu Core API on Render..."
+          STATUS_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "https://scholarsetu-api.onrender.com/health")
+          echo "GET /health status: $STATUS_HEALTH"
+          
+          echo "Pinging DB Readiness..."
+          STATUS_READY=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "https://scholarsetu-api.onrender.com/health/ready")
+          echo "GET /health/ready status: $STATUS_READY"
+          
+          if [ "$STATUS_HEALTH" -eq 200 ] || [ "$STATUS_READY" -eq 200 ]; then
+            echo "ScholarSetu backend is warm, responsive, and ready."
+          else
+            echo "Backend returned non-200, but request triggered container wake-up."
+          fi

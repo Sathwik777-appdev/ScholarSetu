@@ -38,9 +38,10 @@ const KEY = 'scholarsetu.demoMode';
 
 function read(): boolean {
   try {
-    return localStorage.getItem(KEY) === 'on';
+    const val = localStorage.getItem(KEY);
+    return val === null ? true : val === 'on';
   } catch {
-    return false;
+    return true;
   }
 }
 

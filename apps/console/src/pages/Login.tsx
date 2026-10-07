@@ -63,6 +63,7 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resendIn, setResendIn] = useState(0);
+  const [loggingInEmail, setLoggingInEmail] = useState<string | null>(null);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -74,6 +75,21 @@ export default function Login() {
     const from = (location.state as { from?: string } | null)?.from ?? '/';
     return <Navigate to={from} replace />;
   }
+
+  const handleInstantDemoLogin = async (account: DemoAccount) => {
+    if (!account.email) return;
+    setBusy(true);
+    setLoggingInEmail(account.email);
+    setError(null);
+    try {
+      await verifyOtp(account.email, demo.info?.demo_code ?? '123456', true);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+      setLoggingInEmail(null);
+    }
+  };
 
   const send = async (address: string, viaDemo: boolean) => {
     setBusy(true); setError(null);
@@ -175,8 +191,9 @@ export default function Login() {
               <h1 className="mt-6 text-[28px] font-semibold tracking-tight text-slate-900">Sign in</h1>
               {demoOn ? (
                 <>
-                  <p className="mt-1 text-[15px] text-slate-500">Choose a demo account. Demo accounts use sample data
-                    and the code {demo.info?.demo_code ?? '123456'}.</p>
+                  <p className="mt-1 text-[15px] text-slate-500">
+                    Click any officer below to sign in instantly. Demo accounts use sample data.
+                  </p>
                   {demo.info && !demo.info.available && (
                     <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
                       Demo sign-in is switched off on this server. Turn demo mode off to sign in with your email.</p>
@@ -184,21 +201,54 @@ export default function Login() {
                   <ul className="mt-6 grid gap-2.5">
                     {accounts.map((a) => {
                       const Icon = ROLE_ICON[a.role as keyof typeof ROLE_ICON] ?? Landmark;
+                      const isLoggingIn = loggingInEmail === a.email;
                       return (
                         <li key={a.email}>
-                          <button type="button" disabled={busy} onClick={() => send(a.email!, true)}
-                            className="group flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 text-left shadow-soft transition hover:-translate-y-0.5 hover:border-saffron-400 disabled:opacity-60">
-                            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ink-900 text-saffron-400"><Icon className="h-5 w-5" /></span>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => handleInstantDemoLogin(a)}
+                            className="group flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 text-left shadow-soft transition hover:-translate-y-0.5 hover:border-saffron-400 hover:shadow-md disabled:opacity-75 cursor-pointer"
+                          >
+                            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ink-900 text-saffron-400">
+                              <Icon className="h-5 w-5" />
+                            </span>
                             <span className="min-w-0 flex-1">
-                              <span className="block text-sm font-semibold text-slate-900">{ROLE_LABELS[a.role] ?? a.role}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="block text-sm font-semibold text-slate-900">
+                                  {ROLE_LABELS[a.role] ?? a.role}
+                                </span>
+                                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                                  Instant Login
+                                </span>
+                              </div>
                               <span className="block truncate text-[13px] text-slate-500">{a.name}</span>
                             </span>
-                            <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-saffron-500" />
+                            <div className="flex items-center gap-1 text-xs font-semibold text-saffron-600 transition group-hover:translate-x-0.5">
+                              {isLoggingIn ? (
+                                <span className="text-slate-500 font-normal">Signing in…</span>
+                              ) : (
+                                <>
+                                  <span>Sign in</span>
+                                  <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-saffron-500" />
+                                </>
+                              )}
+                            </div>
                           </button>
                         </li>
                       );
                     })}
                   </ul>
+                  <div className="mt-3.5 flex items-center justify-between text-xs text-slate-400">
+                    <span>1-Click direct authentication</span>
+                    <button
+                      type="button"
+                      onClick={() => { setStep('code'); setEmail(accounts[0]?.email ?? ''); setOtp(demo.info?.demo_code ?? '123456'); setUsingDemo(true); }}
+                      className="hover:text-slate-700 underline underline-offset-2"
+                    >
+                      Enter code manually
+                    </button>
+                  </div>
                 </>
               ) : (
                 <form onSubmit={(e) => { e.preventDefault(); send(email.trim().toLowerCase(), false); }} className="mt-1">
