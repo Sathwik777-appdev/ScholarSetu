@@ -93,7 +93,7 @@ class Settings(BaseSettings):
     # with the DigiLocker partner client (the sandbox client uses scholarsetu://digilocker-callback).
     DIGILOCKER_LOGIN_REDIRECT_URI: str = "scholarsetu://digilocker-callback"
     # Public address of this API, for OAuth redirects (e.g. https://scholarsetu-api-....run.app).
-    PUBLIC_BASE_URL: str = "http://localhost:8000"
+    PUBLIC_BASE_URL: str = "https://scholarsetu-api.onrender.com"
 
     # Comma-separated list of browser origins allowed to call the API with credentials.
     CORS_ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:4173,http://localhost:8080,https://console-khaki-two.vercel.app"  # Dev servers & production console
@@ -130,7 +130,7 @@ class Settings(BaseSettings):
     WORKFLOW_RECONCILE_SECONDS: int = 30
 
     # Shared secret the SMS gateway sends on inbound webhooks (X-SMS-Gateway-Token). Empty = inbound disabled.
-    SMS_GATEWAY_TOKEN: str | None = None
+    SMS_GATEWAY_TOKEN: str | None = "b010ffee3e5ff85e21dafc346ba2b527a14fa4fcbb913fbb"
 
     # JAGO guideline search (ARCHITECTURE.md §6.7): multilingual embeddings in pgvector + keyword match.
     EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -145,7 +145,7 @@ class Settings(BaseSettings):
     RULES_DIR: str = next((str(parent / "rules") for parent in Path(__file__).resolve().parents
                            if (parent / "rules").is_dir()), "/rules")
     # Shared secret for privacy-preserving record linkage (CLK v1). No default: Reach Radar is off without it.
-    PPRL_HMAC_KEY: str | None = None
+    PPRL_HMAC_KEY: str | None = "44d3887302f1d4ca4de6253cbeed5a78f037628cfc4b130d335432de6ac207d7"
 
     # Portal state maps (adapters/<portal>/state_map.yaml). In the container they live at /adapters.
     ADAPTERS_DIR: str = next((str(parent / "adapters") for parent in Path(__file__).resolve().parents
