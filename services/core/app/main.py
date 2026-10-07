@@ -223,16 +223,16 @@ async def root():
     return {"status": "ok", "service": "scholarsetu-core", "version": app.version}
 
 
-@app.get("/health", tags=["System"])
-@app.get("/v1/health", tags=["System"])
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["System"])
+@app.api_route("/v1/health", methods=["GET", "HEAD"], tags=["System"])
 async def health_check():
     """Liveness: the API process is up."""
     return {"status": "ok", "service": "scholarsetu-core", "version": app.version,
             "digilocker": {"mode": settings.DIGILOCKER_MODE, "test_service": settings.digilocker_is_test}}
 
 
-@app.get("/health/ready", tags=["System"])
-@app.get("/v1/health/ready", tags=["System"])
+@app.api_route("/health/ready", methods=["GET", "HEAD"], tags=["System"])
+@app.api_route("/v1/health/ready", methods=["GET", "HEAD"], tags=["System"])
 async def readiness():
     """Readiness: checks the database and the event bus."""
     checks = {}
