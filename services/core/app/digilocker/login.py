@@ -62,6 +62,8 @@ def parse_dob(value: Optional[str]) -> Optional[date]:
 
 
 def _configured() -> None:
+    if settings.DIGILOCKER_MODE == "mock":
+        return
     if not (settings.DIGILOCKER_CLIENT_ID and settings.DIGILOCKER_CLIENT_SECRET):
         raise HTTPException(status_code=503, detail="DigiLocker sign-in is not configured on this server")
 
@@ -108,8 +110,9 @@ async def start(db: AsyncSession = Depends(get_db)):
     db.add(attempt)
     await db.commit()
     redirect = settings.DIGILOCKER_LOGIN_REDIRECT_URI
+    client_id = settings.DIGILOCKER_CLIENT_ID or "scholarsetu-demo"
     url = settings.digilocker_authorize_url + "?" + urlencode({
-        "response_type": "code", "client_id": settings.DIGILOCKER_CLIENT_ID, "redirect_uri": redirect,
+        "response_type": "code", "client_id": client_id, "redirect_uri": redirect,
         "state": attempt.state, "code_challenge": challenge, "code_challenge_method": "S256"})
     return StartOut(authorize_url=url, state=attempt.state, redirect_uri=redirect,
                     test_service=settings.digilocker_is_test and settings.DIGILOCKER_MODE == "mock",
@@ -125,10 +128,12 @@ async def complete(body: CompleteIn, db: AsyncSession = Depends(get_db),
     if attempt is None or attempt.status != "PENDING" or _aware(attempt.expires_at) < _now():
         raise HTTPException(status_code=400, detail="This DigiLocker sign-in has expired or was already used. "
                                                     "Start again.")
+    client_id = settings.DIGILOCKER_CLIENT_ID or "scholarsetu-demo"
+    client_secret = settings.DIGILOCKER_CLIENT_SECRET or "demo-secret-1234567890"
     try:
         res = await http.post(TOKEN_PATH, data={
-            "grant_type": "authorization_code", "code": body.code, "client_id": settings.DIGILOCKER_CLIENT_ID,
-            "client_secret": settings.DIGILOCKER_CLIENT_SECRET, "redirect_uri": settings.DIGILOCKER_LOGIN_REDIRECT_URI,
+            "grant_type": "authorization_code", "code": body.code, "client_id": client_id,
+            "client_secret": client_secret, "redirect_uri": settings.DIGILOCKER_LOGIN_REDIRECT_URI,
             "code_verifier": attempt.code_verifier})
     except httpx.TransportError:
         raise HTTPException(status_code=503, detail="DigiLocker could not be reached. Try again.")

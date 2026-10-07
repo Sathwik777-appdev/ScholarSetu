@@ -64,6 +64,8 @@ class DigiLockerService:
 
     @staticmethod
     def _require_configured() -> None:
+        if settings.DIGILOCKER_MODE == "mock":
+            return
         if not (settings.DIGILOCKER_CLIENT_ID and settings.DIGILOCKER_CLIENT_SECRET):
             raise DigiLockerError(503, "DigiLocker is not configured on this server")
 
@@ -74,8 +76,9 @@ class DigiLockerService:
                                     code_verifier=verifier, expires_at=_now() + timedelta(minutes=SESSION_MINUTES))
         self.db.add(session)
         await self.db.flush()
+        client_id = settings.DIGILOCKER_CLIENT_ID or "scholarsetu-demo"
         url = settings.digilocker_authorize_url + "?" + urlencode({
-            "response_type": "code", "client_id": settings.DIGILOCKER_CLIENT_ID,
+            "response_type": "code", "client_id": client_id,
             "redirect_uri": settings.digilocker_redirect_uri, "state": session.state,
             "code_challenge": challenge, "code_challenge_method": "S256"})
         await record_audit(self.db, "DIGILOCKER_CONNECT_STARTED", actor=user, student_id=student_id,
@@ -91,10 +94,12 @@ class DigiLockerService:
         if error or not code:
             session.status, session.error = "FAILED", f"DigiLocker: {error or 'no code returned'}"
             return session
+        client_id = settings.DIGILOCKER_CLIENT_ID or "scholarsetu-demo"
+        client_secret = settings.DIGILOCKER_CLIENT_SECRET or "demo-secret-1234567890"
         try:
             res = await self.http.post(TOKEN_PATH, data={
-                "grant_type": "authorization_code", "code": code, "client_id": settings.DIGILOCKER_CLIENT_ID,
-                "client_secret": settings.DIGILOCKER_CLIENT_SECRET, "redirect_uri": settings.digilocker_redirect_uri,
+                "grant_type": "authorization_code", "code": code, "client_id": client_id,
+                "client_secret": client_secret, "redirect_uri": settings.digilocker_redirect_uri,
                 "code_verifier": session.code_verifier})
         except httpx.TransportError:
             session.status, session.error = "FAILED", "DigiLocker could not be reached"
