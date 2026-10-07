@@ -265,7 +265,7 @@ export default function WakingBanner() {
                       : 'bg-emerald-400/10 text-emerald-300 ring-emerald-400/20'
                   }`}
                 >
-                  {isWaking ? 'Render Free Tier' : 'PostgreSQL 16 Active'}
+                  {isWaking ? 'Cloud System' : 'PostgreSQL 16 Active'}
                 </span>
               </div>
               <p className="flex items-center gap-1.5 text-xs text-slate-300">
@@ -373,7 +373,7 @@ export default function WakingBanner() {
               <Server className="h-3.5 w-3.5 text-saffron-400 shrink-0" />
               <span>
                 Compute:{' '}
-                <strong className="text-white">scholarsetu-api.onrender.com (FastAPI)</strong>
+                <strong className="text-white">ScholarSetu Core API (FastAPI)</strong>
               </span>
             </div>
             <div className="flex items-center gap-2">
