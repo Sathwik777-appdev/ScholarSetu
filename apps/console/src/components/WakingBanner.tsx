@@ -56,29 +56,28 @@ export default function WakingBanner() {
     try {
       let res;
       try {
-        res = await axios.get(`${API_ORIGIN}/health/ready`, { timeout: 8000 });
+        res = await axios.get(`${API_ORIGIN}/health/ready`, { timeout: 10000 });
       } catch {
-        res = await apiClient.get('/health/ready', { timeout: 8000 });
+        res = await apiClient.get('/health/ready', { timeout: 10000 });
       }
       const latency = Math.round(performance.now() - start);
       setLastLatencyMs(latency);
       setIsOnline(true);
 
       if (res.data?.ready === true || res.data?.checks?.database === 'ok' || res.data?.status === 'ok') {
+        setIsWaking(false);
+        setSince(null);
         setIsReady(true);
         setChecks(res.data?.checks || { database: 'ok', guideline_index: 'ok' });
         window.dispatchEvent(new Event('scholarsetu:ready'));
 
-        // Transition back to online state after celebrating ready
         window.setTimeout(() => {
-          setIsWaking(false);
-          setSince(null);
           setIsReady(false);
-        }, 2200);
+        }, 1500);
         return;
       }
     } catch {
-      // Backend still cold or timed out
+      // Backend actually cold, sleeping, or unreachable
       setIsOnline(false);
       setIsWaking(true);
       setSince((prev) => prev ?? Date.now());
@@ -96,37 +95,10 @@ export default function WakingBanner() {
     });
   }, []);
 
-  // Initial mount probe: verify current server status and measure initial latency
+  // Initial mount probe: verify current server status immediately with checkHealth
   useEffect(() => {
-    let active = true;
-    const probeInitial = async () => {
-      const start = performance.now();
-      try {
-        let res;
-        try {
-          res = await axios.get(`${API_ORIGIN}/health/ready`, { timeout: 3500 });
-        } catch {
-          res = await apiClient.get('/health/ready', { timeout: 3500 });
-        }
-        if (active) {
-          const latency = Math.round(performance.now() - start);
-          setLastLatencyMs(latency);
-          setIsOnline(true);
-          setChecks(res.data?.checks || { database: 'ok' });
-        }
-      } catch {
-        if (active) {
-          setIsOnline(false);
-          setIsWaking(true);
-          setSince(Date.now());
-        }
-      }
-    };
-    probeInitial();
-    return () => {
-      active = false;
-    };
-  }, []);
+    checkHealth();
+  }, [checkHealth]);
 
   // Live timer ticks and periodic polling while waking
   useEffect(() => {
